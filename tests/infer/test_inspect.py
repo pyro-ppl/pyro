@@ -425,7 +425,7 @@ def test_nested_plate_collider():
     assert actual == expected
 
 
-@pytest.mark.parametrize("include_deterministic", [False, True])
+@pytest.mark.parametrize("include_deterministic", [True, False])
 def test_get_model_relations(include_deterministic):
     def model(data):
         a = pyro.sample("a", dist.Normal(0, 1))
@@ -479,30 +479,27 @@ def test_get_model_relations(include_deterministic):
             "sample_sample": {
                 "a": [],
                 "b": ["a"],
-                "c": ["b", "a"],
+                "c": ["a", "b"],
                 "d": ["c"],
-                "e": ["b", "a"],
+                "e": ["a", "b"],
                 "f": [],
                 "g": ["e"],
                 "h": ["e"],
-                "i": ["f", "g", "h", "e"],
+                "i": ["e", "f", "g", "h"],
             },
         }
     else:
         expected = {
-            "observed": ["d", "f", "g", "i"],
-            "param_constraint": {},
-            "plate_sample": {"p": ["e", "f", "g", "h", "i"]},
-            "sample_dist": {
-                "a": "Normal",
-                "b": "Normal",
-                "c": "Normal",
-                "d": "Bernoulli",
-                "e": "Normal",
-                "f": "Delta",
-                "g": "Delta",
-                "h": "Delta",
-                "i": "Normal",
+            "sample_sample": {
+                "a": [],
+                "b": ["a"],
+                "c": ["a", "b"],
+                "d": ["c"],
+                "e": ["a", "b"],
+                "f": [],
+                "g": ["e"],
+                "h": ["e"],
+                "i": ["e"],
             },
             "sample_param": {
                 "a": [],
@@ -515,17 +512,20 @@ def test_get_model_relations(include_deterministic):
                 "h": [],
                 "i": [],
             },
-            "sample_sample": {
-                "a": [],
-                "b": ["a"],
-                "c": ["b", "a"],
-                "d": ["c"],
-                "e": ["b", "a"],
-                "f": [],
-                "g": ["e"],
-                "h": ["e"],
-                "i": ["e"],
+            "sample_dist": {
+                "a": "Normal",
+                "b": "Normal",
+                "c": "Normal",
+                "d": "Bernoulli",
+                "e": "Normal",
+                "f": "Delta",
+                "g": "Delta",
+                "h": "Delta",
+                "i": "Normal",
             },
+            "param_constraint": {},
+            "plate_sample": {"p": ["e", "f", "g", "h", "i"]},
+            "observed": ["d", "f", "g", "i"],
         }
 
     assert actual == expected

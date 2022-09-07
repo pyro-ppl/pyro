@@ -5,7 +5,7 @@ import itertools
 from collections import defaultdict
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Callable, Dict, Optional
+from typing import Callable, Collection, Dict, List, Optional
 
 import torch
 
@@ -336,10 +336,15 @@ def get_model_relations(
         return plate_samples
 
     plate_sample = _resolve_plate_samples(plate_sample)
-    # convert set to list to keep order of variables
-    plate_sample = {
-        k: [name for name in trace.nodes if name in v] for k, v in plate_sample.items()
-    }
+
+    # Normalize order of variables.
+    def sort_by_time(names: Collection[str]) -> List[str]:
+        return [name for name in trace.nodes if name in names]
+
+    sample_sample = {k: sort_by_time(v) for k, v in sample_sample.items()}
+    sample_param = {k: sort_by_time(v) for k, v in sample_param.items()}
+    plate_sample = {k: sort_by_time(v) for k, v in plate_sample.items()}
+    observed = sort_by_time(observed)
 
     return {
         "sample_sample": sample_sample,
