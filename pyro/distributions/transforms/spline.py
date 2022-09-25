@@ -254,6 +254,7 @@ def _monotonic_rational_spline(
             c = -input_delta * (inputs - input_cumheights)
 
             discriminant = b.pow(2) - 4 * a * c
+            discriminant[outside_interval_mask] = 0 # added to make sure outside_interval input can be reversed as identity.
             assert (discriminant >= 0).all()
 
             root = (2 * c) / (-b - torch.sqrt(discriminant))
