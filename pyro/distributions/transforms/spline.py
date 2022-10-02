@@ -254,8 +254,13 @@ def _monotonic_rational_spline(
             c = -input_delta * (inputs - input_cumheights)
 
             discriminant = b.pow(2) - 4 * a * c
+<<<<<<< HEAD
 
               # added to make sure outside_interval input can be reversed as identity.
+=======
+            
+            # added to make sure outside_interval input can be reversed as identity.
+>>>>>>> 6776c6b3cc0803919dd94cc56066fa633fcfc0b2
             discriminant = discriminant.masked_fill(outside_interval_mask, 0)
             assert (discriminant >= 0).all()
 
