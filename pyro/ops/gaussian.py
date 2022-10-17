@@ -28,7 +28,12 @@ class Gaussian:
     :param torch.Tensor precision: precision matrix of this gaussian.
     """
 
-    def __init__(self, log_normalizer, info_vec, precision):
+    def __init__(
+        self,
+        log_normalizer: torch.Tensor,
+        info_vec: torch.Tensor,
+        precision: torch.Tensor,
+    ):
         # NB: using info_vec instead of mean to deal with rank-deficient problem
         assert info_vec.dim() >= 1
         assert precision.dim() >= 2
@@ -48,21 +53,21 @@ class Gaussian:
             self.precision.shape[:-2],
         )
 
-    def expand(self, batch_shape):
+    def expand(self, batch_shape) -> "Gaussian":
         n = self.dim()
         log_normalizer = self.log_normalizer.expand(batch_shape)
         info_vec = self.info_vec.expand(batch_shape + (n,))
         precision = self.precision.expand(batch_shape + (n, n))
         return Gaussian(log_normalizer, info_vec, precision)
 
-    def reshape(self, batch_shape):
+    def reshape(self, batch_shape) -> "Gaussian":
         n = self.dim()
         log_normalizer = self.log_normalizer.reshape(batch_shape)
         info_vec = self.info_vec.reshape(batch_shape + (n,))
         precision = self.precision.reshape(batch_shape + (n, n))
         return Gaussian(log_normalizer, info_vec, precision)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> "Gaussian":
         """
         Index into the batch_shape of a Gaussian.
         """
@@ -73,7 +78,7 @@ class Gaussian:
         return Gaussian(log_normalizer, info_vec, precision)
 
     @staticmethod
-    def cat(parts, dim=0):
+    def cat(parts, dim=0) -> "Gaussian":
         """
         Concatenate a list of Gaussians along a given batch dimension.
         """
@@ -85,7 +90,7 @@ class Gaussian:
         ]
         return Gaussian(*args)
 
-    def event_pad(self, left=0, right=0):
+    def event_pad(self, left=0, right=0) -> "Gaussian":
         """
         Pad along event dimension.
         """
@@ -95,7 +100,7 @@ class Gaussian:
         precision = pad(self.precision, lr + lr)
         return Gaussian(log_normalizer, info_vec, precision)
 
-    def event_permute(self, perm):
+    def event_permute(self, perm) -> "Gaussian":
         """
         Permute along event dimension.
         """
@@ -105,7 +110,7 @@ class Gaussian:
         precision = self.precision[..., perm][..., perm, :]
         return Gaussian(self.log_normalizer, info_vec, precision)
 
-    def __add__(self, other):
+    def __add__(self, other: "Gaussian") -> "Gaussian":
         """
         Adds two Gaussians in log-density space.
         """
@@ -120,12 +125,12 @@ class Gaussian:
             return Gaussian(self.log_normalizer + other, self.info_vec, self.precision)
         raise ValueError("Unsupported type: {}".format(type(other)))
 
-    def __sub__(self, other):
+    def __sub__(self, other: "Gaussian") -> "Gaussian":
         if isinstance(other, (int, float, torch.Tensor)):
             return Gaussian(self.log_normalizer - other, self.info_vec, self.precision)
         raise ValueError("Unsupported type: {}".format(type(other)))
 
-    def log_density(self, value):
+    def log_density(self, value: torch.Tensor) -> torch.Tensor:
         """
         Evaluate the log density of this Gaussian at a point value::
 
@@ -135,13 +140,14 @@ class Gaussian:
         """
         if value.size(-1) == 0:
             batch_shape = broadcast_shape(value.shape[:-1], self.batch_shape)
-            return self.log_normalizer.expand(batch_shape)
+            result: torch.Tensor = self.log_normalizer.expand(batch_shape)
+            return result
         result = (-0.5) * matvecmul(self.precision, value)
         result = result + self.info_vec
         result = (value * result).sum(-1)
         return result + self.log_normalizer
 
-    def rsample(self, sample_shape=torch.Size()):
+    def rsample(self, sample_shape=torch.Size()) -> torch.Tensor:
         """
         Reparameterized sampler.
         """
@@ -150,9 +156,10 @@ class Gaussian:
         shape = sample_shape + self.batch_shape + (self.dim(), 1)
         noise = torch.randn(shape, dtype=loc.dtype, device=loc.device)
         noise = triangular_solve(noise, P_chol, upper=False, transpose=True).squeeze(-1)
-        return loc + noise
+        sample: torch.Tensor = loc + noise
+        return sample
 
-    def condition(self, value):
+    def condition(self, value: torch.Tensor) -> "Gaussian":
         """
         Condition this Gaussian on a trailing subset of its state.
         This should satisfy::
@@ -189,7 +196,7 @@ class Gaussian:
         )
         return Gaussian(log_normalizer, info_vec, precision)
 
-    def left_condition(self, value):
+    def left_condition(self, value: torch.Tensor) -> "Gaussian":
         """
         Condition this Gaussian on a leading subset of its state.
         This should satisfy::
@@ -217,7 +224,7 @@ class Gaussian:
         )
         return self.event_permute(perm).condition(value)
 
-    def marginalize(self, left=0, right=0):
+    def marginalize(self, left=0, right=0) -> "Gaussian":
         """
         Marginalizing out variables on either side of the event dimension::
 
@@ -259,7 +266,7 @@ class Gaussian:
         )
         return Gaussian(log_normalizer, info_vec, precision)
 
-    def event_logsumexp(self):
+    def event_logsumexp(self) -> torch.Tensor:
         """
         Integrates out all latent state (i.e. operating on event dimensions).
         """
@@ -269,12 +276,13 @@ class Gaussian:
             self.info_vec.unsqueeze(-1), chol_P, upper=False
         ).squeeze(-1)
         u_P_u = chol_P_u.pow(2).sum(-1)
-        return (
+        log_Z: torch.Tensor = (
             self.log_normalizer
             + 0.5 * n * math.log(2 * math.pi)
             + 0.5 * u_P_u
             - chol_P.diagonal(dim1=-2, dim2=-1).log().sum(-1)
         )
+        return log_Z
 
 
 class AffineNormal:
@@ -477,7 +485,7 @@ def matrix_and_mvn_to_gaussian(matrix, mvn):
     return result
 
 
-def gaussian_tensordot(x, y, dims=0):
+def gaussian_tensordot(x: Gaussian, y: Gaussian, dims: int = 0) -> Gaussian:
     """
     Computes the integral over two gaussians:
 
@@ -538,3 +546,112 @@ def gaussian_tensordot(x, y, dims=0):
         log_normalizer = log_normalizer + diff
 
     return Gaussian(log_normalizer, info_vec, precision)
+
+
+def sequential_gaussian_tensordot(gaussian: Gaussian) -> Gaussian:
+    """
+    Integrates a Gaussian ``x`` whose rightmost batch dimension is time, computes::
+
+        x[..., 0] @ x[..., 1] @ ... @ x[..., T-1]
+    """
+    assert isinstance(gaussian, Gaussian)
+    assert gaussian.dim() % 2 == 0, "dim is not even"
+    batch_shape = gaussian.batch_shape[:-1]
+    state_dim = gaussian.dim() // 2
+    while gaussian.batch_shape[-1] > 1:
+        time = gaussian.batch_shape[-1]
+        even_time = time // 2 * 2
+        even_part = gaussian[..., :even_time]
+        x_y = even_part.reshape(batch_shape + (even_time // 2, 2))
+        x, y = x_y[..., 0], x_y[..., 1]
+        contracted = gaussian_tensordot(x, y, state_dim)
+        if time > even_time:
+            contracted = Gaussian.cat((contracted, gaussian[..., -1:]), dim=-1)
+        gaussian = contracted
+    return gaussian[..., 0]
+
+
+def _is_subshape(x, y):
+    return broadcast_shape(x, y) == y
+
+
+def _sequential_gaussian_filter_sample(init, trans, sample_shape):
+    """
+    Draws a reparameterized sample from a Markov product of Gaussians via
+    parallel-scan forward-filter backward-sample.
+    """
+    assert isinstance(init, Gaussian)
+    assert isinstance(trans, Gaussian)
+    assert trans.dim() == 2 * init.dim()
+    assert _is_subshape(trans.batch_shape[:-1], init.batch_shape)
+    state_dim = trans.dim() // 2
+    device = trans.precision.device
+    perm = torch.cat(
+        [
+            torch.arange(1 * state_dim, 2 * state_dim, device=device),
+            torch.arange(0 * state_dim, 1 * state_dim, device=device),
+            torch.arange(2 * state_dim, 3 * state_dim, device=device),
+        ]
+    )
+
+    # Forward filter, similar to _sequential_gaussian_tensordot().
+    tape = []
+    shape = trans.batch_shape[:-1]  # Note trans may be unbroadcasted.
+    gaussian = trans
+    while gaussian.batch_shape[-1] > 1:
+        time = gaussian.batch_shape[-1]
+        even_time = time // 2 * 2
+        even_part = gaussian[..., :even_time]
+        x_y = even_part.reshape(shape + (even_time // 2, 2))
+        x, y = x_y[..., 0], x_y[..., 1]
+        x = x.event_pad(right=state_dim)
+        y = y.event_pad(left=state_dim)
+        joint = (x + y).event_permute(perm)
+        tape.append(joint)
+        contracted = joint.marginalize(left=state_dim)
+        if time > even_time:
+            contracted = Gaussian.cat((contracted, gaussian[..., -1:]), dim=-1)
+        gaussian = contracted
+    gaussian = gaussian[..., 0] + init.event_pad(right=state_dim)
+
+    # Backward sample.
+    shape = sample_shape + init.batch_shape
+    result = gaussian.rsample(sample_shape).reshape(shape + (2, state_dim))
+    for joint in reversed(tape):
+        # The following comments demonstrate two example computations, one
+        # EVEN, one ODD.  Ignoring sample_shape and batch_shape, let each zn be
+        # a single sampled event of shape (state_dim,).
+        if joint.batch_shape[-1] == result.size(-2) - 1:  # EVEN case.
+            # Suppose e.g. result = [z0, z2, z4]
+            cond = result.repeat_interleave(2, dim=-2)  # [z0, z0, z2, z2, z4, z4]
+            cond = cond[..., 1:-1, :]  # [z0, z2, z2, z4]
+            cond = cond.reshape(shape + (-1, 2 * state_dim))  # [z0z2, z2z4]
+            sample = joint.condition(cond).rsample()  # [z1, z3]
+            sample = torch.nn.functional.pad(sample, (0, 0, 0, 1))  # [z1, z3, 0]
+            result = torch.stack(
+                [
+                    result,  # [z0, z2, z4]
+                    sample,  # [z1, z3, 0]
+                ],
+                dim=-2,
+            )  # [[z0, z1], [z2, z3], [z4, 0]]
+            result = result.reshape(shape + (-1, state_dim))  # [z0, z1, z2, z3, z4, 0]
+            result = result[..., :-1, :]  # [z0, z1, z2, z3, z4]
+        else:  # ODD case.
+            assert joint.batch_shape[-1] == result.size(-2) - 2
+            # Suppose e.g. result = [z0, z2, z3]
+            cond = result[..., :-1, :].repeat_interleave(2, dim=-2)  # [z0, z0, z2, z2]
+            cond = cond[..., 1:-1, :]  # [z0, z2]
+            cond = cond.reshape(shape + (-1, 2 * state_dim))  # [z0z2]
+            sample = joint.condition(cond).rsample()  # [z1]
+            sample = torch.cat([sample, result[..., -1:, :]], dim=-2)  # [z1, z3]
+            result = torch.stack(
+                [
+                    result[..., :-1, :],  # [z0, z2]
+                    sample,  # [z1, z3]
+                ],
+                dim=-2,
+            )  # [[z0, z1], [z2, z3]]
+            result = result.reshape(shape + (-1, state_dim))  # [z0, z1, z2, z3]
+
+    return result[..., 1:, :]  # [z1, z2, z3, ...]
