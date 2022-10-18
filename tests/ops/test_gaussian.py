@@ -17,6 +17,8 @@ from pyro.ops.gaussian import (
     gaussian_tensordot,
     matrix_and_mvn_to_gaussian,
     mvn_to_gaussian,
+    sequential_gaussian_filter_sample,
+    sequential_gaussian_tensordot,
 )
 from tests.common import assert_close
 from tests.ops.gaussian import assert_close_gaussian, random_gaussian, random_mvn
@@ -488,3 +490,32 @@ def test_gaussian_funsor(batch_shape):
         funsor.ops.mean, "particle"
     )
     check_equal(fp_entropy.data, entropy)
+
+
+@pytest.mark.parametrize("num_steps", list(range(1, 20)))
+@pytest.mark.parametrize("state_dim", [1, 2, 3])
+@pytest.mark.parametrize("batch_shape", [(), (5,), (2, 4)], ids=str)
+def test_sequential_gaussian_tensordot(batch_shape, state_dim, num_steps):
+    g = random_gaussian(batch_shape + (num_steps,), state_dim + state_dim)
+    actual = sequential_gaussian_tensordot(g)
+    assert actual.dim() == g.dim()
+    assert actual.batch_shape == batch_shape
+
+    # Check against hand computation.
+    expected = g[..., 0]
+    for t in range(1, num_steps):
+        expected = gaussian_tensordot(expected, g[..., t], state_dim)
+    assert_close_gaussian(actual, expected)
+
+
+@pytest.mark.parametrize("num_steps", list(range(1, 20)))
+@pytest.mark.parametrize("state_dim", [1, 2, 3])
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
+def test_sequential_gaussian_filter_sample(
+    sample_shape, batch_shape, state_dim, num_steps
+):
+    init = random_gaussian(batch_shape, state_dim)
+    trans = random_gaussian(batch_shape + (num_steps,), state_dim + state_dim)
+    sample = sequential_gaussian_filter_sample(init, trans, sample_shape)
+    assert sample.shape == sample_shape + batch_shape + (num_steps, state_dim)
