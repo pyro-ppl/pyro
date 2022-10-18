@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+from typing import Tuple
 
 import torch
 from torch.distributions.utils import lazy_property
@@ -553,6 +554,10 @@ def sequential_gaussian_tensordot(gaussian: Gaussian) -> Gaussian:
     Integrates a Gaussian ``x`` whose rightmost batch dimension is time, computes::
 
         x[..., 0] @ x[..., 1] @ ... @ x[..., T-1]
+
+    :param Gaussian gaussian: A batched Gaussian whose rightmost dimension is time.
+    :returns: A Markov product of the Gaussian along its time dimension.
+    :rtype: Gaussian
     """
     assert isinstance(gaussian, Gaussian)
     assert gaussian.dim() % 2 == 0, "dim is not even"
@@ -575,10 +580,19 @@ def _is_subshape(x, y):
     return broadcast_shape(x, y) == y
 
 
-def _sequential_gaussian_filter_sample(init, trans, sample_shape):
+def sequential_gaussian_filter_sample(
+    init: Gaussian, trans: Gaussian, sample_shape: Tuple[int, ...] = ()
+) -> torch.Tensor:
     """
     Draws a reparameterized sample from a Markov product of Gaussians via
     parallel-scan forward-filter backward-sample.
+
+    :param Gaussian init: A Gaussian representing an initial state.
+    :param Gaussian trans: A Gaussian representing as series of state transitions,
+        with time as the rightmost batch dimension.
+    :param tuple sample_shape: An optional batch shape of samples to draw.
+    :returns: A reparametrized sample.
+    :rtype: torch.Tensor
     """
     assert isinstance(init, Gaussian)
     assert isinstance(trans, Gaussian)
@@ -594,7 +608,7 @@ def _sequential_gaussian_filter_sample(init, trans, sample_shape):
         ]
     )
 
-    # Forward filter, similar to _sequential_gaussian_tensordot().
+    # Forward filter, similar to sequential_gaussian_tensordot().
     tape = []
     shape = trans.batch_shape[:-1]  # Note trans may be unbroadcasted.
     gaussian = trans
