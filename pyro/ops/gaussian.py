@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 from torch.distributions.utils import lazy_property
@@ -148,14 +148,19 @@ class Gaussian:
         result = (value * result).sum(-1)
         return result + self.log_normalizer
 
-    def rsample(self, sample_shape=torch.Size()) -> torch.Tensor:
+    def rsample(
+        self, sample_shape=torch.Size(), noise: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         """
         Reparameterized sampler.
         """
         P_chol = cholesky(self.precision)
         loc = self.info_vec.unsqueeze(-1).cholesky_solve(P_chol).squeeze(-1)
         shape = sample_shape + self.batch_shape + (self.dim(), 1)
-        noise = torch.randn(shape, dtype=loc.dtype, device=loc.device)
+        if noise is None:
+            noise = torch.randn(shape, dtype=loc.dtype, device=loc.device)
+        else:
+            noise = noise.reshape(shape)
         noise = triangular_solve(noise, P_chol, upper=False, transpose=True).squeeze(-1)
         sample: torch.Tensor = loc + noise
         return sample
@@ -348,14 +353,19 @@ class AffineNormal:
         else:
             return self.to_gaussian().left_condition(value)
 
-    def rsample(self, sample_shape=torch.Size()):
+    def rsample(
+        self, sample_shape=torch.Size(), noise: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
         """
         Reparameterized sampler.
         """
         if self.matrix.size(-2) > 0:
             raise NotImplementedError
         shape = sample_shape + self.batch_shape + self.loc.shape[-1:]
-        noise = torch.randn(shape, dtype=self.loc.dtype, device=self.loc.device)
+        if noise is None:
+            noise = torch.randn(shape, dtype=self.loc.dtype, device=self.loc.device)
+        else:
+            noise = noise.reshape(shape)
         return self.loc + noise * self.scale
 
     def to_gaussian(self):
@@ -581,7 +591,10 @@ def _is_subshape(x, y):
 
 
 def sequential_gaussian_filter_sample(
-    init: Gaussian, trans: Gaussian, sample_shape: Tuple[int, ...] = ()
+    init: Gaussian,
+    trans: Gaussian,
+    sample_shape: Tuple[int, ...] = (),
+    noise: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """
     Draws a reparameterized sample from a Markov product of Gaussians via
@@ -628,9 +641,27 @@ def sequential_gaussian_filter_sample(
         gaussian = contracted
     gaussian = gaussian[..., 0] + init.event_pad(right=state_dim)
 
-    # Backward sample.
+    # Generate noise in batch, then allow blocks to be consumed incrementally.
     shape = sample_shape + init.batch_shape
-    result = gaussian.rsample(sample_shape).reshape(shape + (2, state_dim))
+    noise_shape = shape + (1 + trans.batch_shape[-1], init.dim())
+    if noise is None:
+        noise = torch.randn(
+            noise_shape, dtype=init.info_vec.dtype, device=init.info_vec.device
+        )
+    assert noise.shape == noise_shape
+    noise = noise.reshape(-1)
+
+    def rsample(g: Gaussian, sample_shape: Tuple[int, ...] = ()):
+        nonlocal noise
+        shape = torch.Size(sample_shape) + g.batch_shape + (g.dim(),)
+        numel = shape.numel()
+        assert noise.numel() >= numel, "too little noise provided"
+        consumed = noise[:numel]
+        noise = noise[numel:]
+        return g.rsample(sample_shape, noise=consumed)
+
+    # Backward sample.
+    result = rsample(gaussian, sample_shape).reshape(shape + (2, state_dim))
     for joint in reversed(tape):
         # The following comments demonstrate two example computations, one
         # EVEN, one ODD.  Ignoring sample_shape and batch_shape, let each zn be
@@ -640,7 +671,7 @@ def sequential_gaussian_filter_sample(
             cond = result.repeat_interleave(2, dim=-2)  # [z0, z0, z2, z2, z4, z4]
             cond = cond[..., 1:-1, :]  # [z0, z2, z2, z4]
             cond = cond.reshape(shape + (-1, 2 * state_dim))  # [z0z2, z2z4]
-            sample = joint.condition(cond).rsample()  # [z1, z3]
+            sample = rsample(joint.condition(cond))  # [z1, z3]
             sample = torch.nn.functional.pad(sample, (0, 0, 0, 1))  # [z1, z3, 0]
             result = torch.stack(
                 [
@@ -657,7 +688,7 @@ def sequential_gaussian_filter_sample(
             cond = result[..., :-1, :].repeat_interleave(2, dim=-2)  # [z0, z0, z2, z2]
             cond = cond[..., 1:-1, :]  # [z0, z2]
             cond = cond.reshape(shape + (-1, 2 * state_dim))  # [z0z2]
-            sample = joint.condition(cond).rsample()  # [z1]
+            sample = rsample(joint.condition(cond))  # [z1]
             sample = torch.cat([sample, result[..., -1:, :]], dim=-2)  # [z1, z3]
             result = torch.stack(
                 [
@@ -668,4 +699,5 @@ def sequential_gaussian_filter_sample(
             )  # [[z0, z1], [z2, z3]]
             result = result.reshape(shape + (-1, state_dim))  # [z0, z1, z2, z3]
 
+    assert noise.numel() == 0, "too much noise provided"
     return result[..., 1:, :]  # [z1, z2, z3, ...]
