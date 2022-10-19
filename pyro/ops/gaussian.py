@@ -366,7 +366,8 @@ class AffineNormal:
             noise = torch.randn(shape, dtype=self.loc.dtype, device=self.loc.device)
         else:
             noise = noise.reshape(shape)
-        return self.loc + noise * self.scale
+        sample: torch.Tensor = self.loc + noise * self.scale
+        return sample
 
     def to_gaussian(self):
         if self._gaussian is None:
@@ -586,10 +587,6 @@ def sequential_gaussian_tensordot(gaussian: Gaussian) -> Gaussian:
     return gaussian[..., 0]
 
 
-def _is_subshape(x, y):
-    return broadcast_shape(x, y) == y
-
-
 def sequential_gaussian_filter_sample(
     init: Gaussian,
     trans: Gaussian,
@@ -602,16 +599,27 @@ def sequential_gaussian_filter_sample(
 
     :param Gaussian init: A Gaussian representing an initial state.
     :param Gaussian trans: A Gaussian representing as series of state transitions,
-        with time as the rightmost batch dimension.
-    :param tuple sample_shape: An optional batch shape of samples to draw.
-    :returns: A reparametrized sample.
+        with time as the rightmost batch dimension. This must have twice the event
+        dim as ``init``: ``trans.dim() == 2 * init.dim()``.
+    :param tuple sample_shape: An optional extra shape of samples to draw.
+    :param torch.Tensor noise: An optional standard white noise tensor of shape
+        ``sample_shape + batch_shape + (duration, state_dim)``, where
+        ``duration = trans.batch_shape[-1]`` is the number of time points to be
+        sampled, and ``state_dim = init.dim()`` is the state dimension. This is
+        useful for computing the mean (pass zeros), varying temperature (pass
+        scaled noise), and antithetic sampling (pass ``cat([z,-z])``).
+    :returns: A reparametrized sample of shape
+        ``sample_shape + batch_shape + (duration, state_dim)``.
     :rtype: torch.Tensor
     """
     assert isinstance(init, Gaussian)
     assert isinstance(trans, Gaussian)
     assert trans.dim() == 2 * init.dim()
-    assert _is_subshape(trans.batch_shape[:-1], init.batch_shape)
     state_dim = trans.dim() // 2
+    batch_shape = broadcast_shape(trans.batch_shape[:-1], init.batch_shape)
+    if init.batch_shape != batch_shape:
+        init = init.expand(batch_shape)
+    dtype = trans.precision.dtype
     device = trans.precision.device
     perm = torch.cat(
         [
@@ -642,23 +650,26 @@ def sequential_gaussian_filter_sample(
     gaussian = gaussian[..., 0] + init.event_pad(right=state_dim)
 
     # Generate noise in batch, then allow blocks to be consumed incrementally.
-    shape = sample_shape + init.batch_shape
-    noise_shape = shape + (1 + trans.batch_shape[-1], init.dim())
+    duration = 1 + trans.batch_shape[-1]
+    shape = torch.Size(sample_shape) + init.batch_shape
+    noise_shape = shape + (duration, state_dim)
+    noise_stride = shape.numel() * state_dim  # noise is consumed in time blocks
+    noise_position: int = 0
     if noise is None:
-        noise = torch.randn(
-            noise_shape, dtype=init.info_vec.dtype, device=init.info_vec.device
-        )
+        noise = torch.randn(noise_shape, dtype=dtype, device=device)
     assert noise.shape == noise_shape
-    noise = noise.reshape(-1)
 
-    def rsample(g: Gaussian, sample_shape: Tuple[int, ...] = ()):
-        nonlocal noise
-        shape = torch.Size(sample_shape) + g.batch_shape + (g.dim(),)
-        numel = shape.numel()
-        assert noise.numel() >= numel, "too little noise provided"
-        consumed = noise[:numel]
-        noise = noise[numel:]
-        return g.rsample(sample_shape, noise=consumed)
+    def rsample(g: Gaussian, sample_shape: Tuple[int, ...] = ()) -> torch.Tensor:
+        """Samples, extracting a time-block of noise."""
+        nonlocal noise_position
+        assert noise is not None
+        numel = torch.Size(sample_shape + g.batch_shape + (g.dim(),)).numel()
+        assert numel % noise_stride == 0
+        beg: int = noise_position
+        end: int = noise_position + numel // noise_stride
+        assert end <= duration, "too little noise provided"
+        noise_position = end
+        return g.rsample(sample_shape, noise=noise[..., beg:end, :])
 
     # Backward sample.
     result = rsample(gaussian, sample_shape).reshape(shape + (2, state_dim))
@@ -699,5 +710,5 @@ def sequential_gaussian_filter_sample(
             )  # [[z0, z1], [z2, z3]]
             result = result.reshape(shape + (-1, state_dim))  # [z0, z1, z2, z3]
 
-    assert noise.numel() == 0, "too much noise provided"
+    assert noise_position == duration, "too much noise provided"
     return result[..., 1:, :]  # [z1, z2, z3, ...]
