@@ -604,10 +604,10 @@ def sequential_gaussian_filter_sample(
     :param tuple sample_shape: An optional extra shape of samples to draw.
     :param torch.Tensor noise: An optional standard white noise tensor of shape
         ``sample_shape + batch_shape + (duration, state_dim)``, where
-        ``duration = trans.batch_shape[-1]`` is the number of time points to be
-        sampled, and ``state_dim = init.dim()`` is the state dimension. This is
-        useful for computing the mean (pass zeros), varying temperature (pass
-        scaled noise), and antithetic sampling (pass ``cat([z,-z])``).
+        ``duration = 1 + trans.batch_shape[-1]`` is the number of time points
+        to be sampled, and ``state_dim = init.dim()`` is the state dimension.
+        This is useful for computing the mean (pass zeros), varying temperature
+        (pass scaled noise), and antithetic sampling (pass ``cat([z,-z])``).
     :returns: A reparametrized sample of shape
         ``sample_shape + batch_shape + (duration, state_dim)``.
     :rtype: torch.Tensor
@@ -652,12 +652,12 @@ def sequential_gaussian_filter_sample(
     # Generate noise in batch, then allow blocks to be consumed incrementally.
     duration = 1 + trans.batch_shape[-1]
     shape = torch.Size(sample_shape) + init.batch_shape
-    noise_shape = shape + (duration, state_dim)
+    result_shape = shape + (duration, state_dim)
     noise_stride = shape.numel() * state_dim  # noise is consumed in time blocks
     noise_position: int = 0
     if noise is None:
-        noise = torch.randn(noise_shape, dtype=dtype, device=device)
-    assert noise.shape == noise_shape
+        noise = torch.randn(result_shape, dtype=dtype, device=device)
+    assert noise.shape == result_shape
 
     def rsample(g: Gaussian, sample_shape: Tuple[int, ...] = ()) -> torch.Tensor:
         """Samples, extracting a time-block of noise."""
@@ -711,4 +711,5 @@ def sequential_gaussian_filter_sample(
             result = result.reshape(shape + (-1, state_dim))  # [z0, z1, z2, z3]
 
     assert noise_position == duration, "too much noise provided"
-    return result[..., 1:, :]  # [z1, z2, z3, ...]
+    assert result.shape == result_shape
+    return result  # [z0, z1, z2, ...]
