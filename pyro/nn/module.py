@@ -14,6 +14,7 @@ the :class:`PyroSample` struct::
 """
 import functools
 import inspect
+import weakref
 from collections import OrderedDict, namedtuple
 
 import torch
@@ -481,6 +482,8 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                     fullname = self._pyro_get_fullname(name)
                     value = context.get(fullname)
                     if value is None:
+                        if isinstance(prior, weakref.ref):
+                            prior = prior()
                         if not hasattr(prior, "sample"):  # if not a distribution
                             prior = prior(self)
                         value = pyro.sample(fullname, prior)
@@ -586,8 +589,13 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 delattr(self, name)
             except AttributeError:
                 pass
+
             _pyro_samples = self.__dict__["_pyro_samples"]
-            _pyro_samples[name] = value.prior
+            if self._pyro_context.active:
+                _pyro_samples[name] = weakref.ref(value.prior)
+                getattr(self, name)  # trigger pyro.sample immediately
+            else:
+                _pyro_samples[name] = value.prior
             return
 
         super().__setattr__(name, value)
