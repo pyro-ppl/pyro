@@ -31,6 +31,7 @@ def preprocess(args):
     arrivals = dataset["counts"][:, :, i].sum(-1)
     departures = dataset["counts"][:, i, :].sum(-1)
     data = torch.stack([arrivals, departures], dim=-1)
+    print(f"Loaded data of shape {tuple(data.shape)}")
 
     # This simple example uses no covariates, so we will construct a
     # zero-element tensor of the correct length as empty covariates.

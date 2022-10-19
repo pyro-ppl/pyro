@@ -590,7 +590,7 @@ class GaussianHMM(HiddenMarkovModel):
         trans = trans.expand(trans.batch_shape[:-1] + (self.duration,))
         z = sequential_gaussian_filter_sample(self._init, trans, sample_shape)
         z = z[..., 1:, :]  # drop the initial hidden state
-        x = self._obs.left_condition().rsample()
+        x = self._obs.left_condition(z).rsample()
         return x
 
     def rsample_posterior(self, value, sample_shape=torch.Size()):
