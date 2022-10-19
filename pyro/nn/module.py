@@ -180,6 +180,9 @@ class _Context:
         self.used = False
 
     def __enter__(self):
+        if not self.active:
+            self._param_ctx = pyro.get_param_store().scope(state=None)
+            self._param_ctx.__enter__()
         self.active += 1
         self.used = True
 
@@ -187,6 +190,8 @@ class _Context:
         self.active -= 1
         if not self.active:
             self.cache.clear()
+            self._param_ctx.__exit__(type, value, traceback)
+            del self._param_ctx
 
     def get(self, name):
         if self.active:
