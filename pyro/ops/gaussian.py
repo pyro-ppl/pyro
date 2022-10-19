@@ -683,10 +683,10 @@ def sequential_gaussian_filter_sample(
             cond = cond[..., 1:-1, :]  # [z0, z2, z2, z4]
             cond = cond.reshape(shape + (-1, 2 * state_dim))  # [z0z2, z2z4]
             sample = rsample(joint.condition(cond))  # [z1, z3]
-            interleaved = torch.empty(shape + (2 * result.size(-2) - 1, state_dim))
-            interleaved[..., ::2, :] = result  # [z0, _, z2, _, z4]
-            interleaved[..., 1::2, :] = sample  # [_, z1, _, z3, _]
-            result = interleaved  # [z0, z1, z2, z3, z4]
+            zipper = result.new_empty(shape + (2 * result.size(-2) - 1, state_dim))
+            zipper[..., ::2, :] = result  # [z0, _, z2, _, z4]
+            zipper[..., 1::2, :] = sample  # [_, z1, _, z3, _]
+            result = zipper  # [z0, z1, z2, z3, z4]
         else:  # ODD case.
             assert joint.batch_shape[-1] == result.size(-2) - 2
             # Suppose e.g. result = [z0, z2, z3]
@@ -694,11 +694,11 @@ def sequential_gaussian_filter_sample(
             cond = cond[..., 1:-1, :]  # [z0, z2]
             cond = cond.reshape(shape + (-1, 2 * state_dim))  # [z0z2]
             sample = rsample(joint.condition(cond))  # [z1]
-            interleaved = torch.empty(shape + (2 * result.size(-2) - 2, state_dim))
-            interleaved[..., ::2, :] = result[..., :-1, :]  # [z0, _, z2, _]
-            interleaved[..., -1, :] = result[..., -1, :]  # [_, _, _, z3]
-            interleaved[..., 1:-1:2, :] = sample  # [_, z1, _, _]
-            result = interleaved  # [z0, z1, z2, z3]
+            zipper = result.new_empty(shape + (2 * result.size(-2) - 2, state_dim))
+            zipper[..., ::2, :] = result[..., :-1, :]  # [z0, _, z2, _]
+            zipper[..., -1, :] = result[..., -1, :]  # [_, _, _, z3]
+            zipper[..., 1:-1:2, :] = sample  # [_, z1, _, _]
+            result = zipper  # [z0, z1, z2, z3]
 
     assert noise_position == duration, "too much noise provided"
     assert result.shape == result_shape
