@@ -5,6 +5,7 @@ import pyro.poutine as poutine
 from pyro.infer.inspect import render_model
 from pyro.logger import log
 from pyro.poutine import condition, do, markov
+from pyro.poutine.runtime import enable_module_local_param
 from pyro.primitives import (
     barrier,
     clear_param_store,
@@ -41,6 +42,7 @@ __all__ = [
     "condition",
     "deterministic",
     "do",
+    "enable_module_local_param",
     "enable_validation",
     "factor",
     "get_param_store",
