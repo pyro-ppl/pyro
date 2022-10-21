@@ -21,7 +21,7 @@ from torch.distributions import constraints, transform_to
 
 import pyro
 from pyro.ops.provenance import detach_provenance
-from pyro.poutine.runtime import _PYRO_PARAM_STORE, _module_local_param_enabled
+from pyro.poutine.runtime import _PYRO_PARAM_STORE
 
 
 class PyroParam(namedtuple("PyroParam", ("init_value", "constraint", "event_dim"))):
@@ -169,6 +169,10 @@ def _unconstrain(constrained_value, constraint):
         return torch.nn.Parameter(unconstrained_value)
 
 
+def _is_module_local_param_enabled() -> bool:
+    return pyro.poutine.runtime._PYRO_MODULE_LOCAL_PARAM
+
+
 class _Context:
     """
     Sometimes-active cache for ``PyroModule.__call__()`` contexts.
@@ -180,7 +184,7 @@ class _Context:
         self.used = False
 
     def __enter__(self):
-        if not self.active and _module_local_param_enabled():
+        if not self.active and _is_module_local_param_enabled():
             self._param_ctx = pyro.get_param_store().scope(state=None)
             self._param_ctx.__enter__()
         self.active += 1
@@ -190,7 +194,7 @@ class _Context:
         self.active -= 1
         if not self.active:
             self.cache.clear()
-            if _module_local_param_enabled():
+            if _is_module_local_param_enabled():
                 self._param_ctx.__exit__(type, value, traceback)
                 del self._param_ctx
 

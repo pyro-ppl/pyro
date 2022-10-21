@@ -19,15 +19,6 @@ _PYRO_PARAM_STORE = ParamStoreDict()
 _PYRO_MODULE_LOCAL_PARAM = False
 
 
-def enable_module_local_param(flag: bool) -> None:
-    global _PYRO_MODULE_LOCAL_PARAM
-    _PYRO_MODULE_LOCAL_PARAM = flag
-
-
-def _module_local_param_enabled():
-    return _PYRO_MODULE_LOCAL_PARAM
-
-
 class _DimAllocator:
     """
     Dimension allocator for internal use by :class:`plate`.
