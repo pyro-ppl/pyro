@@ -58,7 +58,7 @@ class ParamStoreDict:
         self._param_to_name = {}
         self._constraints = {}
 
-    def items(self) -> Tuple[str, Constraint]:
+    def items(self) -> Iterator[Tuple[str, Constraint]]:
         """
         Iterate over ``(name, constrained_param)`` pairs. Note that `constrained_param` is
         in the constrained (i.e. user-facing) space.
