@@ -6,9 +6,12 @@ import warnings
 import weakref
 from contextlib import contextmanager
 
+from typing import Optional, Callable, Union, Tuple, Generator
+from collections.abc import Iterator, KeysView
+
 import torch
 from torch.distributions import constraints, transform_to
-
+from torch.distributions.constraints import Constraint
 
 class ParamStoreDict:
     """
@@ -55,7 +58,7 @@ class ParamStoreDict:
         self._param_to_name = {}
         self._constraints = {}
 
-    def items(self):
+    def items(self) -> Tuple[str, Constraint]:
         """
         Iterate over ``(name, constrained_param)`` pairs. Note that `constrained_param` is
         in the constrained (i.e. user-facing) space.
@@ -63,35 +66,35 @@ class ParamStoreDict:
         for name in self._params:
             yield name, self[name]
 
-    def keys(self):
+    def keys(self) -> KeysView:
         """
         Iterate over param names.
         """
         return self._params.keys()
 
-    def values(self):
+    def values(self) -> Generator[Constraint, None, None]:
         """
         Iterate over constrained parameter values.
         """
         for name, constrained_param in self.items():
             yield constrained_param
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return bool(self._params)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._params)
 
-    def __contains__(self, name):
+    def __contains__(self, name: str) -> bool:
         return name in self._params
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[str]:
         """
         Iterate over param names.
         """
         return iter(self.keys())
 
-    def __delitem__(self, name):
+    def __delitem__(self, name: str):
         """
         Remove a parameter from the param store.
         """
@@ -99,7 +102,7 @@ class ParamStoreDict:
         self._param_to_name.pop(unconstrained_value)
         self._constraints.pop(name)
 
-    def __getitem__(self, name):
+    def __getitem__(self, name: str) -> Constraint:
         """
         Get the *constrained* value of a named parameter.
         """
@@ -112,7 +115,7 @@ class ParamStoreDict:
 
         return constrained_value
 
-    def __setitem__(self, name, new_constrained_value):
+    def __setitem__(self, name: str, new_constrained_value):
         """
         Set the constrained value of an existing parameter, or the value of a
         new *unconstrained* parameter. To declare a new parameter with
@@ -132,7 +135,7 @@ class ParamStoreDict:
         self._params[name] = unconstrained_value
         self._param_to_name[unconstrained_value] = name
 
-    def setdefault(self, name, init_constrained_value, constraint=constraints.real):
+    def setdefault(self, name: str, init_constrained_value: Union[torch.Tensor, Callable[[], torch.Tensor]], constraint: Constraint=constraints.real) -> torch.Tensor:
         """
         Retrieve a *constrained* parameter value from the if it exists, otherwise
         set the initial value. Note that this is a little fancier than
@@ -170,7 +173,7 @@ class ParamStoreDict:
     # -------------------------------------------------------------------------------
     # Old non-dict interface
 
-    def named_parameters(self):
+    def named_parameters(self) -> Iterator[Tuple[str, Constraint]]:
         """
         Returns an iterator over ``(name, unconstrained_value)`` tuples for
         each parameter in the ParamStore. Note that, in the event the parameter is constrained,
@@ -178,14 +181,14 @@ class ParamStoreDict:
         """
         return self._params.items()
 
-    def get_all_param_names(self):
+    def get_all_param_names(self) -> KeysView:
         warnings.warn(
             "ParamStore.get_all_param_names() is deprecated; use .keys() instead.",
             DeprecationWarning,
         )
         return self.keys()
 
-    def replace_param(self, param_name, new_param, old_param):
+    def replace_param(self, param_name: str, new_param: torch.Tensor, old_param: torch.Tensor):
         warnings.warn(
             "ParamStore.replace_param() is deprecated; use .__setitem__() instead.",
             DeprecationWarning,
@@ -194,8 +197,8 @@ class ParamStoreDict:
         self[param_name] = new_param
 
     def get_param(
-        self, name, init_tensor=None, constraint=constraints.real, event_dim=None
-    ):
+        self, name: str, init_tensor: Optional[torch.Tensor]=None, constraint: Constraint=constraints.real, event_dim: Optional[int]=None
+    ) -> torch.Tensor:
         """
         Get parameter from its name. If it does not yet exist in the
         ParamStore, it will be created and stored.
@@ -216,7 +219,7 @@ class ParamStoreDict:
         else:
             return self.setdefault(name, init_tensor, constraint)
 
-    def match(self, name):
+    def match(self, name: str) -> dict[str, torch.Tensor]:
         """
         Get all parameters that match regex. The parameter must exist.
 
@@ -227,7 +230,7 @@ class ParamStoreDict:
         pattern = re.compile(name)
         return {name: self[name] for name in self if pattern.match(name)}
 
-    def param_name(self, p):
+    def param_name(self, p: Constraint) -> str:
         """
         Get parameter name from parameter
 
@@ -268,7 +271,7 @@ class ParamStoreDict:
                 constraint = constraints.real
             self._constraints[param_name] = constraint
 
-    def save(self, filename):
+    def save(self, filename: str):
         """
         Save parameters to file
 
