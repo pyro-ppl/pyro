@@ -375,7 +375,7 @@ class AffineNormal:
                 torch.distributions.Normal(self.loc, scale=self.scale), 1
             )
             y_gaussian = mvn_to_gaussian(mvn)
-            self._gaussian = _matrix_and_gaussian_to_gaussian(self.matrix, y_gaussian)
+            self._gaussian = matrix_and_gaussian_to_gaussian(self.matrix, y_gaussian)
         return self._gaussian
 
     def expand(self, batch_shape):
@@ -446,7 +446,17 @@ def mvn_to_gaussian(mvn):
     return Gaussian(log_normalizer, info_vec, precision)
 
 
-def _matrix_and_gaussian_to_gaussian(matrix, y_gaussian):
+def matrix_and_gaussian_to_gaussian(
+    matrix: torch.Tensor, y_gaussian: Gaussian
+) -> Gaussian:
+    """
+    Constructs a conditional Gaussian for ``p(y|x)`` where
+    ``y - x @ matrix ~ y_gaussian``.
+
+    :param torch.Tensor matrix: A right-acting transformation matrix.
+    :param Gaussian y_gaussian: A distribution over noise of ``y - x@matrix``.
+    :rtype: Gaussian
+    """
     P_yy = y_gaussian.precision
     neg_P_xy = matmul(matrix, P_yy)
     P_xy = -neg_P_xy
@@ -491,7 +501,7 @@ def matrix_and_mvn_to_gaussian(matrix, mvn):
         return AffineNormal(matrix, mvn.base_dist.loc, mvn.base_dist.scale)
 
     y_gaussian = mvn_to_gaussian(mvn)
-    result = _matrix_and_gaussian_to_gaussian(matrix, y_gaussian)
+    result = matrix_and_gaussian_to_gaussian(matrix, y_gaussian)
     assert result.batch_shape == batch_shape
     assert result.dim() == x_dim + y_dim
     return result
