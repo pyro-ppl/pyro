@@ -66,7 +66,8 @@ def test_svi_smoke():
         svi.step(data)
 
 
-def test_names():
+@pytest.mark.parametrize("local_params", [True, False])
+def test_names(local_params):
     class Model(PyroModule):
         def __init__(self):
             super().__init__()
@@ -86,34 +87,39 @@ def test_names():
             self.p.v
             self.p.w
 
-    model = Model()
+    with pyro.module_local_param_enabled(local_params):
+        model = Model()
 
-    # Check named_parameters.
-    expected = {
-        "x",
-        "y_unconstrained",
-        "m.u",
-        "p.v",
-        "p.w_unconstrained",
-    }
-    actual = set(name for name, _ in model.named_parameters())
-    assert actual == expected
+        # Check named_parameters.
+        expected = {
+            "x",
+            "y_unconstrained",
+            "m.u",
+            "p.v",
+            "p.w_unconstrained",
+        }
+        actual = set(name for name, _ in model.named_parameters())
+        assert actual == expected
 
-    # Check pyro.param names.
-    expected = {"x", "y", "m$$$u", "p.v", "p.w"}
-    with poutine.trace(param_only=True) as param_capture:
-        model()
-    actual = {
-        name
-        for name, site in param_capture.trace.nodes.items()
-        if site["type"] == "param"
-    }
-    assert actual == expected
+        # Check pyro.param names.
+        expected = {"x", "y", "m$$$u", "p.v", "p.w"}
+        with poutine.trace(param_only=True) as param_capture:
+            model()
+        actual = {
+            name
+            for name, site in param_capture.trace.nodes.items()
+            if site["type"] == "param"
+        }
+        assert actual == expected
+        if local_params:
+            assert set(pyro.get_param_store().keys()) == set()
+        else:
+            assert set(pyro.get_param_store().keys()) == expected
 
-    # Check pyro_parameters method
-    expected = {"x", "y", "m.u", "p.v", "p.w"}
-    actual = set(k for k, v in model.named_pyro_params())
-    assert actual == expected
+        # Check pyro_parameters method
+        expected = {"x", "y", "m.u", "p.v", "p.w"}
+        actual = set(k for k, v in model.named_pyro_params())
+        assert actual == expected
 
 
 def test_delete():
@@ -258,7 +264,8 @@ def test_constraints(shape, constraint_):
     assert not hasattr(module, "x_unconstrained")
 
 
-def test_clear():
+@pytest.mark.parametrize("local_params", [True, False])
+def test_clear(local_params):
     class Model(PyroModule):
         def __init__(self):
             super().__init__()
@@ -272,28 +279,33 @@ def test_clear():
         def forward(self):
             return [x.clone() for x in [self.x, self.m.weight, self.m.bias, self.p.x]]
 
-    assert set(pyro.get_param_store().keys()) == set()
-    m = Model()
-    state0 = m()
-    assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
+    with pyro.module_local_param_enabled(local_params):
+        m = Model()
+        state0 = m()
 
-    # mutate
-    for x in pyro.get_param_store().values():
-        x.unconstrained().data += torch.randn(())
-    state1 = m()
-    for x, y in zip(state0, state1):
-        assert not (x == y).all()
-    assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
+        # mutate
+        for _, x in m.named_pyro_params():
+            x.unconstrained().data += torch.randn(())
+        state1 = m()
+        for x, y in zip(state0, state1):
+            assert not (x == y).all()
 
-    clear(m)
-    del m
-    assert set(pyro.get_param_store().keys()) == set()
+        if local_params:
+            assert set(pyro.get_param_store().keys()) == set()
+        else:
+            assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
+            clear(m)
+            del m
+            assert set(pyro.get_param_store().keys()) == set()
 
-    m = Model()
-    state2 = m()
-    assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
-    for actual, expected in zip(state2, state0):
-        assert_equal(actual, expected)
+        m = Model()
+        state2 = m()
+        if local_params:
+            assert set(pyro.get_param_store().keys()) == set()
+        else:
+            assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
+        for actual, expected in zip(state2, state0):
+            assert_equal(actual, expected)
 
 
 def test_sample():
@@ -411,23 +423,25 @@ class DecoratorModel(PyroModule):
 
 @pytest.mark.parametrize("Model", [AttributeModel, DecoratorModel])
 @pytest.mark.parametrize("size", [1, 2])
-def test_decorator(Model, size):
-    model = Model(size)
-    for i in range(2):
-        trace = poutine.trace(model).get_trace()
-        assert set(trace.nodes.keys()) == {"_INPUT", "x", "y", "z", "s", "t", "_RETURN"}
+@pytest.mark.parametrize("local_params", [False, True])
+def test_decorator(Model, size, local_params):
+    with pyro.module_local_param_enabled(local_params):
+        model = Model(size)
+        for i in range(2):
+            trace = poutine.trace(model).get_trace()
+            assert set(trace.nodes.keys()) == {"_INPUT", "x", "y", "z", "s", "t", "_RETURN"}
 
-        assert trace.nodes["x"]["type"] == "param"
-        assert trace.nodes["y"]["type"] == "param"
-        assert trace.nodes["z"]["type"] == "param"
-        assert trace.nodes["s"]["type"] == "sample"
-        assert trace.nodes["t"]["type"] == "sample"
+            assert trace.nodes["x"]["type"] == "param"
+            assert trace.nodes["y"]["type"] == "param"
+            assert trace.nodes["z"]["type"] == "param"
+            assert trace.nodes["s"]["type"] == "sample"
+            assert trace.nodes["t"]["type"] == "sample"
 
-        assert trace.nodes["x"]["value"].shape == (size,)
-        assert trace.nodes["y"]["value"].shape == (size,)
-        assert trace.nodes["z"]["value"].shape == (size,)
-        assert trace.nodes["s"]["value"].shape == ()
-        assert trace.nodes["t"]["value"].shape == (size,)
+            assert trace.nodes["x"]["value"].shape == (size,)
+            assert trace.nodes["y"]["value"].shape == (size,)
+            assert trace.nodes["z"]["value"].shape == (size,)
+            assert trace.nodes["s"]["value"].shape == ()
+            assert trace.nodes["t"]["value"].shape == (size,)
 
 
 def test_mixin_factory():
@@ -553,27 +567,42 @@ def test_torch_serialize_attributes():
     assert actual_names == expected_names
 
 
-def test_torch_serialize_decorators():
-    module = DecoratorModel(3)
-    module()  # initialize
+@pytest.mark.parametrize("local_params", [True, False])
+def test_torch_serialize_decorators(local_params):
+    with pyro.module_local_param_enabled(local_params):
+        module = DecoratorModel(3)
+        module()  # initialize
 
-    # Work around https://github.com/pytorch/pytorch/issues/27972
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=UserWarning)
-        f = io.BytesIO()
-        torch.save(module, f)
-        pyro.clear_param_store()
-        f.seek(0)
-        actual = torch.load(f)
+        module2 = DecoratorModel(3)
+        module2()  # initialize
 
-    assert_equal(actual.x, module.x)
-    assert_equal(actual.y, module.y)
-    assert_equal(actual.z, module.z)
-    assert actual.s.shape == module.s.shape
-    assert actual.t.shape == module.t.shape
-    actual_names = {name for name, _ in actual.named_parameters()}
-    expected_names = {name for name, _ in module.named_parameters()}
-    assert actual_names == expected_names
+        # Work around https://github.com/pytorch/pytorch/issues/27972
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            f = io.BytesIO()
+            torch.save(module, f)
+            pyro.clear_param_store()
+            f.seek(0)
+            actual = torch.load(f)
+
+        assert_equal(actual.x, module.x)
+        assert_equal(actual.y, module.y)
+        assert_equal(actual.z, module.z)
+        assert actual.s.shape == module.s.shape
+        assert actual.t.shape == module.t.shape
+        actual_names = {name for name, _ in actual.named_parameters()}
+        expected_names = {name for name, _ in module.named_parameters()}
+        assert actual_names == expected_names
+
+        actual()
+        if local_params:
+            assert len(set(pyro.get_param_store().keys())) == 0
+            assert torch.all(module.y != module2.y)
+            assert torch.all(actual.y != module2.y)
+        else:
+            assert len(set(pyro.get_param_store().keys())) > 0
+            assert_equal(module.y, module2.y)
+            assert_equal(actual.y, module2.y)
 
 
 def test_pyro_serialize():
@@ -636,3 +665,26 @@ def test_bayesian_gru():
     assert output.shape == (seq_len, batch_size, hidden_size)
     output2, _ = gru(input_)
     assert not torch.allclose(output2, output)
+
+
+@pytest.mark.parametrize("local_params", [True, False])
+def test_pyro_module_mixin_local_params(local_params):
+    with pyro.module_local_param_enabled(local_params):
+        input_size = 2
+        hidden_size = 3
+        batch_size = 4
+        input_ = torch.randn(batch_size, input_size)
+
+        c = PyroModule[nn.Linear]
+        m = c(input_size, hidden_size)
+        output = m(input_)
+
+        del m
+
+        m2 = c(input_size, hidden_size)
+        output2 = m2(input_)
+
+        if local_params:
+            assert not torch.allclose(output2, output)
+        else:
+            assert torch.allclose(output2, output)
