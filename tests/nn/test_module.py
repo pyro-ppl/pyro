@@ -293,7 +293,12 @@ def test_clear(local_params):
         if local_params:
             assert set(pyro.get_param_store().keys()) == set()
         else:
-            assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
+            assert set(pyro.get_param_store().keys()) == {
+                "x",
+                "m$$$weight",
+                "m$$$bias",
+                "p.x",
+            }
             clear(m)
             del m
             assert set(pyro.get_param_store().keys()) == set()
@@ -303,7 +308,12 @@ def test_clear(local_params):
         if local_params:
             assert set(pyro.get_param_store().keys()) == set()
         else:
-            assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
+            assert set(pyro.get_param_store().keys()) == {
+                "x",
+                "m$$$weight",
+                "m$$$bias",
+                "p.x",
+            }
         for actual, expected in zip(state2, state0):
             assert_equal(actual, expected)
 
@@ -339,42 +349,45 @@ def test_sample():
         svi.step(data)
 
 
-def test_cache():
-    class MyModule(PyroModule):
-        def forward(self):
-            return [self.gather(), self.gather()]
+@pytest.mark.parametrize("local_params", [True, False])
+def test_cache(local_params):
+    with pyro.module_local_param_enabled(local_params):
 
-        def gather(self):
-            return {
-                "a": self.a,
-                "b": self.b,
-                "c": self.c,
-                "p.d": self.p.d,
-                "p.e": self.p.e,
-                "p.f": self.p.f,
-            }
+        class MyModule(PyroModule):
+            def forward(self):
+                return [self.gather(), self.gather()]
 
-    module = MyModule()
-    module.a = nn.Parameter(torch.tensor(0.0))
-    module.b = PyroParam(torch.tensor(1.0), constraint=constraints.positive)
-    module.c = PyroSample(dist.Normal(0, 1))
-    module.p = PyroModule()
-    module.p.d = nn.Parameter(torch.tensor(3.0))
-    module.p.e = PyroParam(torch.tensor(4.0), constraint=constraints.positive)
-    module.p.f = PyroSample(dist.Normal(0, 1))
+            def gather(self):
+                return {
+                    "a": self.a,
+                    "b": self.b,
+                    "c": self.c,
+                    "p.d": self.p.d,
+                    "p.e": self.p.e,
+                    "p.f": self.p.f,
+                }
 
-    assert module._pyro_context is module.p._pyro_context
+        module = MyModule()
+        module.a = nn.Parameter(torch.tensor(0.0))
+        module.b = PyroParam(torch.tensor(1.0), constraint=constraints.positive)
+        module.c = PyroSample(dist.Normal(0, 1))
+        module.p = PyroModule()
+        module.p.d = nn.Parameter(torch.tensor(3.0))
+        module.p.e = PyroParam(torch.tensor(4.0), constraint=constraints.positive)
+        module.p.f = PyroSample(dist.Normal(0, 1))
 
-    # Check that results are cached with an invocation of .__call__().
-    result1 = module()
-    actual, expected = result1
-    for key in ["a", "c", "p.d", "p.f"]:
-        assert actual[key] is expected[key], key
+        assert module._pyro_context is module.p._pyro_context
 
-    # Check that results are not cached across invocations of .__call__().
-    result2 = module()
-    for key in ["b", "c", "p.e", "p.f"]:
-        assert result1[0] is not result2[0], key
+        # Check that results are cached with an invocation of .__call__().
+        result1 = module()
+        actual, expected = result1
+        for key in ["a", "c", "p.d", "p.f"]:
+            assert actual[key] is expected[key], key
+
+        # Check that results are not cached across invocations of .__call__().
+        result2 = module()
+        for key in ["b", "c", "p.e", "p.f"]:
+            assert result1[0] is not result2[0], key
 
 
 class AttributeModel(PyroModule):
@@ -429,7 +442,15 @@ def test_decorator(Model, size, local_params):
         model = Model(size)
         for i in range(2):
             trace = poutine.trace(model).get_trace()
-            assert set(trace.nodes.keys()) == {"_INPUT", "x", "y", "z", "s", "t", "_RETURN"}
+            assert set(trace.nodes.keys()) == {
+                "_INPUT",
+                "x",
+                "y",
+                "z",
+                "s",
+                "t",
+                "_RETURN",
+            }
 
             assert trace.nodes["x"]["type"] == "param"
             assert trace.nodes["y"]["type"] == "param"
@@ -665,26 +686,3 @@ def test_bayesian_gru():
     assert output.shape == (seq_len, batch_size, hidden_size)
     output2, _ = gru(input_)
     assert not torch.allclose(output2, output)
-
-
-@pytest.mark.parametrize("local_params", [True, False])
-def test_pyro_module_mixin_local_params(local_params):
-    with pyro.module_local_param_enabled(local_params):
-        input_size = 2
-        hidden_size = 3
-        batch_size = 4
-        input_ = torch.randn(batch_size, input_size)
-
-        c = PyroModule[nn.Linear]
-        m = c(input_size, hidden_size)
-        output = m(input_)
-
-        del m
-
-        m2 = c(input_size, hidden_size)
-        output2 = m2(input_)
-
-        if local_params:
-            assert not torch.allclose(output2, output)
-        else:
-            assert torch.allclose(output2, output)
