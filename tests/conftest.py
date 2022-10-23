@@ -34,6 +34,7 @@ def pytest_runtest_setup(item):
     if test_initialize_marker:
         rng_seed = test_initialize_marker.kwargs["rng_seed"]
         pyro.set_rng_seed(rng_seed)
+    pyro.enable_module_local_param(False)
 
 
 def pytest_addoption(parser):
