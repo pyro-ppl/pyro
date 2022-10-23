@@ -67,6 +67,72 @@ def test_svi_smoke():
 
 
 @pytest.mark.parametrize("local_params", [True, False])
+@pytest.mark.parametrize("num_particles", [1, 2])
+@pytest.mark.parametrize("vectorize_particles", [True, False])
+@pytest.mark.parametrize("Autoguide", [pyro.infer.autoguide.AutoNormal])
+def test_svi_elbomodule_interface(
+    local_params, num_particles, vectorize_particles, Autoguide
+):
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.loc = nn.Parameter(torch.zeros(2))
+            self.scale = PyroParam(torch.ones(2), constraint=constraints.positive)
+            self.z = PyroSample(
+                lambda self: dist.Normal(self.loc, self.scale).to_event(1)
+            )
+
+        def forward(self, data):
+            loc, log_scale = self.z.unbind(-1)
+            with pyro.plate("data"):
+                pyro.sample("obs", dist.Cauchy(loc, log_scale.exp()), obs=data)
+
+    with pyro.module_local_param_enabled(local_params):
+        data = torch.randn(5)
+        model = Model()
+        model(data)  # initialize
+
+        guide = Autoguide(model)
+        guide(data)  # initialize
+
+        elbo = Trace_ELBO(
+            vectorize_particles=vectorize_particles, num_particles=num_particles
+        )
+        elbo = elbo(model, guide)
+        assert isinstance(elbo, torch.nn.Module)
+        assert set(
+            k[: -len("_unconstrained")] if k.endswith("_unconstrained") else k
+            for k, v in elbo.named_parameters()
+        ) == set("model." + k for k, v in model.named_pyro_params()) | set(
+            "guide." + k for k, v in guide.named_pyro_params()
+        )
+
+        adam = torch.optim.Adam(elbo.parameters(), lr=0.0001)
+        for _ in range(3):
+            adam.zero_grad()
+            loss = elbo(data)
+            loss.backward()
+            adam.step()
+
+        guide2 = Autoguide(model)
+        guide2(data)  # initialize
+        if local_params:
+            assert set(pyro.get_param_store().keys()) == set()
+            for (name, p), (name2, p2) in zip(
+                guide.named_parameters(), guide2.named_parameters()
+            ):
+                assert name == name2
+                assert not torch.allclose(p, p2)
+        else:
+            assert set(pyro.get_param_store().keys()) != set()
+            for (name, p), (name2, p2) in zip(
+                guide.named_parameters(), guide2.named_parameters()
+            ):
+                assert name == name2
+                assert torch.allclose(p, p2)
+
+
+@pytest.mark.parametrize("local_params", [True, False])
 def test_names(local_params):
     class Model(PyroModule):
         def __init__(self):
@@ -351,22 +417,21 @@ def test_sample():
 
 @pytest.mark.parametrize("local_params", [True, False])
 def test_cache(local_params):
+    class MyModule(PyroModule):
+        def forward(self):
+            return [self.gather(), self.gather()]
+
+        def gather(self):
+            return {
+                "a": self.a,
+                "b": self.b,
+                "c": self.c,
+                "p.d": self.p.d,
+                "p.e": self.p.e,
+                "p.f": self.p.f,
+            }
+
     with pyro.module_local_param_enabled(local_params):
-
-        class MyModule(PyroModule):
-            def forward(self):
-                return [self.gather(), self.gather()]
-
-            def gather(self):
-                return {
-                    "a": self.a,
-                    "b": self.b,
-                    "c": self.c,
-                    "p.d": self.p.d,
-                    "p.e": self.p.e,
-                    "p.f": self.p.f,
-                }
-
         module = MyModule()
         module.a = nn.Parameter(torch.tensor(0.0))
         module.b = PyroParam(torch.tensor(1.0), constraint=constraints.positive)
