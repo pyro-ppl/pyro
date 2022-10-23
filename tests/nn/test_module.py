@@ -499,33 +499,23 @@ class DecoratorModel(PyroModule):
 
 @pytest.mark.parametrize("Model", [AttributeModel, DecoratorModel])
 @pytest.mark.parametrize("size", [1, 2])
-@pytest.mark.parametrize("local_params", [False, True])
-def test_decorator(Model, size, local_params):
-    with pyro.module_local_param_enabled(local_params):
-        model = Model(size)
-        for i in range(2):
-            trace = poutine.trace(model).get_trace()
-            assert set(trace.nodes.keys()) == {
-                "_INPUT",
-                "x",
-                "y",
-                "z",
-                "s",
-                "t",
-                "_RETURN",
-            }
+def test_decorator(Model, size):
+    model = Model(size)
+    for i in range(2):
+        trace = poutine.trace(model).get_trace()
+        assert set(trace.nodes.keys()) == {"_INPUT", "x", "y", "z", "s", "t", "_RETURN"}
 
-            assert trace.nodes["x"]["type"] == "param"
-            assert trace.nodes["y"]["type"] == "param"
-            assert trace.nodes["z"]["type"] == "param"
-            assert trace.nodes["s"]["type"] == "sample"
-            assert trace.nodes["t"]["type"] == "sample"
+        assert trace.nodes["x"]["type"] == "param"
+        assert trace.nodes["y"]["type"] == "param"
+        assert trace.nodes["z"]["type"] == "param"
+        assert trace.nodes["s"]["type"] == "sample"
+        assert trace.nodes["t"]["type"] == "sample"
 
-            assert trace.nodes["x"]["value"].shape == (size,)
-            assert trace.nodes["y"]["value"].shape == (size,)
-            assert trace.nodes["z"]["value"].shape == (size,)
-            assert trace.nodes["s"]["value"].shape == ()
-            assert trace.nodes["t"]["value"].shape == (size,)
+        assert trace.nodes["x"]["value"].shape == (size,)
+        assert trace.nodes["y"]["value"].shape == (size,)
+        assert trace.nodes["z"]["value"].shape == (size,)
+        assert trace.nodes["s"]["value"].shape == ()
+        assert trace.nodes["t"]["value"].shape == (size,)
 
 
 def test_mixin_factory():
