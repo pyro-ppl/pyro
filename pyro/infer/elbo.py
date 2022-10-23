@@ -15,7 +15,7 @@ from pyro.util import check_site_shape
 
 
 class _ELBOModule(torch.nn.Module):
-    def __init__(self, model, guide, elbo):
+    def __init__(self, model: torch.nn.Module, guide: torch.nn.Module, elbo: "ELBO"):
         super().__init__()
         self.model = model
         self.guide = guide
@@ -35,6 +35,40 @@ class ELBO(object, metaclass=ABCMeta):
     :class:`~pyro.infer.trace_elbo.Trace_ELBO`,
     :class:`~pyro.infer.tracegraph_elbo.TraceGraph_ELBO`, or
     :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO`.
+
+    .. note:: Derived classes now provide a more idiomatic PyTorch interface via
+        :meth:`__call__` for (model, guide) pairs that are :class:`~torch.nn.Module` s,
+        which is useful for integrating Pyro's variational inference tooling with
+        standard PyTorch interfaces like :class:`~torch.optim.Optimizer` s
+        and the large ecosystem of libraries like PyTorch Lightning
+        and the PyTorch JIT that work with these interfaces::
+
+            model = Model()
+            guide = pyro.infer.autoguide.AutoNormal(model)
+
+            elbo_ = pyro.infer.Trace_ELBO(num_particles=10)
+
+            # Fix the model/guide pair
+            elbo = elbo_(model, guide)
+
+            # perform any data-dependent initialization
+            elbo(data)
+
+            optim = torch.optim.Adam(elbo.parameters(), lr=0.001)
+
+            for _ in range(100):
+                optim.zero_grad()
+                loss = elbo(data)
+                loss.backward()
+                optim.step()
+
+        Note that Pyro's global parameter store may cause this new interface to
+        behave unexpectedly relative to standard PyTorch when working with
+        :class:`~pyro.nn.PyroModule` s.
+
+        Users are therefore strongly encouraged to use this interface in conjunction
+        with :func:`~pyro.enable_module_local_param` which will override the default
+        implicit sharing of parameters across :class:`~pyro.nn.PyroModule` instances.
 
     :param num_particles: The number of particles/samples used to form the ELBO
         (gradient) estimators.
@@ -99,7 +133,13 @@ class ELBO(object, metaclass=ABCMeta):
         self.jit_options = jit_options
         self.tail_adaptive_beta = tail_adaptive_beta
 
-    def __call__(self, model, guide):
+    def __call__(
+        self, model: torch.nn.Module, guide: torch.nn.Module
+    ) -> torch.nn.Module:
+        """
+        Given a model and guide, returns a :class:`~torch.nn.Module` which
+        computes the ELBO loss when called with arguments to the model and guide.
+        """
         return _ELBOModule(model, guide, self)
 
     def _guess_max_plate_nesting(self, model, guide, args, kwargs):
