@@ -515,7 +515,45 @@ def test_sequential_gaussian_tensordot(batch_shape, state_dim, num_steps):
 def test_sequential_gaussian_filter_sample(
     sample_shape, batch_shape, state_dim, num_steps
 ):
+    init = random_gaussian(batch_shape, state_dim, requires_grad=True)
+    trans = random_gaussian(
+        batch_shape + (num_steps,), state_dim + state_dim, requires_grad=True
+    )
+    duration = 1 + num_steps
+
+    # Check shape.
+    sample = sequential_gaussian_filter_sample(init, trans, sample_shape)
+    assert sample.shape == sample_shape + batch_shape + (duration, state_dim)
+
+    # Check gradients.
+    assert sample.requires_grad
+    loss = (torch.randn_like(sample) * sample).sum()
+    params = [init.info_vec, init.precision, trans.info_vec, trans.precision]
+    torch.autograd.grad(loss, params)
+
+
+@pytest.mark.parametrize("num_steps", list(range(1, 20)))
+@pytest.mark.parametrize("state_dim", [1, 2, 3])
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
+def test_sequential_gaussian_filter_sample_antithetic(
+    sample_shape, batch_shape, state_dim, num_steps
+):
     init = random_gaussian(batch_shape, state_dim)
     trans = random_gaussian(batch_shape + (num_steps,), state_dim + state_dim)
-    sample = sequential_gaussian_filter_sample(init, trans, sample_shape)
-    assert sample.shape == sample_shape + batch_shape + (num_steps, state_dim)
+    duration = 1 + num_steps
+
+    noise = torch.randn(sample_shape + batch_shape + (duration, state_dim))
+    zero = torch.zeros_like(noise)
+    sample = sequential_gaussian_filter_sample(init, trans, sample_shape, noise)
+    mean = sequential_gaussian_filter_sample(init, trans, sample_shape, zero)
+    assert sample.shape == sample_shape + batch_shape + (duration, state_dim)
+    assert mean.shape == sample_shape + batch_shape + (duration, state_dim)
+
+    # Check that antithetic sampling works as expected.
+    noise3 = torch.stack([noise, zero, -noise])
+    sample3 = sequential_gaussian_filter_sample(
+        init, trans, (3,) + sample_shape, noise3
+    )
+    expected = torch.stack([sample, mean, 2 * mean - sample])
+    assert torch.allclose(sample3, expected)
