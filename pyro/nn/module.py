@@ -182,11 +182,13 @@ class _Context:
         self.active = 0
         self.cache = {}
         self.used = False
+        if _is_module_local_param_enabled():
+            self.param_state = {"params": {}, "constraints": {}}
 
     def __enter__(self):
         if not self.active and _is_module_local_param_enabled():
-            self._param_ctx = pyro.get_param_store().scope(state=None)
-            self._param_ctx.__enter__()
+            self._param_ctx = pyro.get_param_store().scope(state=self.param_state)
+            self.param_state = self._param_ctx.__enter__()
         self.active += 1
         self.used = True
 
@@ -419,6 +421,8 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             yield elem
 
     def _pyro_set_supermodule(self, name, context):
+        if _is_module_local_param_enabled():
+            context.param_state.update(self._pyro_context.param_state)
         self._pyro_name = name
         self._pyro_context = context
         for key, value in self._modules.items():

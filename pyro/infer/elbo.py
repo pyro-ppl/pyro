@@ -14,7 +14,7 @@ from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_site_shape
 
 
-class _ELBOModule(torch.nn.Module):
+class ELBOModule(torch.nn.Module):
     def __init__(self, model: torch.nn.Module, guide: torch.nn.Module, elbo: "ELBO"):
         super().__init__()
         self.model = model
@@ -133,14 +133,12 @@ class ELBO(object, metaclass=ABCMeta):
         self.jit_options = jit_options
         self.tail_adaptive_beta = tail_adaptive_beta
 
-    def __call__(
-        self, model: torch.nn.Module, guide: torch.nn.Module
-    ) -> torch.nn.Module:
+    def __call__(self, model: torch.nn.Module, guide: torch.nn.Module) -> ELBOModule:
         """
         Given a model and guide, returns a :class:`~torch.nn.Module` which
         computes the ELBO loss when called with arguments to the model and guide.
         """
-        return _ELBOModule(model, guide, self)
+        return ELBOModule(model, guide, self)
 
     def _guess_max_plate_nesting(self, model, guide, args, kwargs):
         """
