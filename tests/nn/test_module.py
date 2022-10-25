@@ -192,12 +192,13 @@ def test_local_param_vanilla_behavior(local_params):
             assert pyro_param_2 == pyro_param_1
 
         # vanilla param names should be unaffected by module nesting
-        outer = PyroModule(name="outer")
+        outer = PyroModule[torch.nn.Module]()
         outer.inner = model
         outer.inner()  # initialize
         pyro_param_3 = outer.inner.get_pyro_param()
 
         assert pyro_param_3 == pyro_param_1
+        assert pyro_param_3 != pyro_param_0
 
         if local_params:
             assert "pyro_param" in set(outer._pyro_context.param_state["params"].keys())

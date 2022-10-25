@@ -422,7 +422,21 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
 
     def _pyro_set_supermodule(self, name, context):
         if _is_module_local_param_enabled():
-            context.param_state.update(self._pyro_context.param_state)
+            with pyro.get_param_store().scope(
+                state=self._pyro_context.param_state
+            ) as vanilla_param_state:
+                # make sure we only propagate vanilla pyro.param data
+                #   in the _Context param_state - all others are handled
+                #   by the standard PyroModule/torch.nn.Module semantics
+                for param_name in list(pyro.get_param_store().keys()):
+                    # hack to detect vanilla pyro.params:
+                    #   vanilla pyro.params unattached to any Module
+                    #   should not have a pyromodule prefix
+                    if not param_name.startswith(self._pyro_name) or isinstance(
+                        getattr(self, param_name, None), torch.nn.Parameter
+                    ):
+                        del pyro.get_param_store()[param_name]
+            context.param_state.update(vanilla_param_state)
         self._pyro_name = name
         self._pyro_context = context
         for key, value in self._modules.items():
