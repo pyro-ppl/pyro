@@ -4,14 +4,14 @@
 import re
 import warnings
 import weakref
-from contextlib import contextmanager
-
-from typing import Optional, Callable, Union, Tuple, Generator
 from collections.abc import Iterator, KeysView
+from contextlib import contextmanager
+from typing import Callable, Generator, Optional, Tuple, Union
 
 import torch
 from torch.distributions import constraints, transform_to
 from torch.distributions.constraints import Constraint
+
 
 class ParamStoreDict:
     """
@@ -135,7 +135,12 @@ class ParamStoreDict:
         self._params[name] = unconstrained_value
         self._param_to_name[unconstrained_value] = name
 
-    def setdefault(self, name: str, init_constrained_value: Union[torch.Tensor, Callable[[], torch.Tensor]], constraint: Constraint=constraints.real) -> torch.Tensor:
+    def setdefault(
+        self,
+        name: str,
+        init_constrained_value: Union[torch.Tensor, Callable[[], torch.Tensor]],
+        constraint: Constraint = constraints.real,
+    ) -> torch.Tensor:
         """
         Retrieve a *constrained* parameter value from the if it exists, otherwise
         set the initial value. Note that this is a little fancier than
@@ -188,7 +193,9 @@ class ParamStoreDict:
         )
         return self.keys()
 
-    def replace_param(self, param_name: str, new_param: torch.Tensor, old_param: torch.Tensor):
+    def replace_param(
+        self, param_name: str, new_param: torch.Tensor, old_param: torch.Tensor
+    ):
         warnings.warn(
             "ParamStore.replace_param() is deprecated; use .__setitem__() instead.",
             DeprecationWarning,
@@ -197,7 +204,11 @@ class ParamStoreDict:
         self[param_name] = new_param
 
     def get_param(
-        self, name: str, init_tensor: Optional[torch.Tensor]=None, constraint: Constraint=constraints.real, event_dim: Optional[int]=None
+        self,
+        name: str,
+        init_tensor: Optional[torch.Tensor] = None,
+        constraint: Constraint = constraints.real,
+        event_dim: Optional[int] = None,
     ) -> torch.Tensor:
         """
         Get parameter from its name. If it does not yet exist in the
