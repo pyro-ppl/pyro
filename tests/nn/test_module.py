@@ -636,3 +636,61 @@ def test_bayesian_gru():
     assert output.shape == (seq_len, batch_size, hidden_size)
     output2, _ = gru(input_)
     assert not torch.allclose(output2, output)
+
+
+def test_local_sample_eager():
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.x = PyroSample(dist.Normal(0, 1))
+
+        @PyroParam(constraint=constraints.positive)
+        def z_scale(self):
+            return torch.rand(())
+
+        def forward(self):
+            self.y_scale = PyroParam(torch.rand(()), constraint=constraints.positive)
+            self.y = PyroSample(dist.Normal(self.x, self.y_scale))
+            PyroSample(dist.Normal(self.y, self.z_scale))  # no-op without assignment
+            with pyro.plate("data", 3):
+                return self.y
+
+    model = Model()
+    assert isinstance(model.x, torch.Tensor)
+
+    tr1 = poutine.trace(model).get_trace()
+    assert set(k for k, v in tr1.nodes.items() if v["type"] in {"sample", "param"}) == {
+        "x",
+        "y_scale",
+        "y",
+        "z_scale",
+        "data",
+    }
+    assert hasattr(model, "y_scale")
+    assert hasattr(model, "z_scale")
+    assert hasattr(model, "y") and isinstance(model.y, torch.Tensor)
+    with poutine.trace() as tr:
+        assert isinstance(model.y, torch.Tensor)
+    assert (model.y == model.y).all()
+    assert "y" not in tr.trace.nodes
+    assert set(k for k, _ in model.named_parameters()) == {
+        "y_scale_unconstrained",
+        "z_scale_unconstrained",
+    }
+
+    assert not tr1.nodes["y"]["cond_indep_stack"]
+    assert tr1.nodes["y"]["fn"].batch_shape == ()
+    assert tr1.nodes["y"]["fn"].event_shape == ()
+
+    outer = PyroModule[torch.nn.Module]()
+    outer.inner = model
+    tr2 = poutine.trace(outer.inner).get_trace()
+    assert "inner.y" in tr2.nodes
+    assert hasattr(outer.inner, "y") and isinstance(outer.inner.y, torch.Tensor)
+    assert tr2.nodes["inner.y"]["value"] is outer.inner.y
+    assert set(k for k, _ in outer.named_parameters()) == {
+        "inner.y_scale_unconstrained",
+        "inner.z_scale_unconstrained",
+    }
+
+    tr2.log_prob_sum().backward()  # smoke

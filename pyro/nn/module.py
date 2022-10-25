@@ -180,10 +180,20 @@ class _Context:
         self.used = False
 
     def __enter__(self):
+        if not self.active:
+            self._local_samples = {}
         self.active += 1
         self.used = True
 
     def __exit__(self, type, value, traceback):
+        if not (self.active - 1):
+            # attr statements below depend on bool(self.active) is True
+            for name, mod in self._local_samples.items():
+                const_value = getattr(mod, name)
+                assert not isinstance(const_value, torch.nn.Parameter)
+                delattr(mod, name)
+                setattr(mod, name, const_value)
+            del self._local_samples
         self.active -= 1
         if not self.active:
             self.cache.clear()
@@ -323,6 +333,30 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
     only once in a Pyro trace, you should ensure that traced access to sample
     attributes is wrapped in a single invocation of ``.__call__()`` or method
     decorated by :func:`pyro_method` .
+
+    .. note:: when a :class:`PyroSample` is set as an attribute in the
+        ``forward`` method of a :class:`PyroModule` , a corresponding
+        ``pyro.sample`` statement will now be invoked immediately, rather
+        than upon the first access of this attribute, and its value will be
+        stored as a constant ``Tensor`` in the module until it is overwritten.
+        This makes ``PyroSample`` a convenient and PyTorch-idiomatic way
+        to name and record sample values in a :class:`PyroModule`
+        without colliding with sample names in parent or child modules::
+
+            class MyModule(PyroModule):
+                ...
+                def forward(self):
+                    self.x = PyroSample(dist.Normal(0, 1))
+                    with pyro.plate("data", 3):
+                        self.y = PyroSample(dist.Normal(self.x, 1))
+                        return self.x, self.y
+
+            module = MyModule()
+            x, y = module()
+
+            assert x.shape == ()
+            assert y.shape == (3,)
+            assert module.x is x
 
     To make an existing module probabilistic, you can create a subclass and
     overwrite some parameters with :class:`PyroSample` s::
@@ -582,6 +616,9 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 pass
             _pyro_samples = self.__dict__["_pyro_samples"]
             _pyro_samples[name] = value.prior
+            if self._pyro_context.active:
+                getattr(self, name)  # trigger pyro.sample immediately
+                self._pyro_context._local_samples[name] = self
             return
 
         super().__setattr__(name, value)
