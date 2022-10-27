@@ -575,6 +575,45 @@ class IndirectLambdaHandlerTests(TestCase):
         _test_scale_factor(2, 1, [2.0] * 2)
 
 
+class SubstituteHandlerTests(NormalNormalNormalHandlerTestCase):
+    def test_substitute(self):
+        data = {"loc1": torch.randn(2)}
+        tr2 = poutine.trace(poutine.substitute(self.guide, data=data)).get_trace()
+        assert "loc1" in tr2
+        breakpoint()
+        assert tr2.nodes["loc1"]["type"] == "param" and tr2.nodes["loc1"]["is_observed"]
+        assert tr2.nodes["loc1"]["value"] is data["loc1"]
+
+    def test_trace_data(self):
+        tr1 = poutine.trace(
+            poutine.block(self.guide, expose_types=["param"])
+        ).get_trace()
+        tr2 = poutine.trace(poutine.substitute(self.guide, data=tr1)).get_trace()
+        assert tr2.nodes["loc1"]["type"] == "param" and tr2.nodes["loc1"]["is_observed"]
+        assert tr2.nodes["loc1"]["value"] is tr1.nodes["loc1"]["value"]
+
+    def test_stack_overwrite_behavior(self):
+        data1 = {"loc1": torch.randn(2)}
+        data2 = {"loc1": torch.randn(2)}
+        with poutine.trace() as tr:
+            cm = poutine.substitute(
+                poutine.substitute(self.guide, data=data1), data=data2
+            )
+            cm()
+        assert tr.trace.nodes["loc1"]["value"] is data2["loc1"]
+
+    def test_stack_success(self):
+        data1 = {"loc1": torch.randn(2)}
+        data2 = {"loc2": torch.randn(2)}
+        tr = poutine.trace(
+            poutine.substitute(poutine.substitute(self.guide, data=data1), data=data2)
+        ).get_trace()
+        assert tr.nodes["loc1"]["type"] == "param" and tr.nodes["loc1"]["is_observed"]
+        assert tr.nodes["loc1"]["value"] is data1["loc1"]
+        assert tr.nodes["loc2"]["type"] == "param" and tr.nodes["loc2"]["is_observed"]
+        assert tr.nodes["loc2"]["value"] is data2["loc2"]
+
+
 class ConditionHandlerTests(NormalNormalNormalHandlerTestCase):
     def test_condition(self):
         data = {"latent2": torch.randn(2)}
