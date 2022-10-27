@@ -72,9 +72,9 @@ from .replay_messenger import ReplayMessenger
 from .runtime import NonlocalExit
 from .scale_messenger import ScaleMessenger
 from .seed_messenger import SeedMessenger
+from .substitute_messenger import SubstituteMessenger
 from .trace_messenger import TraceMessenger
 from .uncondition_messenger import UnconditionMessenger
-from .substitute_messenger import SubstituteMessenger
 
 ############################################
 # Begin primitive operations

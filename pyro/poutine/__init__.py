@@ -18,9 +18,9 @@ from .handlers import (
     replay,
     scale,
     seed,
+    substitute,
     trace,
     uncondition,
-    substitute,
 )
 from .messenger import unwrap
 from .runtime import NonlocalExit, get_mask
@@ -48,6 +48,7 @@ __all__ = [
     "queue",
     "scale",
     "seed",
+    "substitute",
     "trace",
     "Trace",
     "uncondition",
