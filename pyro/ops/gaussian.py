@@ -9,7 +9,13 @@ from torch.distributions.utils import lazy_property
 from torch.nn.functional import pad
 
 from pyro.distributions.util import broadcast_shape
-from pyro.ops.tensor_utils import cholesky, matmul, matvecmul, triangular_solve
+from pyro.ops.tensor_utils import (
+    cholesky,
+    cholesky_solve,
+    matmul,
+    matvecmul,
+    triangular_solve,
+)
 
 
 class Gaussian:
@@ -155,7 +161,7 @@ class Gaussian:
         Reparameterized sampler.
         """
         P_chol = cholesky(self.precision)
-        loc = self.info_vec.unsqueeze(-1).cholesky_solve(P_chol).squeeze(-1)
+        loc = cholesky_solve(self.info_vec.unsqueeze(-1), P_chol).squeeze(-1)
         shape = sample_shape + self.batch_shape + (self.dim(), 1)
         if noise is None:
             noise = torch.randn(shape, dtype=loc.dtype, device=loc.device)
@@ -230,7 +236,9 @@ class Gaussian:
         )
         return self.event_permute(perm).condition(value)
 
-    def marginalize(self, left=0, right=0) -> "Gaussian":
+    def marginalize(
+        self, left: int = 0, right: int = 0, *, jitter: float = 0.0
+    ) -> "Gaussian":
         """
         Marginalizing out variables on either side of the event dimension::
 
@@ -241,6 +249,11 @@ class Gaussian:
 
             g.condition(x).event_logsumexp()
               = g.marginalize(left=g.dim() - x.size(-1)).log_density(x)
+
+        :param int left: Number of left event dims to marginalize.
+        :param int right: Number of right event dims to marginalize.
+        :param float jitter: Optional constant added to matrix diagonals before
+            performing Cholesky decompositions, to improve stability.
         """
         if left == 0 and right == 0:
             return self
@@ -254,7 +267,7 @@ class Gaussian:
         P_aa = self.precision[..., a, a]
         P_ba = self.precision[..., b, a]
         P_bb = self.precision[..., b, b]
-        P_b = cholesky(P_bb)
+        P_b = cholesky(P_bb, jitter=jitter)
         P_a = triangular_solve(P_ba, P_b, upper=False)
         P_at = P_a.transpose(-1, -2)
         precision = P_aa - matmul(P_at, P_a)
@@ -403,7 +416,9 @@ class AffineNormal:
     def __add__(self, other):
         return self.to_gaussian() + other
 
-    def marginalize(self, left=0, right=0):
+    def marginalize(
+        self, left: int = 0, right: int = 0, *, jitter: float = 0.0
+    ) -> Gaussian:
         if left == 0 and right == self.loc.size(-1):
             n = self.matrix.size(-2)
             precision = self.scale.new_zeros(self.batch_shape + (n, n))
@@ -411,7 +426,7 @@ class AffineNormal:
             log_normalizer = self.scale.new_zeros(self.batch_shape)
             return Gaussian(log_normalizer, info_vec, precision)
         else:
-            return self.to_gaussian().marginalize(left, right)
+            return self.to_gaussian().marginalize(left, right, jitter=jitter)
 
 
 def mvn_to_gaussian(mvn):
@@ -507,7 +522,9 @@ def matrix_and_mvn_to_gaussian(matrix, mvn):
     return result
 
 
-def gaussian_tensordot(x: Gaussian, y: Gaussian, dims: int = 0) -> Gaussian:
+def gaussian_tensordot(
+    x: Gaussian, y: Gaussian, dims: int = 0, *, jitter: float = 0.0
+) -> Gaussian:
     """
     Computes the integral over two gaussians:
 
@@ -519,6 +536,8 @@ def gaussian_tensordot(x: Gaussian, y: Gaussian, dims: int = 0) -> Gaussian:
     :param x: a Gaussian instance
     :param y: a Gaussian instance
     :param dims: number of variables to contract
+    :param float jitter: Optional constant added to matrix diagonals before
+        performing Cholesky decompositions, to improve stability.
     """
     assert isinstance(x, Gaussian)
     assert isinstance(y, Gaussian)
@@ -550,7 +569,7 @@ def gaussian_tensordot(x: Gaussian, y: Gaussian, dims: int = 0) -> Gaussian:
         b = xb + yb
 
         # Pbb + Qbb needs to be positive definite, so that we can malginalize out `b` (to have a finite integral)
-        L = cholesky(Pbb + Qbb)
+        L = cholesky(Pbb + Qbb, jitter=jitter)
         LinvB = triangular_solve(B, L, upper=False)
         LinvBt = LinvB.transpose(-2, -1)
         Linvb = triangular_solve(b.unsqueeze(-1), L, upper=False)
@@ -570,13 +589,17 @@ def gaussian_tensordot(x: Gaussian, y: Gaussian, dims: int = 0) -> Gaussian:
     return Gaussian(log_normalizer, info_vec, precision)
 
 
-def sequential_gaussian_tensordot(gaussian: Gaussian) -> Gaussian:
+def sequential_gaussian_tensordot(
+    gaussian: Gaussian, *, jitter: float = 0.0
+) -> Gaussian:
     """
     Integrates a Gaussian ``x`` whose rightmost batch dimension is time, computes::
 
         x[..., 0] @ x[..., 1] @ ... @ x[..., T-1]
 
     :param Gaussian gaussian: A batched Gaussian whose rightmost dimension is time.
+    :param float jitter: Optional constant added to matrix diagonals before
+        performing Cholesky decompositions, to improve stability.
     :returns: A Markov product of the Gaussian along its time dimension.
     :rtype: Gaussian
     """
@@ -590,7 +613,7 @@ def sequential_gaussian_tensordot(gaussian: Gaussian) -> Gaussian:
         even_part = gaussian[..., :even_time]
         x_y = even_part.reshape(batch_shape + (even_time // 2, 2))
         x, y = x_y[..., 0], x_y[..., 1]
-        contracted = gaussian_tensordot(x, y, state_dim)
+        contracted = gaussian_tensordot(x, y, state_dim, jitter=jitter)
         if time > even_time:
             contracted = Gaussian.cat((contracted, gaussian[..., -1:]), dim=-1)
         gaussian = contracted
@@ -602,6 +625,8 @@ def sequential_gaussian_filter_sample(
     trans: Gaussian,
     sample_shape: Tuple[int, ...] = (),
     noise: Optional[torch.Tensor] = None,
+    *,
+    jitter: float = 0.0,
 ) -> torch.Tensor:
     """
     Draws a reparameterized sample from a Markov product of Gaussians via
@@ -618,6 +643,8 @@ def sequential_gaussian_filter_sample(
         to be sampled, and ``state_dim = init.dim()`` is the state dimension.
         This is useful for computing the mean (pass zeros), varying temperature
         (pass scaled noise), and antithetic sampling (pass ``cat([z,-z])``).
+    :param float jitter: Optional constant added to matrix diagonals before
+        performing Cholesky decompositions, to improve stability.
     :returns: A reparametrized sample of shape
         ``sample_shape + batch_shape + (duration, state_dim)``.
     :rtype: torch.Tensor
@@ -653,7 +680,7 @@ def sequential_gaussian_filter_sample(
         y = y.event_pad(left=state_dim)
         joint = (x + y).event_permute(perm)
         tape.append(joint)
-        contracted = joint.marginalize(left=state_dim)
+        contracted = joint.marginalize(left=state_dim, jitter=jitter)
         if time > even_time:
             contracted = Gaussian.cat((contracted, gaussian[..., -1:]), dim=-1)
         gaussian = contracted

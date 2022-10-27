@@ -15,6 +15,7 @@ from pyro.ops.gaussian import (
     AffineNormal,
     Gaussian,
     gaussian_tensordot,
+    matrix_and_gaussian_to_gaussian,
     matrix_and_mvn_to_gaussian,
     mvn_to_gaussian,
     sequential_gaussian_filter_sample,
@@ -378,7 +379,7 @@ def test_gaussian_tensordot(
     nc = y_dim - dot_dims
     try:
         torch.linalg.cholesky(x.precision[..., na:, na:] + y.precision[..., :nb, :nb])
-    except RuntimeError:
+    except Exception:
         pytest.skip("Cannot marginalize the common variables of two Gaussians.")
 
     z = gaussian_tensordot(x, y, dot_dims)
@@ -557,3 +558,60 @@ def test_sequential_gaussian_filter_sample_antithetic(
     )
     expected = torch.stack([sample, mean, 2 * mean - sample])
     assert torch.allclose(sample3, expected)
+
+
+@pytest.mark.parametrize("num_steps", [10, 100, 1000, 10000, 100000, 1000000])
+def test_sequential_gaussian_filter_sample_stability(num_steps):
+    # This tests long-chain filtering at low precision.
+    zero = torch.zeros((), dtype=torch.float)
+    eye = torch.eye(4, dtype=torch.float)
+    noise = torch.randn(num_steps, 4, dtype=torch.float, requires_grad=True)
+    trans_matrix = torch.tensor(
+        [
+            [
+                0.8571434617042542,
+                -0.23285813629627228,
+                0.05360094830393791,
+                -0.017088839784264565,
+            ],
+            [
+                0.7609677314758301,
+                0.6596274971961975,
+                -0.022656921297311783,
+                0.05166701227426529,
+            ],
+            [
+                3.0979342460632324,
+                5.446939945220947,
+                -0.3425334692001343,
+                0.01096670888364315,
+            ],
+            [
+                -1.8180007934570312,
+                -0.4965082108974457,
+                -0.006048532668501139,
+                -0.08525419235229492,
+            ],
+        ],
+        dtype=torch.float,
+        requires_grad=True,
+    )
+
+    init = Gaussian(zero, zero.expand(4), eye)
+    trans = matrix_and_gaussian_to_gaussian(
+        trans_matrix, Gaussian(zero, zero.expand(4), eye)
+    ).expand((num_steps - 1,))
+
+    # Check numerically stabilized value.
+    jitter = 1e-7
+    x = sequential_gaussian_filter_sample(init, trans, (), noise, jitter=jitter)
+    assert torch.isfinite(x).all()
+
+    # Check gradients.
+    grads = torch.autograd.grad(x.sum(), [trans_matrix, noise])
+    assert all(torch.isfinite(g).all() for g in grads)
+
+    if num_steps <= 100:
+        # Check agreement with unstablized computation.
+        x_nojitter = sequential_gaussian_filter_sample(init, trans, (), noise)
+        assert_close(x, x_nojitter, rtol=1e-4, atol=1e-2)

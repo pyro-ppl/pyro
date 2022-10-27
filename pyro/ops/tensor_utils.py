@@ -393,9 +393,11 @@ def inverse_haar_transform(x):
     return x
 
 
-def cholesky(x):
+def cholesky(x, *, jitter: float = 0.0):
     if x.size(-1) == 1:
         return x.sqrt()
+    if jitter > 0:
+        x = x + jitter * torch.eye(x.size(-1), device=x.device, dtype=x.dtype)
     return torch.linalg.cholesky(x)
 
 
