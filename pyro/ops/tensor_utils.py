@@ -2,34 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
-import warnings
-from contextlib import contextmanager
-from typing import Optional
 
 import torch
 from torch.fft import irfft, rfft
 
 _ROOT_TWO_INVERSE = 1.0 / math.sqrt(2.0)
-JITTER = 1e-12
-
-
-@contextmanager
-def settings(*, jitter: float):
-    """
-    Context manager to set global settings.
-
-    :param float jitter: Constant added to matrix diagonals before
-        performing Cholesky decompositions, to improve stability.
-    """
-    global JITTER
-    jitter = float(jitter)
-    assert jitter >= 0
-    old = JITTER
-    try:
-        JITTER = jitter
-        yield
-    finally:
-        JITTER = old
 
 
 def as_complex(x):
@@ -416,32 +393,17 @@ def inverse_haar_transform(x):
     return x
 
 
-def cholesky(x, *, jitter: Optional[float] = None):
-    if jitter is None:
-        jitter = JITTER
-
-    # Handle simple scalar case.
+def cholesky(x, *, safe: bool = True):
     if x.size(-1) == 1:
-        if jitter:
-            x = x.clamp(min=0)
+        if safe:
+            x = x.clamp(min=torch.finfo(x.dtype).tiny)
         return x.sqrt()
 
-    if jitter > 0:
-        # First try without jitter.
-        result, info = torch.linalg.cholesky_ex(x)
-        if not info.any():
-            return result
-
-        # Try adding increasing amounts of jitter where needed.
-        warnings.warn("Singular matrix in cholesky(); adding jitter.")
+    if safe:
         x = x.clone()
-        x_diag = x.diagonal(dim1=-1, dim2=-2)
-        while jitter < 1:
-            x_diag[info > 0] += jitter
-            result, info = torch.linalg.cholesky_ex(x)
-            if not info.any():
-                return result
-            jitter *= 3
+        x_max = x.data.reshape(*x.shape[:-2], -1).abs().max(-1, True).values
+        jitter = x_max * torch.finfo(x.dtype).eps
+        x.data.diagonal(dim1=-1, dim2=-2).add_(jitter)
 
     return torch.linalg.cholesky(x)
 
