@@ -436,8 +436,9 @@ def cholesky(x, *, jitter: Optional[float] = None):
         warnings.warn("Singular matrix in cholesky(); adding jitter.")
         eye = torch.eye(x.size(-1), device=x.device, dtype=x.dtype)
         x = x.clone()
+        x_diag = x.diagonal(dim1=-1, dim2=-2)
         while jitter < 1:
-            x[info > 0] += jitter * eye
+            x_diag[info > 0] += jitter
             result, info = torch.linalg.cholesky_ex(x)
             if not info.any():
                 return result
