@@ -489,8 +489,6 @@ class GaussianHMM(HiddenMarkovModel):
     :param int duration: Optional size of the time axis ``event_shape[0]``.
         This is required when sampling from homogeneous HMMs whose parameters
         are not expanded along the time axis.
-    :param float jitter: Optional constant added to matrix diagonals before
-        performing Cholesky decompositions, to improve stability.
     """
 
     has_rsample = True
@@ -506,8 +504,6 @@ class GaussianHMM(HiddenMarkovModel):
         observation_dist,
         validate_args=None,
         duration=None,
-        *,
-        jitter: float = 0.0,
     ):
         assert isinstance(initial_dist, torch.distributions.MultivariateNormal) or (
             isinstance(initial_dist, torch.distributions.Independent)
@@ -546,13 +542,11 @@ class GaussianHMM(HiddenMarkovModel):
         self._init = mvn_to_gaussian(initial_dist).expand(self.batch_shape)
         self._trans = matrix_and_mvn_to_gaussian(transition_matrix, transition_dist)
         self._obs = matrix_and_mvn_to_gaussian(observation_matrix, observation_dist)
-        self.jitter = jitter
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(GaussianHMM, _instance)
         new.hidden_dim = self.hidden_dim
         new.obs_dim = self.obs_dim
-        new.jitter = self.jitter
         new._obs = self._obs
         new._trans = self._trans
 
@@ -578,14 +572,10 @@ class GaussianHMM(HiddenMarkovModel):
         )
 
         # Eliminate time dimension.
-        result = sequential_gaussian_tensordot(
-            result.expand(result.batch_shape), jitter=self.jitter
-        )
+        result = sequential_gaussian_tensordot(result.expand(result.batch_shape))
 
         # Combine initial factor.
-        result = gaussian_tensordot(
-            self._init, result, dims=self.hidden_dim, jitter=self.jitter
-        )
+        result = gaussian_tensordot(self._init, result, dims=self.hidden_dim)
 
         # Marginalize out final state.
         result = result.event_logsumexp()
@@ -594,13 +584,11 @@ class GaussianHMM(HiddenMarkovModel):
     def rsample(self, sample_shape=torch.Size()):
         assert self.duration is not None
         sample_shape = torch.Size(sample_shape)
-        trans = self._trans + self._obs.marginalize(
-            right=self.obs_dim, jitter=self.jitter
-        ).event_pad(left=self.hidden_dim)
-        trans = trans.expand(trans.batch_shape[:-1] + (self.duration,))
-        z = sequential_gaussian_filter_sample(
-            self._init, trans, sample_shape, jitter=self.jitter
+        trans = self._trans + self._obs.marginalize(right=self.obs_dim).event_pad(
+            left=self.hidden_dim
         )
+        trans = trans.expand(trans.batch_shape[:-1] + (self.duration,))
+        z = sequential_gaussian_filter_sample(self._init, trans, sample_shape)
         z = z[..., 1:, :]  # drop the initial hidden state
         x = self._obs.left_condition(z).rsample()
         return x
@@ -611,9 +599,7 @@ class GaussianHMM(HiddenMarkovModel):
         """
         trans = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
         trans = trans.expand(trans.batch_shape)
-        z = sequential_gaussian_filter_sample(
-            self._init, trans, sample_shape, jitter=self.jitter
-        )
+        z = sequential_gaussian_filter_sample(self._init, trans, sample_shape)
         z = z[..., 1:, :]  # drop the initial hidden state
         return z
 
@@ -635,14 +621,10 @@ class GaussianHMM(HiddenMarkovModel):
         logp = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
 
         # Eliminate time dimension.
-        logp = sequential_gaussian_tensordot(
-            logp.expand(logp.batch_shape), jitter=self.jitter
-        )
+        logp = sequential_gaussian_tensordot(logp.expand(logp.batch_shape))
 
         # Combine initial factor.
-        logp = gaussian_tensordot(
-            self._init, logp, dims=self.hidden_dim, jitter=self.jitter
-        )
+        logp = gaussian_tensordot(self._init, logp, dims=self.hidden_dim)
 
         # Convert to a distribution
         precision = logp.precision
@@ -682,7 +664,6 @@ class GaussianHMM(HiddenMarkovModel):
         new = self._get_checked_instance(GaussianHMM)
         new.hidden_dim = self.hidden_dim
         new.obs_dim = self.obs_dim
-        new.jitter = self.jitter
         new._init = self._init
         new._trans = self._trans
         new._obs = self._obs + mvn_to_gaussian(other.to_event(-1)).event_pad(
@@ -691,9 +672,9 @@ class GaussianHMM(HiddenMarkovModel):
 
         # Normalize.
         # TODO cache this computation for the forward pass of .rsample().
-        logp = new._trans + new._obs.marginalize(
-            right=new.obs_dim, jitter=self.jitter
-        ).event_pad(left=new.hidden_dim)
+        logp = new._trans + new._obs.marginalize(right=new.obs_dim).event_pad(
+            left=new.hidden_dim
+        )
         logp = sequential_gaussian_tensordot(logp.expand(logp.batch_shape))
         logp = gaussian_tensordot(new._init, logp, dims=new.hidden_dim)
         log_normalizer = logp.event_logsumexp()

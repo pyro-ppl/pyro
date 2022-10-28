@@ -433,8 +433,7 @@ def test_gaussian_hmm_distribution(
         scale = obs_dist.scale_tril.diagonal(dim1=-2, dim2=-1)
         obs_dist = dist.Normal(obs_dist.loc, scale).to_event(1)
     d = dist.GaussianHMM(
-        init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=num_steps,
-        jitter=1e-8
+        init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=num_steps
     )
     if diag:
         obs_mvn = dist.MultivariateNormal(

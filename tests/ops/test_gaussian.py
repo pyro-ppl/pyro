@@ -10,6 +10,7 @@ from torch.distributions import constraints, transform_to
 from torch.nn.functional import pad
 
 import pyro.distributions as dist
+import pyro.ops.tensor_utils
 from pyro.distributions.util import broadcast_shape
 from pyro.ops.gaussian import (
     AffineNormal,
@@ -603,15 +604,15 @@ def test_sequential_gaussian_filter_sample_stability(num_steps):
     ).expand((num_steps - 1,))
 
     # Check numerically stabilized value.
-    jitter = 1e-7
-    x = sequential_gaussian_filter_sample(init, trans, (), noise, jitter=jitter)
+    x = sequential_gaussian_filter_sample(init, trans, (), noise)
     assert torch.isfinite(x).all()
 
     # Check gradients.
     grads = torch.autograd.grad(x.sum(), [trans_matrix, noise])
     assert all(torch.isfinite(g).all() for g in grads)
 
-    if num_steps <= 100:
-        # Check agreement with unstablized computation.
-        x_nojitter = sequential_gaussian_filter_sample(init, trans, (), noise)
-        assert_close(x, x_nojitter, rtol=1e-4, atol=1e-2)
+    if num_steps <= 1000:
+        # Check jitter did not significantly affect computation.
+        with pyro.ops.tensor_utils.settings(jitter=0.0):
+            x_nojitter = sequential_gaussian_filter_sample(init, trans, (), noise)
+            assert_close(x, x_nojitter, rtol=1e-4, atol=1e-2)
