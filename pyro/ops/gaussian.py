@@ -9,7 +9,7 @@ from torch.distributions.utils import lazy_property
 from torch.nn.functional import pad
 
 from pyro.distributions.util import broadcast_shape
-from pyro.ops.tensor_utils import cholesky, matmul, matvecmul, triangular_solve
+from pyro.ops.tensor_utils import matmul, matvecmul, safe_cholesky, triangular_solve
 
 
 class Gaussian:
@@ -154,7 +154,7 @@ class Gaussian:
         """
         Reparameterized sampler.
         """
-        P_chol = cholesky(self.precision)
+        P_chol = safe_cholesky(self.precision)
         loc = self.info_vec.unsqueeze(-1).cholesky_solve(P_chol).squeeze(-1)
         shape = sample_shape + self.batch_shape + (self.dim(), 1)
         if noise is None:
@@ -254,7 +254,7 @@ class Gaussian:
         P_aa = self.precision[..., a, a]
         P_ba = self.precision[..., b, a]
         P_bb = self.precision[..., b, b]
-        P_b = cholesky(P_bb)
+        P_b = safe_cholesky(P_bb)
         P_a = triangular_solve(P_ba, P_b, upper=False)
         P_at = P_a.transpose(-1, -2)
         precision = P_aa - matmul(P_at, P_a)
@@ -277,7 +277,7 @@ class Gaussian:
         Integrates out all latent state (i.e. operating on event dimensions).
         """
         n = self.dim()
-        chol_P = cholesky(self.precision)
+        chol_P = safe_cholesky(self.precision)
         chol_P_u = triangular_solve(
             self.info_vec.unsqueeze(-1), chol_P, upper=False
         ).squeeze(-1)
@@ -550,7 +550,7 @@ def gaussian_tensordot(x: Gaussian, y: Gaussian, dims: int = 0) -> Gaussian:
         b = xb + yb
 
         # Pbb + Qbb needs to be positive definite, so that we can malginalize out `b` (to have a finite integral)
-        L = cholesky(Pbb + Qbb)
+        L = safe_cholesky(Pbb + Qbb)
         LinvB = triangular_solve(B, L, upper=False)
         LinvBt = LinvB.transpose(-2, -1)
         Linvb = triangular_solve(b.unsqueeze(-1), L, upper=False)
