@@ -7,7 +7,7 @@ import torch
 from torch.fft import irfft, rfft
 
 _ROOT_TWO_INVERSE = 1.0 / math.sqrt(2.0)
-CHOLESKY_JITTER = 1.0
+CHOLESKY_JITTER = 1.0  # in units of finfo.eps
 
 
 def as_complex(x):
@@ -396,14 +396,16 @@ def inverse_haar_transform(x):
 
 def safe_cholesky(x):
     if x.size(-1) == 1:
-        x = x.clamp(min=torch.finfo(x.dtype).tiny)
+        if CHOLESKY_JITTER:
+            x = x.clamp(min=torch.finfo(x.dtype).tiny)
         return x.sqrt()
 
-    # Add adaptive jitter.
-    x = x.clone()
-    x_max = x.data.reshape(*x.shape[:-2], -1).abs().max(-1, True).values
-    jitter = CHOLESKY_JITTER * torch.finfo(x.dtype).eps * x_max
-    x.data.diagonal(dim1=-1, dim2=-2).add_(jitter)
+    if CHOLESKY_JITTER:
+        # Add adaptive jitter.
+        x = x.clone()
+        x_max = x.data.reshape(*x.shape[:-2], -1).abs().max(-1, True).values
+        jitter = CHOLESKY_JITTER * torch.finfo(x.dtype).eps * x_max
+        x.data.diagonal(dim1=-1, dim2=-2).add_(jitter)
 
     return torch.linalg.cholesky(x)
 
