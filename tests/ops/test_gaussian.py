@@ -561,6 +561,7 @@ def test_sequential_gaussian_filter_sample_antithetic(
     assert torch.allclose(sample3, expected)
 
 
+@pytest.mark.filterwarnings("ignore:Singular matrix in cholesky")
 @pytest.mark.parametrize("num_steps", [10, 100, 1000, 10000, 100000, 1000000])
 def test_sequential_gaussian_filter_sample_stability(num_steps):
     # This tests long-chain filtering at low precision.

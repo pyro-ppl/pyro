@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+import warnings
 from contextlib import contextmanager
 from typing import Optional
 
@@ -432,6 +433,7 @@ def cholesky(x, *, jitter: Optional[float] = None):
             return result
 
         # Try adding increasing amounts of jitter where needed.
+        warnings.warn("Singular matrix in cholesky(); adding jitter.")
         eye = torch.eye(x.size(-1), device=x.device, dtype=x.dtype)
         x = x.clone()
         while jitter < 1:
