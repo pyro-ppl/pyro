@@ -4,9 +4,9 @@
 import re
 import warnings
 import weakref
-from collections.abc import Iterator, KeysView
+from collections.abc import KeysView
 from contextlib import contextmanager
-from typing import Callable, Generator, Optional, Tuple, Union
+from typing import Callable, Generator, Optional, Tuple, Union, Iterator
 
 import torch
 from torch.distributions import constraints, transform_to
