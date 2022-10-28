@@ -393,17 +393,16 @@ def inverse_haar_transform(x):
     return x
 
 
-def cholesky(x, *, safe: bool = True):
+def cholesky(x):
     if x.size(-1) == 1:
-        if safe:
-            x = x.clamp(min=torch.finfo(x.dtype).tiny)
+        x = x.clamp(min=torch.finfo(x.dtype).tiny)
         return x.sqrt()
 
-    if safe:
-        x = x.clone()
-        x_max = x.data.reshape(*x.shape[:-2], -1).abs().max(-1, True).values
-        jitter = x_max * torch.finfo(x.dtype).eps
-        x.data.diagonal(dim1=-1, dim2=-2).add_(jitter)
+    # Add adaptive jitter.
+    x = x.clone()
+    x_max = x.data.reshape(*x.shape[:-2], -1).abs().max(-1, True).values
+    jitter = x_max * torch.finfo(x.dtype).eps
+    x.data.diagonal(dim1=-1, dim2=-2).add_(jitter)
 
     return torch.linalg.cholesky(x)
 
