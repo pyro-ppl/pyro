@@ -20,7 +20,7 @@ from pyro.ops.gaussian import (
 )
 from pyro.ops.indexing import Vindex
 from pyro.ops.special import safe_log
-from pyro.ops.tensor_utils import cholesky, cholesky_solve
+from pyro.ops.tensor_utils import cholesky_solve, safe_cholesky
 
 from . import constraints
 from .torch import Categorical, Gamma, Independent, MultivariateNormal
@@ -628,9 +628,9 @@ class GaussianHMM(HiddenMarkovModel):
 
         # Convert to a distribution
         precision = logp.precision
-        loc = cholesky_solve(logp.info_vec.unsqueeze(-1), cholesky(precision)).squeeze(
-            -1
-        )
+        loc = cholesky_solve(
+            logp.info_vec.unsqueeze(-1), safe_cholesky(precision)
+        ).squeeze(-1)
         return MultivariateNormal(
             loc, precision_matrix=precision, validate_args=self._validate_args
         )
@@ -928,7 +928,7 @@ class GammaGaussianHMM(HiddenMarkovModel):
             gamma_dist.concentration, gamma_dist.rate, validate_args=self._validate_args
         )
         # Conditional of last state on unit scale
-        scale_tril = cholesky(logp.precision)
+        scale_tril = safe_cholesky(logp.precision)
         loc = cholesky_solve(logp.info_vec.unsqueeze(-1), scale_tril).squeeze(-1)
         mvn = MultivariateNormal(
             loc, scale_tril=scale_tril, validate_args=self._validate_args
