@@ -15,15 +15,16 @@ class SubstituteMessenger(Messenger):
     the fixed values.
     data should be a dict of names to values.
     Consider the following Pyro program:
+
         >>> def model(x):
         ...     a = pyro.param("a", torch.tensor(0.5))
         ...     x = pyro.sample("x", dist.Bernoulli(probs=a))
         ...     return x
         >>> substituted_model = pyro.poutine.substitute(model, data={"s": 0.3})
+
     In this example, site `a` will now have value `0.3`.
     :param data: dictionary of values keyed by site names.
-    :returns: ``fn`` decorated with a
-      :class:`~pyro.poutine.substitute_messenger.SubstituteMessenger`
+    :returns: ``fn`` decorated with a :class:`~pyro.poutine.substitute_messenger.SubstituteMessenger`
     """
 
     def __init__(self, data):

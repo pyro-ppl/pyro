@@ -159,7 +159,7 @@ __________________
     :show-inheritance:
 
 SubstituteMessenger
-______________
+___________________
 
 .. automodule:: pyro.poutine.substitute_messenger
     :members:
