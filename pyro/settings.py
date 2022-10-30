@@ -34,6 +34,9 @@ Example usage::
     def validate_thresh(thresh):  # called each time setting is set
         assert isinstance(thresh, float)
         assert thresh > 0
+
+Settings
+--------
 """
 
 # This library must have no other dependencies on pyro.
@@ -53,15 +56,19 @@ def register(
     deepname: str,
     validator: Optional[Callable] = None,
 ) -> Callable:
+    global __doc__
     assert isinstance(alias, str)
     assert isinstance(modulename, str)
     assert isinstance(deepname, str)
+    is_new = alias not in _REGISTRY
     _REGISTRY[alias] = modulename, deepname, validator
+
+    # Add default value to module docstring.
+    if is_new:
+        __doc__ += f"- {alias} = {get(alias)}\n"
 
     # Support use as a decorator on an optional user-provided validator.
     if validator is None:
-        # Smoke test to check that setting exists.
-        get(alias)
         # Return a decorator, but its fine if user discards this.
         return functools.partial(register, alias, modulename, deepname)
     else:
