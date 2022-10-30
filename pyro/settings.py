@@ -95,8 +95,9 @@ def set(**kwargs) -> None:
 
 @contextmanager
 def context(**kwargs) -> Iterator[None]:
-    """
-    Context manager to temporarily override one or more settings.
+    r"""
+    Context manager to temporarily override one or more settings. This also
+    works as a decorator.
 
     :param \*\*kwargs: alias=value pairs.
     """
