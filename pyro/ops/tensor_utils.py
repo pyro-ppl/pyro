@@ -7,7 +7,7 @@ import torch
 from torch.fft import irfft, rfft
 
 _ROOT_TWO_INVERSE = 1.0 / math.sqrt(2.0)
-CHOLESKY_RELATIVE_JITTER = 1.0  # in units of finfo.eps
+CHOLESKY_RELATIVE_JITTER = 4.0  # in units of finfo.eps
 
 
 def as_complex(x):
@@ -403,7 +403,7 @@ def safe_cholesky(x):
     if CHOLESKY_RELATIVE_JITTER:
         # Add adaptive jitter.
         x = x.clone()
-        x_max = x.data.reshape(*x.shape[:-2], -1).abs().max(-1, True).values
+        x_max = x.data.abs().max(-1).values
         jitter = CHOLESKY_RELATIVE_JITTER * torch.finfo(x.dtype).eps * x_max
         x.data.diagonal(dim1=-1, dim2=-2).add_(jitter)
 
