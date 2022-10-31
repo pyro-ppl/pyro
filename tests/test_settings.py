@@ -7,6 +7,8 @@ from pyro import settings
 
 _TEST_SETTING: float = 0.1
 
+pytestmark = pytest.mark.stage("unit")
+
 
 def test_settings():
     v0 = settings.get()
