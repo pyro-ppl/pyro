@@ -15,10 +15,6 @@ _PYRO_STACK = []
 # the global ParamStore
 _PYRO_PARAM_STORE = ParamStoreDict()
 
-# toggle usage of local param stores in PyroModules
-_PYRO_MODULE_LOCAL_PARAM = False
-
-
 class _DimAllocator:
     """
     Dimension allocator for internal use by :class:`plate`.

@@ -24,6 +24,15 @@ from pyro.ops.provenance import detach_provenance
 from pyro.poutine.runtime import _PYRO_PARAM_STORE
 
 
+@pyro.settings.register("module_local_params", __name__, "MODULE_LOCAL_PARAMS")
+def _validate_module_local_params(value: bool) -> None:
+    assert isinstance(value, bool), "MODULE_LOCAL_PARAMS must be a bool"
+
+
+def _module_local_param_enabled():
+    return pyro.settings.get("module_local_params")
+
+
 class PyroParam(namedtuple("PyroParam", ("init_value", "constraint", "event_dim"))):
     """
     Declares a Pyro-managed learnable attribute of a :class:`PyroModule`,
