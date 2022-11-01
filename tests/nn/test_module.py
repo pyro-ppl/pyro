@@ -13,14 +13,7 @@ import pyro
 import pyro.distributions as dist
 from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
-from pyro.nn.module import (
-    PyroModule,
-    PyroParam,
-    PyroSample,
-    clear,
-    pyro_method,
-    to_pyro_module_,
-)
+from pyro.nn.module import PyroModule, PyroParam, PyroSample, clear, to_pyro_module_
 from pyro.optim import Adam
 from tests.common import assert_equal
 
@@ -140,70 +133,26 @@ def test_svi_elbomodule_interface(
 
 
 @pytest.mark.parametrize("local_params", [True, False])
-def test_local_param_vanilla_behavior(local_params):
+def test_local_param_global_behavior_fails(local_params):
     class Model(PyroModule):
         def __init__(self):
             super().__init__()
-            self.nn_param = nn.Parameter(torch.tensor(0.0))
-            self.pyro_nn_param = PyroParam(
-                torch.tensor(1.0), constraint=constraints.positive
-            )
-
-        @pyro_method
-        def init_pyro_param(self):
-            return pyro.param(
-                "pyro_param", lambda: torch.tensor(0.5), constraint=constraints.positive
-            )
-
-        @pyro_method
-        def get_pyro_param(self):
-            return pyro.param("pyro_param")
-
-        @pyro_method
-        def update_params(self) -> None:
-            self.get_pyro_param().unconstrained().data += torch.randn(())
-            self.nn_param.unconstrained().data += torch.randn(())
-            self.pyro_nn_param.unconstrained().data += torch.rand(())
+            self.global_nn_param = nn.Parameter(torch.zeros(2))
 
         def forward(self):
-            return self.nn_param, self.pyro_nn_param, self.init_pyro_param()
+            global_param = pyro.param("_global_param", lambda: torch.randn(2))
+            global_nn_param = pyro.param("global_nn_param", self.global_nn_param)
+            return global_param, global_nn_param
 
     with pyro.settings.context(module_local_params=local_params):
         model = Model()
-        model()  # initialize
-
-        pyro_param_0 = model.get_pyro_param()
-        model.update_params()
-        pyro_param_1 = model.get_pyro_param()
-
-        assert pyro_param_1 != pyro_param_0
-
-        model2 = Model()
-        model2()  # initialize
-        pyro_param_2 = model2.get_pyro_param()
-
         if local_params:
-            assert set(pyro.get_param_store().keys()) == set()
-            assert pyro_param_2 == pyro_param_0
-            assert pyro_param_2 != pyro_param_1
+            assert pyro.settings.get("module_local_params")
+            with pytest.raises(NotImplementedError):
+                model()
         else:
-            assert set(pyro.get_param_store().keys()) != set()
-            assert pyro_param_2 != pyro_param_0
-            assert pyro_param_2 == pyro_param_1
-
-        # vanilla param names should be unaffected by module nesting
-        outer = PyroModule[torch.nn.Module]()
-        outer.inner = model
-        outer.inner()  # initialize
-        pyro_param_3 = outer.inner.get_pyro_param()
-
-        assert pyro_param_3 == pyro_param_1
-        assert pyro_param_3 != pyro_param_0
-
-        if local_params:
-            assert "pyro_param" in set(outer._pyro_context.param_state["params"].keys())
-        else:
-            assert "pyro_param" in set(pyro.get_param_store().keys())
+            assert not pyro.settings.get("module_local_params")
+            model()
 
 
 @pytest.mark.parametrize("local_params", [True, False])
