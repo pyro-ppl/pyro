@@ -89,7 +89,7 @@ class CorrLCholeskyTransform(Transform):
 
 class CholeskyTransform(Transform):
     r"""
-    Transform via the mapping :math:`y = cholesky(x)`, where `x` is a
+    Transform via the mapping :math:`y = safe_cholesky(x)`, where `x` is a
     positive definite matrix.
     """
     bijective = True
@@ -116,7 +116,7 @@ class CholeskyTransform(Transform):
 
 class CorrMatrixCholeskyTransform(CholeskyTransform):
     r"""
-    Transform via the mapping :math:`y = cholesky(x)`, where `x` is a
+    Transform via the mapping :math:`y = safe_cholesky(x)`, where `x` is a
     correlation matrix.
     """
     bijective = True
