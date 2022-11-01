@@ -6,8 +6,16 @@ import math
 import torch
 from torch.fft import irfft, rfft
 
+from .. import settings
+
 _ROOT_TWO_INVERSE = 1.0 / math.sqrt(2.0)
 CHOLESKY_RELATIVE_JITTER = 4.0  # in units of finfo.eps
+
+
+@settings.register("cholesky_relative_jitter", __name__, "CHOLESKY_RELATIVE_JITTER")
+def _validate_jitter(value):
+    assert isinstance(value, (float, int))
+    assert 0 <= value
 
 
 def as_complex(x):
