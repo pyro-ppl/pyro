@@ -204,7 +204,12 @@ def _safe_coalesce(t):
 
 def assert_close(actual, expected, atol=1e-7, rtol=0, msg=""):
     if not msg:
-        msg = "{} vs {}".format(actual, expected)
+        actual_str = str(actual)
+        expected_str = str(expected)
+        if "\n" in actual_str or "\n" in expected_str:
+            msg = f"\n{actual_str}\nversus\n{expected_str}"
+        else:
+            msg = f"{actual_str} vs {expected_str}"
     if isinstance(actual, numbers.Number) and isinstance(expected, numbers.Number):
         assert actual == approx(expected, abs=atol, rel=rtol), msg
     # Placing this as a second check allows for coercing of numeric types above;

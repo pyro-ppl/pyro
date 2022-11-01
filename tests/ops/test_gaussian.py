@@ -560,13 +560,13 @@ def test_sequential_gaussian_filter_sample_antithetic(
     assert torch.allclose(sample3, expected)
 
 
-@pytest.mark.filterwarnings("ignore:Singular matrix in cholesky")
 @pytest.mark.parametrize("num_steps", [10, 100, 1000, 10000, 100000, 1000000])
-def test_sequential_gaussian_filter_sample_stability(num_steps):
+@pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=["fp32", "fp64"])
+def test_sequential_gaussian_filter_sample_stability(num_steps, dtype):
     # This tests long-chain filtering at low precision.
-    zero = torch.zeros((), dtype=torch.float)
-    eye = torch.eye(4, dtype=torch.float)
-    noise = torch.randn(num_steps, 4, dtype=torch.float, requires_grad=True)
+    zero = torch.zeros((), dtype=dtype)
+    eye = torch.eye(4, dtype=dtype)
+    noise = torch.randn(num_steps, 4, dtype=dtype, requires_grad=True)
     trans_matrix = torch.tensor(
         [
             [
@@ -594,11 +594,18 @@ def test_sequential_gaussian_filter_sample_stability(num_steps):
                 -0.08525419235229492,
             ],
         ],
-        dtype=torch.float,
+        dtype=dtype,
         requires_grad=True,
     )
 
-    init = Gaussian(zero, zero.expand(4), eye)
+    # Compute steady state distribution.
+    m = trans_matrix
+    cov_ss = eye
+    for _ in range(20):
+        cov_ss = cov_ss + m.T @ cov_ss @ m
+        m = m @ m
+
+    init = Gaussian(zero, zero.expand(4), cov_ss.inverse())
     trans = matrix_and_gaussian_to_gaussian(
         trans_matrix, Gaussian(zero, zero.expand(4), eye)
     ).expand((num_steps - 1,))
@@ -610,3 +617,17 @@ def test_sequential_gaussian_filter_sample_stability(num_steps):
     # Check gradients.
     grads = torch.autograd.grad(x.sum(), [trans_matrix, noise])
     assert all(torch.isfinite(g).all() for g in grads)
+
+    # Check steady state distribution.
+    with torch.no_grad():
+        num_samples = 1000000 // num_steps
+        x = sequential_gaussian_filter_sample(
+            init, trans, sample_shape=(num_samples,)
+        )
+    sample_mean = x.mean([0, 1])  # should be zero
+    assert sample_mean.shape == (4,)
+    std = cov_ss.data.diagonal().sqrt()
+    assert_close(sample_mean / std, zero.expand(4), atol=2 / num_samples**0.5)
+    sample_cov = (x.unsqueeze(-1) @ x.unsqueeze(-2)).mean([0, 1])
+    assert sample_cov.shape == (4, 4)
+    assert_close(sample_cov, cov_ss, rtol=0.02 if dtype is torch.double else 0.5)
