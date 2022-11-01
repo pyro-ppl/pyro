@@ -23,13 +23,16 @@ import pyro
 from pyro.ops.provenance import detach_provenance
 from pyro.poutine.runtime import _PYRO_PARAM_STORE
 
+_MODULE_LOCAL_PARAMS: bool = False
 
-@pyro.settings.register("module_local_params", __name__, "MODULE_LOCAL_PARAMS")
+
+@pyro.settings.register("module_local_params", __name__, "_MODULE_LOCAL_PARAMS")
 def _validate_module_local_params(value: bool) -> None:
-    assert isinstance(value, bool), "MODULE_LOCAL_PARAMS must be a bool"
+    assert isinstance(value, bool)
 
 
-def _module_local_param_enabled():
+def _is_module_local_param_enabled() -> bool:
+    print(pyro.settings.get("module_local_params"))
     return pyro.settings.get("module_local_params")
 
 
@@ -176,10 +179,6 @@ def _unconstrain(constrained_value, constraint):
             constrained_value = constrained_value()
         unconstrained_value = transform_to(constraint).inv(constrained_value.detach())
         return torch.nn.Parameter(unconstrained_value)
-
-
-def _is_module_local_param_enabled() -> bool:
-    return pyro.poutine.runtime._PYRO_MODULE_LOCAL_PARAM
 
 
 class _Context:

@@ -15,6 +15,7 @@ _PYRO_STACK = []
 # the global ParamStore
 _PYRO_PARAM_STORE = ParamStoreDict()
 
+
 class _DimAllocator:
     """
     Dimension allocator for internal use by :class:`plate`.

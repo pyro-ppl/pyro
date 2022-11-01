@@ -94,7 +94,7 @@ def test_svi_elbomodule_interface(
             with pyro.plate("data"):
                 pyro.sample("obs", dist.Cauchy(loc, log_scale.exp()), obs=data)
 
-    with pyro.module_local_param_enabled(local_params):
+    with pyro.settings.context(module_local_params=local_params):
         data = torch.randn(5)
         model = Model()
         model(data)  # initialize
@@ -168,7 +168,7 @@ def test_local_param_vanilla_behavior(local_params):
         def forward(self):
             return self.nn_param, self.pyro_nn_param, self.init_pyro_param()
 
-    with pyro.module_local_param_enabled(local_params):
+    with pyro.settings.context(module_local_params=local_params):
         model = Model()
         model()  # initialize
 
@@ -227,7 +227,7 @@ def test_names(local_params):
             self.p.v
             self.p.w
 
-    with pyro.module_local_param_enabled(local_params):
+    with pyro.settings.context(module_local_params=local_params):
         model = Model()
 
         # Check named_parameters.
@@ -419,7 +419,7 @@ def test_clear(local_params):
         def forward(self):
             return [x.clone() for x in [self.x, self.m.weight, self.m.bias, self.p.x]]
 
-    with pyro.module_local_param_enabled(local_params):
+    with pyro.settings.context(module_local_params=local_params):
         m = Model()
         state0 = m()
 
@@ -696,7 +696,7 @@ def test_to_pyro_module_():
 
 @pytest.mark.parametrize("local_params", [True, False])
 def test_torch_serialize_attributes(local_params):
-    pyro.enable_module_local_param(local_params)
+    pyro.settings.set(module_local_params=local_params)
     module = PyroModule()
     module.x = PyroParam(torch.tensor(1.234), constraints.positive)
     module.y = nn.Parameter(torch.randn(3))
@@ -719,7 +719,7 @@ def test_torch_serialize_attributes(local_params):
 
 @pytest.mark.parametrize("local_params", [True, False])
 def test_torch_serialize_decorators(local_params):
-    with pyro.module_local_param_enabled(local_params):
+    with pyro.settings.context(module_local_params=local_params):
         module = DecoratorModel(3)
         module()  # initialize
 

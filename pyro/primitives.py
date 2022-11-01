@@ -562,35 +562,3 @@ def validation_enabled(is_validate=True):
         dist.enable_validation(distribution_validation_status)
         infer.enable_validation(infer_validation_status)
         poutine.enable_validation(poutine_validation_status)
-
-
-def enable_module_local_param(is_enabled: bool = False) -> None:
-    """
-    Toggles the behavior of :class:`~pyro.nn.module.PyroModule` to use
-    local parameters instead of global parameters.
-
-    When this feature is enabled, :class:`~pyro.nn.module.PyroModule`
-    instances will not share parameters with other instances of the same
-    class through Pyro's global parameter store. Instead, each instance
-    will have its own local parameters, just like a standard :class:`torch.nn.Module`.
-
-    .. note:: This feature is disabled by default to ensure backwards compatibility
-        of :class:`~pyro.nn.module.PyroModule` with existing Pyro code.
-
-    :param bool is_enabled: (optional; defaults to False) whether to
-        enable local parameters.
-    """
-    poutine.runtime._PYRO_MODULE_LOCAL_PARAM = is_enabled
-
-
-@contextmanager
-def module_local_param_enabled(is_enabled=False):
-    """
-    Context manager to temporarily toggle local parameter stores in PyroModules.
-    """
-    old_flag = poutine.runtime._PYRO_MODULE_LOCAL_PARAM
-    poutine.runtime._PYRO_MODULE_LOCAL_PARAM = is_enabled
-    try:
-        yield
-    finally:
-        poutine.runtime._PYRO_MODULE_LOCAL_PARAM = old_flag
