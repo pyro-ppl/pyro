@@ -645,25 +645,25 @@ def test_to_pyro_module_():
 
 @pytest.mark.parametrize("local_params", [True, False])
 def test_torch_serialize_attributes(local_params):
-    pyro.settings.set(module_local_params=local_params)
-    module = PyroModule()
-    module.x = PyroParam(torch.tensor(1.234), constraints.positive)
-    module.y = nn.Parameter(torch.randn(3))
-    assert isinstance(module.x, torch.Tensor)
+    with pyro.settings.context(module_local_params=local_params):
+        module = PyroModule()
+        module.x = PyroParam(torch.tensor(1.234), constraints.positive)
+        module.y = nn.Parameter(torch.randn(3))
+        assert isinstance(module.x, torch.Tensor)
 
-    # Work around https://github.com/pytorch/pytorch/issues/27972
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=UserWarning)
-        f = io.BytesIO()
-        torch.save(module, f)
-        pyro.clear_param_store()
-        f.seek(0)
-        actual = torch.load(f)
+        # Work around https://github.com/pytorch/pytorch/issues/27972
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            f = io.BytesIO()
+            torch.save(module, f)
+            pyro.clear_param_store()
+            f.seek(0)
+            actual = torch.load(f)
 
-    assert_equal(actual.x, module.x)
-    actual_names = {name for name, _ in actual.named_parameters()}
-    expected_names = {name for name, _ in module.named_parameters()}
-    assert actual_names == expected_names
+        assert_equal(actual.x, module.x)
+        actual_names = {name for name, _ in actual.named_parameters()}
+        expected_names = {name for name, _ in module.named_parameters()}
+        assert actual_names == expected_names
 
 
 @pytest.mark.parametrize("local_params", [True, False])
