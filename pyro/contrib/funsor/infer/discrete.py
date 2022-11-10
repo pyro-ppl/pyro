@@ -36,7 +36,7 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
         log_prob = funsor.sum_product.sum_product(
             sum_op,
             prod_op,
-            terms["log_factors"] + terms["log_measures"],
+            terms["log_factors"] + list(terms["log_measures"].values()),
             eliminate=terms["measure_vars"] | terms["plate_vars"],
             plates=terms["plate_vars"],
         )

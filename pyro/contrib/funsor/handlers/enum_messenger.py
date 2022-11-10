@@ -18,7 +18,9 @@ from pyro.contrib.funsor.handlers.named_messenger import NamedMessenger
 from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
 from pyro.contrib.funsor.handlers.replay_messenger import ReplayMessenger
 from pyro.contrib.funsor.handlers.trace_messenger import TraceMessenger
+from pyro.ops.provenance import detach_provenance, extract_provenance
 from pyro.poutine.escape_messenger import EscapeMessenger
+from pyro.poutine.reentrant_messenger import ReentrantMessenger
 from pyro.poutine.subsample_messenger import _Subsample
 
 funsor.set_backend("torch")
@@ -56,6 +58,13 @@ def _get_support_value_tensor(funsor_dist, name, **kwargs):
         OrderedDict([(name, funsor_dist.inputs[name])]),
         funsor_dist.inputs[name].size,
     )
+
+
+@_get_support_value.register(funsor.Provenance)
+def _get_support_value_sampled(funsor_dist, name, **kwargs):
+    assert name in funsor_dist.inputs
+    value = _get_support_value(funsor_dist.term, name, **kwargs)
+    return funsor.Provenance(value, funsor_dist.provenance)
 
 
 @_get_support_value.register(funsor.distribution.Distribution)
@@ -179,6 +188,49 @@ def enumerate_site(dist, msg):
     raise ValueError("{} not valid enum strategy".format(msg))
 
 
+@extract_provenance.register(funsor.Provenance)
+def _extract_provenance_funsor(x):
+    return x.term, x.provenance
+
+
+class ProvenanceMessenger(ReentrantMessenger):
+    """
+    Adds provenance information for all sample sites that are not enumerated.
+    """
+
+    def _pyro_sample(self, msg):
+        if (
+            msg["done"]
+            or msg["is_observed"]
+            or msg["infer"].get("enumerate") == "parallel"
+            or isinstance(msg["fn"], _Subsample)
+        ):
+            return
+
+        if "funsor" not in msg:
+            msg["funsor"] = {}
+
+        with funsor.terms.lazy:
+            unsampled_log_measure = to_funsor(msg["fn"], output=funsor.Real)(
+                value=msg["name"]
+            )
+        # TODO delegate to enumerate_site
+        log_measure = _enum_strategy_default(unsampled_log_measure, msg)
+        msg["funsor"]["log_measure"] = detach_provenance(log_measure)
+        support_value = _get_support_value(
+            log_measure,
+            msg["name"],
+            expand=msg["infer"].get("expand", False),
+        )
+        # TODO delegate to _get_support_value
+        msg["funsor"]["value"] = funsor.Provenance(
+            support_value,
+            frozenset([(msg["name"], detach_provenance(support_value))]),
+        )
+        msg["value"] = to_data(msg["funsor"]["value"])
+        msg["done"] = True
+
+
 class EnumMessenger(NamedMessenger):
     """
     This version of :class:`~EnumMessenger` uses :func:`~pyro.contrib.funsor.to_data`
@@ -200,9 +252,10 @@ class EnumMessenger(NamedMessenger):
         unsampled_log_measure = to_funsor(msg["fn"], output=funsor.Real)(
             value=msg["name"]
         )
-        msg["funsor"]["log_measure"] = enumerate_site(unsampled_log_measure, msg)
+        log_measure = enumerate_site(unsampled_log_measure, msg)
+        msg["funsor"]["log_measure"] = detach_provenance(log_measure)
         msg["funsor"]["value"] = _get_support_value(
-            msg["funsor"]["log_measure"],
+            log_measure,
             msg["name"],
             expand=msg["infer"].get("expand", False),
         )

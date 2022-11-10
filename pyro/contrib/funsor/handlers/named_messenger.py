@@ -4,6 +4,8 @@
 from collections import OrderedDict
 from contextlib import ExitStack
 
+import funsor
+
 from pyro.contrib.funsor.handlers.runtime import (
     _DIM_STACK,
     DimRequest,
@@ -64,7 +66,10 @@ class NamedMessenger(ReentrantMessenger):
         name_to_dim = msg["kwargs"].setdefault("name_to_dim", OrderedDict())
         dim_type = msg["kwargs"].setdefault("dim_type", DimType.LOCAL)
 
-        batch_names = tuple(funsor_value.inputs.keys())
+        if isinstance(funsor_value, funsor.Provenance):
+            batch_names = tuple(funsor_value.term.inputs.keys())
+        else:
+            batch_names = tuple(funsor_value.inputs.keys())
 
         # interpret all names/dims as requests since we only run this function once
         name_to_dim_request = name_to_dim.copy()
