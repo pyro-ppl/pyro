@@ -222,6 +222,6 @@ def setup(app):
 if "READTHEDOCS" in os.environ:
     os.system("pip install numpy")
     os.system(
-        "pip install torch==1.11.0+cpu torchvision==0.12.0+cpu "
+        "pip install torch==1.13.0+cpu torchvision==0.14.0+cpu "
         "-f https://download.pytorch.org/whl/torch_stable.html"
     )
