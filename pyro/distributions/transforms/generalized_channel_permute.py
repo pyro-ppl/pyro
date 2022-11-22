@@ -174,7 +174,7 @@ class GeneralizedChannelPermute(ConditionedGeneralizedChannelPermute, TransformM
         W, _ = torch.linalg.qr(torch.randn(channels, channels))
 
         # Construct the partially pivoted LU-form and the pivots
-        LU, pivots = W.lu()
+        LU, pivots = torch.linalg.lu_factor(W)
 
         # Convert the pivots into the permutation matrix
         if permutation is None:
