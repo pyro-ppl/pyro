@@ -16,7 +16,11 @@ from pyro.ops.einsum.adjoint import require_backward
 from pyro.ops.rings import MarginalRing
 from pyro.poutine.util import site_is_subsample
 
+from .. import settings
+
 _VALIDATION_ENABLED = __debug__
+settings.register("validate_infer", __name__, "_VALIDATION_ENABLED")
+
 LAST_CACHE_SIZE = [Counter()]  # for profiling
 
 

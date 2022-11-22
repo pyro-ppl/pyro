@@ -15,8 +15,17 @@ from torch.distributions.utils import broadcast_all
 
 from pyro.util import ignore_jit_warnings
 
+from .. import settings
+
 _VALIDATION_ENABLED = __debug__
 torch_dist.Distribution.set_default_validate_args(__debug__)
+
+settings.register("validate_distributions_pyro", __name__, "_VALIDATION_ENABLED")
+settings.register(
+    "validate_distributions_torch",
+    "torch.distributions.distribution",
+    "Distribution._validate_args",
+)
 
 log_sum_exp = logsumexp  # DEPRECATED
 

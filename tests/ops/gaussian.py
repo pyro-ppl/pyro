@@ -8,30 +8,32 @@ from pyro.ops.gaussian import Gaussian
 from tests.common import assert_close
 
 
-def random_gaussian(batch_shape, dim, rank=None):
+def random_gaussian(batch_shape, dim, rank=None, *, requires_grad=False):
     """
     Generate a random Gaussian for testing.
     """
     if rank is None:
         rank = dim + dim
-    log_normalizer = torch.randn(batch_shape)
-    info_vec = torch.randn(batch_shape + (dim,))
+    log_normalizer = torch.randn(batch_shape, requires_grad=requires_grad)
+    info_vec = torch.randn(batch_shape + (dim,), requires_grad=requires_grad)
     samples = torch.randn(batch_shape + (dim, rank))
     precision = torch.matmul(samples, samples.transpose(-2, -1))
+    precision.requires_grad_(requires_grad)
     result = Gaussian(log_normalizer, info_vec, precision)
     assert result.dim() == dim
     assert result.batch_shape == batch_shape
     return result
 
 
-def random_mvn(batch_shape, dim):
+def random_mvn(batch_shape, dim, *, requires_grad=False):
     """
     Generate a random MultivariateNormal distribution for testing.
     """
     rank = dim + dim
-    loc = torch.randn(batch_shape + (dim,))
+    loc = torch.randn(batch_shape + (dim,), requires_grad=requires_grad)
     cov = torch.randn(batch_shape + (dim, rank))
     cov = cov.matmul(cov.transpose(-1, -2))
+    cov.requires_grad_(requires_grad)
     return dist.MultivariateNormal(loc, cov)
 
 

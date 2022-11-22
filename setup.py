@@ -69,13 +69,13 @@ EXTRAS_REQUIRE = [
     "graphviz>=0.8",
     "matplotlib>=1.3",
     "torchvision>=0.12.0",
-    "visdom>=0.1.4",
+    "visdom>=0.1.4,<0.2.2",  # FIXME visdom.utils is unavailable >=0.2.2
     "pandas",
     "pillow==8.2.0",  # https://github.com/pytorch/pytorch/issues/61125
     "scikit-learn",
     "seaborn>=0.11.0",
     "wget",
-    "lap",
+    "lap",  # Requires setuptools<60
     # 'biopython>=1.54',
     # 'scanpy>=1.4',  # Requires HDF5
     # 'scvi>=0.6',  # Requires loopy and other fragile packages

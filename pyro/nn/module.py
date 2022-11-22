@@ -23,6 +23,17 @@ import pyro
 from pyro.ops.provenance import detach_provenance
 from pyro.poutine.runtime import _PYRO_PARAM_STORE
 
+_MODULE_LOCAL_PARAMS: bool = False
+
+
+@pyro.settings.register("module_local_params", __name__, "_MODULE_LOCAL_PARAMS")
+def _validate_module_local_params(value: bool) -> None:
+    assert isinstance(value, bool)
+
+
+def _is_module_local_param_enabled() -> bool:
+    return pyro.settings.get("module_local_params")
+
 
 class PyroParam(namedtuple("PyroParam", ("init_value", "constraint", "event_dim"))):
     """
@@ -178,8 +189,13 @@ class _Context:
         self.active = 0
         self.cache = {}
         self.used = False
+        if _is_module_local_param_enabled():
+            self.param_state = {"params": {}, "constraints": {}}
 
     def __enter__(self):
+        if not self.active and _is_module_local_param_enabled():
+            self._param_ctx = pyro.get_param_store().scope(state=self.param_state)
+            self.param_state = self._param_ctx.__enter__()
         self.active += 1
         self.used = True
 
@@ -187,6 +203,9 @@ class _Context:
         self.active -= 1
         if not self.active:
             self.cache.clear()
+            if _is_module_local_param_enabled():
+                self._param_ctx.__exit__(type, value, traceback)
+                del self._param_ctx
 
     def get(self, name):
         if self.active:
@@ -409,6 +428,8 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             yield elem
 
     def _pyro_set_supermodule(self, name, context):
+        if _is_module_local_param_enabled() and pyro.settings.get("validate_poutine"):
+            self._check_module_local_param_usage()
         self._pyro_name = name
         self._pyro_context = context
         for key, value in self._modules.items():
@@ -424,7 +445,26 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
 
     def __call__(self, *args, **kwargs):
         with self._pyro_context:
-            return super().__call__(*args, **kwargs)
+            result = super().__call__(*args, **kwargs)
+        if (
+            pyro.settings.get("validate_poutine")
+            and not self._pyro_context.active
+            and _is_module_local_param_enabled()
+        ):
+            self._check_module_local_param_usage()
+        return result
+
+    def _check_module_local_param_usage(self) -> None:
+        self_nn_params = set(id(p) for p in self.parameters())
+        self_pyro_params = set(
+            id(p if not hasattr(p, "unconstrained") else p.unconstrained())
+            for p in self._pyro_context.param_state["params"].values()
+        )
+        if not self_pyro_params <= self_nn_params:
+            raise NotImplementedError(
+                "Support for global pyro.param statements in PyroModules "
+                "with local param mode enabled is not yet implemented."
+            )
 
     def __getattr__(self, name):
         # PyroParams trigger pyro.param statements.

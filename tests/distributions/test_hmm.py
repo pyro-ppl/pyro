@@ -13,8 +13,6 @@ import pyro
 import pyro.distributions as dist
 from pyro.distributions.hmm import (
     _sequential_gamma_gaussian_tensordot,
-    _sequential_gaussian_filter_sample,
-    _sequential_gaussian_tensordot,
     _sequential_logmatmulexp,
 )
 from pyro.distributions.util import broadcast_shape
@@ -36,7 +34,7 @@ from tests.ops.gamma_gaussian import (
     random_gamma,
     random_gamma_gaussian,
 )
-from tests.ops.gaussian import assert_close_gaussian, random_gaussian, random_mvn
+from tests.ops.gaussian import random_mvn
 
 logger = logging.getLogger(__name__)
 
@@ -91,35 +89,6 @@ def test_sequential_logmatmulexp(batch_shape, state_dim, num_steps):
         equation, *operands, backend="pyro.ops.einsum.torch_log"
     )
     assert_close(actual, expected)
-
-
-@pytest.mark.parametrize("num_steps", list(range(1, 20)))
-@pytest.mark.parametrize("state_dim", [1, 2, 3])
-@pytest.mark.parametrize("batch_shape", [(), (5,), (2, 4)], ids=str)
-def test_sequential_gaussian_tensordot(batch_shape, state_dim, num_steps):
-    g = random_gaussian(batch_shape + (num_steps,), state_dim + state_dim)
-    actual = _sequential_gaussian_tensordot(g)
-    assert actual.dim() == g.dim()
-    assert actual.batch_shape == batch_shape
-
-    # Check against hand computation.
-    expected = g[..., 0]
-    for t in range(1, num_steps):
-        expected = gaussian_tensordot(expected, g[..., t], state_dim)
-    assert_close_gaussian(actual, expected)
-
-
-@pytest.mark.parametrize("num_steps", list(range(1, 20)))
-@pytest.mark.parametrize("state_dim", [1, 2, 3])
-@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
-@pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
-def test_sequential_gaussian_filter_sample(
-    sample_shape, batch_shape, state_dim, num_steps
-):
-    init = random_gaussian(batch_shape, state_dim)
-    trans = random_gaussian(batch_shape + (num_steps,), state_dim + state_dim)
-    sample = _sequential_gaussian_filter_sample(init, trans, sample_shape)
-    assert sample.shape == sample_shape + batch_shape + (num_steps, state_dim)
 
 
 @pytest.mark.parametrize("num_steps", list(range(1, 20)))
