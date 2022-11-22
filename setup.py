@@ -75,7 +75,7 @@ EXTRAS_REQUIRE = [
     "scikit-learn",
     "seaborn>=0.11.0",
     "wget",
-    "lap",
+    "lap",  # Requires setuptools<60
     # 'biopython>=1.54',
     # 'scanpy>=1.4',  # Requires HDF5
     # 'scvi>=0.6',  # Requires loopy and other fragile packages
