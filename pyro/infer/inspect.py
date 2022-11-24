@@ -5,7 +5,7 @@ import itertools
 from collections import defaultdict
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional, Union
 
 import torch
 
@@ -276,6 +276,8 @@ def get_model_relations(
         model_args = ()
     if model_kwargs is None:
         model_kwargs = {}
+    assert isinstance(model_args, tuple)
+    assert isinstance(model_kwargs, dict)
 
     with torch.random.fork_rng(), torch.no_grad(), pyro.validation_enabled(False):
         with TrackProvenance():
@@ -435,6 +437,31 @@ def generate_graph_specification(
     }
 
 
+def _deep_merge(things: list):
+    if len(things) == 1:
+        return things[0]
+
+    # Recurse into dicts.
+    if isinstance(things[0], dict):
+        result = {}
+        for thing in things:
+            for key, value in thing.items():
+                if key not in result:
+                    result[key] = _deep_merge([t[key] for t in things])
+        return result
+
+    # Vote for booleans.
+    if isinstance(things[0], bool):
+        if all(x is True for x in things):
+            return True
+        if all(x is False for x in things):
+            return False
+        return None  # i.e. maybe
+
+    # Otherwise choose arbitrarily.
+    return things[0]
+
+
 def render_graph(
     graph_specification: dict, render_distributions: bool = False
 ) -> "graphviz.Digraph":
@@ -472,11 +499,12 @@ def render_graph(
     plate_graph_dict[None] = graph
 
     # add nodes
+    colors = {False: "white", True: "gray", None: "gray:white"}
     for plate, rv_list in plate_groups.items():
         cur_graph = plate_graph_dict[plate]
 
         for rv in rv_list:
-            color = "grey" if node_data[rv]["is_observed"] else "white"
+            color = colors[node_data[rv]["is_observed"]]
 
             # For sample_nodes - ellipse
             if node_data[rv]["distribution"]:
@@ -526,8 +554,8 @@ def render_graph(
 
 def render_model(
     model: Callable,
-    model_args: Optional[tuple] = None,
-    model_kwargs: Optional[dict] = None,
+    model_args: Optional[Union[tuple, List[tuple]]] = None,
+    model_kwargs: Optional[Union[dict, List[dict]]] = None,
     filename: Optional[str] = None,
     render_distributions: bool = False,
     render_params: bool = False,
@@ -540,8 +568,10 @@ def render_model(
     `model rendering tutorial <https://pyro.ai/examples/model_rendering.html>`_ .
 
     :param model: Model to render.
-    :param model_args: Positional arguments to pass to the model.
-    :param model_kwargs: Keyword arguments to pass to the model.
+    :param model_args: Tuple of positional arguments to pass to the model, or
+        list of tuples for semisupervised models.
+    :param model_kwargs: Dict of keyword arguments to pass to the model, or
+        list of dicts for semisupervised models.
     :param str filename: File to save rendered model in.
     :param bool render_distributions: Whether to include RV distribution
         annotations (and param constraints) in the plot.
@@ -549,14 +579,28 @@ def render_model(
     :returns: A model graph.
     :rtype: graphviz.Digraph
     """
-    assert model_args is None or isinstance(
-        model_args, tuple
-    ), "model_args must be None or tuple"
-    assert model_kwargs is None or isinstance(
-        model_kwargs, dict
-    ), "model_kwargs must be None or dict"
-    relations = get_model_relations(model, model_args, model_kwargs)
-    graph_spec = generate_graph_specification(relations, render_params=render_params)
+    # Get model relations.
+    if not isinstance(model_args, list) and not isinstance(model_kwargs, list):
+        relations = [get_model_relations(model, model_args, model_kwargs)]
+    else:  # semisupervised
+        if isinstance(model_args, list):
+            if not isinstance(model_kwargs, list):
+                model_kwargs = [model_kwargs] * len(model_args)
+        elif not isinstance(model_args, list):
+            model_args = [model_args] * len(model_kwargs)
+        assert len(model_args) == len(model_kwargs)
+        relations = [
+            get_model_relations(model, args, kwargs)
+            for args, kwargs in zip(model_args, model_kwargs)
+        ]
+
+    # Get graph specifications.
+    graph_specs = [
+        generate_graph_specification(r, render_params=render_params) for r in relations
+    ]
+    graph_spec = _deep_merge(graph_specs)
+
+    # Render.
     graph = render_graph(graph_spec, render_distributions=render_distributions)
 
     if filename is not None:
