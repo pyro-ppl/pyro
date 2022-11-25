@@ -1025,6 +1025,61 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         return self.loc, scale
 
 
+class AutoGaussianHMM(AutoContinuous):
+    scale_tril_constraint = constraints.softplus_scale_tril
+
+    def __init__(
+        self,
+        model,
+        plate_name: str = "time",
+        *,
+        rank: Optional[int] = None,
+        init_loc_fn: Callable = init_to_median,
+    ):
+        super().__init__(model, init_loc_fn=init_loc_fn)
+        self.rank = rank
+        self.register_buffer("zero", torch.zeros(()))
+
+    def _setup_prototype(self, *args, **kwargs):
+        super()._setup_prototype(*args, **kwargs)
+        if self.rank is None:
+            self.rank = int(round(self.latent_dim**0.5))
+        self.init_scale_tril = PyroParam(
+            torch.eye(self.rank),
+            constraint=self.scale_tril_constraint,
+        )
+        self.trans_scale_tril = PyroParam(
+            0.1 * torch.eye(self.rank),
+            constraint=self.scale_tril_constraint,
+        )
+        self.trans_matrix = nn.Parameter(0.9 * torch.eye(self.rank, self.rank))
+        self.obs_loc = nn.Parameter(self._init_loc())
+        self.obs_scale_tril = PyroParam(
+            0.1 * torch.eye(self.obs_loc.size(-1)),
+            constraint=self.scale_tril_constraint,
+        )
+        self.obs_matrix = nn.Parameter(torch.randn(self.rank, self.obs_loc.size(-1)))
+
+    def get_posterior(self, *args, **kwargs):
+        init_dist = dist.MultivariateNormal(
+            self.zero.expand(self.rank), scale_tril=self.init_scale_tril
+        )
+        trans_dist = dist.MultivariateNormal(
+            self.zero.expand(self.rank), scale_tril=self.trans_scale_tril
+        )
+        obs_dist = dist.MultivariateNormal(
+            self.obs_loc, scale_tril=self.obs_scale_tril
+        )
+        return dist.GaussianHMM(
+            init_dist,
+            self.trans_matrix,
+            trans_dist,
+            self.obs_matrix,
+            obs_dist,
+            duration=self.duration,
+        )
+
+
 class AutoNormalizingFlow(AutoContinuous):
     """
     This implementation of :class:`AutoContinuous` uses a Diagonal Normal
