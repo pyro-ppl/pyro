@@ -7,7 +7,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 from pyro.distributions.testing.fakes import NonreparameterizedNormal
-from pyro.infer.inspect import get_dependencies
+from pyro.infer.inspect import _deep_merge, get_dependencies
 
 
 @pytest.mark.parametrize("grad_enabled", [True, False])
@@ -422,4 +422,31 @@ def test_nested_plate_collider():
             "c": {"c": {"i"}, "d": _},
         },
     }
+    assert actual == expected
+
+
+DEEP_MERGE_EXAMPLES = [
+    ([True], True),
+    ([False], False),
+    ([True, True], True),
+    ([True, False], None),
+    ([False, False], False),
+    ([{"a": True}], {"a": True}),
+    ([{"a": True}, {"a": True}], {"a": True}),
+    ([{"a": True}, {"a": False}], {"a": None}),
+    (
+        [
+            {"a": True, "b": {"c": True}, "d": False, "e": 0},
+            {"a": True, "b": {"c": True}, "d": True, "e": 1},
+            {"a": True, "b": {"c": False}, "d": False, "e": 2},
+            {"a": True, "b": {"c": True}, "d": False, "e": 3},
+        ],
+        {"a": True, "b": {"c": None}, "d": None, "e": 0},
+    ),
+]
+
+
+@pytest.mark.parametrize("things, expected", DEEP_MERGE_EXAMPLES)
+def test_deep_merge(things, expected):
+    actual = _deep_merge(things)
     assert actual == expected
