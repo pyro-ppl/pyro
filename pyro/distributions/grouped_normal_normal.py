@@ -24,15 +24,29 @@ class GroupedNormalNormal(TorchDistribution):
 
     See e.g. Eqn. (55) in ref. [1] for relevant expressions in a simpler case with scalar `obs_scale`.
 
+    Example:
+
+    >>> num_groups = 3
+    >>> num_data = 4
+    >>> prior_loc = torch.randn(num_groups)
+    >>> prior_scale = torch.rand(num_groups)
+    >>> obs_scale = torch.rand(num_data)
+    >>> group_idx = torch.tensor([1, 0, 2, 1]).long()
+    >>> values = torch.randn(num_data)
+    >>> gnn = GroupedNormalNormal(prior_loc, prior_scale, obs_scale, group_idx)
+    >>> assert gnn.log_prob(values).shape == ()
+
     References:
     [1] "Conjugate Bayesian analysis of the Gaussian distribution," Kevin P. Murphy.
 
-    Args:
-        prior_loc: (num_groups,)
-        prior_scale: (num_groups,)
-        obs_scale: (num_data,)
-        group_idx: (num_data,)
-        value: (num_data,)
+    :param torch.Tensor prior_loc: Tensor of shape `(num_groups,)` specifying the prior mean of the latent
+        of each group.
+    :param torch.Tensor prior_scale: Tensor of shape `(num_groups,)` specifying the prior scale of the latent
+        of each group.
+    :param torch.Tensor obs_scale: Tensor of shape `(num_data,)` specifying the scale of the observation noise
+        of each observation.
+    :param torch.LongTensor group_idx: Tensor of indices of shape `(num_data,)` linking each observation to one
+        of the `num_groups` groups that are specified in `prior_loc` and `prior_scale`.
     """
     arg_constraints = {
         "prior_loc": constraints.real,
@@ -74,6 +88,11 @@ class GroupedNormalNormal(TorchDistribution):
         raise NotImplementedError
 
     def get_posterior(self, value):
+        """
+        Get a `pyro.distributions.Normal` distribution that encodes the posterior distribution
+        over the vector of latents specified by `prior_loc` and `prior_scale` conditioned on the
+        observed data specified by `value`.
+        """
         obs_scale_sq_inv = self.obs_scale.pow(-2)
         prior_scale_sq_inv = self.prior_scale.pow(-2)
 
