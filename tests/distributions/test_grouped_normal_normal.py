@@ -9,7 +9,7 @@ from pyro.distributions import GroupedNormalNormal, Normal
 from tests.common import assert_close
 
 
-def test_grouped_normal_normal(num_groups=3, num_samples=10 * 6):
+def test_grouped_normal_normal(num_groups=3, num_samples=10 ** 5):
     prior_scale = torch.rand(num_groups)
     prior_loc = torch.randn(num_groups)
     group_idx = torch.cat(
@@ -35,9 +35,10 @@ def test_grouped_normal_normal(num_groups=3, num_samples=10 * 6):
     gnn = GroupedNormalNormal(prior_loc, prior_scale, obs_scale, group_idx)
     actual = gnn.log_prob(values).item()
 
-    prior = Normal(prior_loc, prior_scale)
-    z = prior.sample(sample_shape=(num_samples,))
+    prior = Normal(0.0, prior_scale)
+    z = prior.sample(sample_shape=(num_samples // 2,))
+    z = torch.cat([prior_loc + z, prior_loc - z])
     log_likelihood = Normal(z, obs_scale).log_prob(values).sum(-1)
     expected = torch.logsumexp(log_likelihood, dim=-1).item() - math.log(num_samples)
 
-    assert_close(actual, expected, atol=0.02)
+    assert_close(actual, expected, atol=0.001)
