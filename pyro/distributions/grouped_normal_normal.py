@@ -58,6 +58,19 @@ class GroupedNormalNormal(TorchDistribution):
     def __init__(
         self, prior_loc, prior_scale, obs_scale, group_idx, validate_args=None
     ):
+        if prior_loc.ndim not in [0, 1] or prior_scale.ndim not in [0, 1]:
+            raise ValueError(
+                "prior_loc and prior_scale must be broadcastable to 1D tensors of the same shape."
+            )
+
+        if obs_scale.ndim not in [0, 1]:
+            raise ValueError(
+                "obs_scale must be broadcastable to a 1-dimensional tensor."
+            )
+
+        if group_idx.ndim != 1 or not isinstance(group_idx, torch.LongTensor):
+            raise ValueError("group_idx must be a 1-dimensional tensor of indices.")
+
         prior_loc, prior_scale = broadcast_all(prior_loc, prior_scale)
         obs_scale, group_idx = broadcast_all(obs_scale, group_idx)
 
@@ -93,6 +106,11 @@ class GroupedNormalNormal(TorchDistribution):
         over the vector of latents specified by `prior_loc` and `prior_scale` conditioned on the
         observed data specified by `value`.
         """
+        if value.shape != self.group_idx.shape:
+            raise ValueError(
+                "GroupedNormalNormal.get_posterior only supports values that have the same shape as group_idx."
+            )
+
         obs_scale_sq_inv = self.obs_scale.pow(-2)
         prior_scale_sq_inv = self.prior_scale.pow(-2)
 
@@ -105,7 +123,7 @@ class GroupedNormalNormal(TorchDistribution):
         )
 
         loc = (scaled_value_sum + self.prior_loc * prior_scale_sq_inv) / precision
-        scale = precision.pow(-0.5)
+        scale = precision.rsqrt()
 
         return Normal(loc=loc, scale=scale)
 
