@@ -57,12 +57,18 @@ jobs:
           pip install torch==1.9.0+cpu torchvision==0.10.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           pip install .[test]
           pip install -r docs/requirements.txt
+          # requirements for tutorials
+          pip install nbformat
+          pip install nbsphinx>=0.3.2
+          pip install nbstripout
+          pip install pypandoc
+          pip install ninja
           pip freeze
       - name: Build docs and run doctest
         run: |
           make docs
           make doctest
-          make tutorial
+          SPHINXOPTS="-E -W" make tutorial
   unit:
     runs-on: ubuntu-20.04
     needs: docs
