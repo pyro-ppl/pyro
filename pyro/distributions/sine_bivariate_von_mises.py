@@ -130,14 +130,14 @@ class SineBivariateVonMises(TorchDistribution):
 
     @lazy_property
     def norm_const(self):
-        corr = self.correlation.view(1, -1) + 1e-8
+        corr = self.correlation.view(1, -1)
         conc = torch.stack(
             (self.phi_concentration, self.psi_concentration), dim=-1
         ).view(-1, 2)
         m = torch.arange(50, device=self.phi_loc.device).view(-1, 1)
         fs = (
             SineBivariateVonMises._lbinoms(m.max() + 1).view(-1, 1)
-            + 2 * m * torch.log(corr)
+            + m * torch.log(corr ** 2)
             - m * torch.log(4 * torch.prod(conc, dim=-1))
         )
         fs += log_I1(m.max(), conc, 51).sum(-1)
