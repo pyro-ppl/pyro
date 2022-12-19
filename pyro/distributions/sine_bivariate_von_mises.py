@@ -95,8 +95,9 @@ class SineBivariateVonMises(TorchDistribution):
             sqrt_ = (
                 torch.sqrt if isinstance(phi_concentration, torch.Tensor) else math.sqrt
             )
+            eps = torch.finfo(weighted_correlation.dtype).eps
             correlation = (
-                weighted_correlation * sqrt_(phi_concentration * psi_concentration)
+                (weighted_correlation * sqrt_(phi_concentration * psi_concentration)).clamp(min=eps)
                 + 1e-8
             )
 
@@ -135,9 +136,10 @@ class SineBivariateVonMises(TorchDistribution):
             (self.phi_concentration, self.psi_concentration), dim=-1
         ).view(-1, 2)
         m = torch.arange(50, device=self.phi_loc.device).view(-1, 1)
+        eps = torch.finfo(corr.dtype).eps
         fs = (
             SineBivariateVonMises._lbinoms(m.max() + 1).view(-1, 1)
-            + m * torch.log(corr**2)
+            + m * torch.log((corr**2).clamp(min=eps))
             - m * torch.log(4 * torch.prod(conc, dim=-1))
         )
         fs += log_I1(m.max(), conc, 51).sum(-1)
