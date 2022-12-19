@@ -526,9 +526,17 @@ continuous_dists = [
         pyro_dist=dist.ProjectedNormal,
         examples=[
             {"concentration": [0.0, 0.0], "test_data": [1.0, 0.0]},
+            {"concentration": [0.2, 0.1], "test_data": [1.0, 0.0]},
             {"concentration": [2.0, 3.0], "test_data": [0.0, 1.0]},
-            {"concentration": [0.0, 0.0, 0.0], "test_data": [1.0, 0.0, 0.0]},
+            {"concentration": [0.1, 0.0, 0.0], "test_data": [1.0, 0.0, 0.0]},
+            {"concentration": [0.3, 0.2, 0.1], "test_data": [1.0, 0.0, 0.0]},
             {"concentration": [-1.0, 2.0, 3.0], "test_data": [0.0, 0.0, 1.0]},
+            {"concentration": [0.0, 0.0, 0.0, 0.0], "test_data": [1.0, 0.0, 0.0, 0.0]},
+            {"concentration": [0.4, 0.3, 0.2, 0.1], "test_data": [1.0, 0.0, 0.0, 0.0]},
+            {
+                "concentration": [-1.0, 2.0, 0.5, -0.5],
+                "test_data": [0.0, 1.0, 0.0, 0.0],
+            },
         ],
     ),
     Fixture(
@@ -997,6 +1005,24 @@ discrete_dists = [
         ],
         scipy_arg_fn=lambda probs: ((np.array(probs), -1), {}),
         prec=0.08,
+        is_discrete=True,
+    ),
+    Fixture(
+        pyro_dist=dist.LogNormalNegativeBinomial,
+        examples=[
+            {
+                "logits": [0.6],
+                "total_count": 8,
+                "multiplicative_noise_scale": [0.1],
+                "test_data": [4.0],
+            },
+            {
+                "logits": [0.2, 0.4],
+                "multiplicative_noise_scale": [0.1, 0.2],
+                "total_count": [[8.0, 7.0], [5.0, 9.0]],
+                "test_data": [[6.0, 3.0], [2.0, 8.0]],
+            },
+        ],
         is_discrete=True,
     ),
 ]

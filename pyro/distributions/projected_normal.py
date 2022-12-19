@@ -126,6 +126,10 @@ def _dot(x, y):
     return (x[..., None, :] @ y[..., None])[..., 0, 0]
 
 
+def _safe_log(x):
+    return x.clamp(min=torch.finfo(x.dtype).eps).log()
+
+
 @ProjectedNormal._register_log_prob(dim=2)
 def _log_prob_2(concentration, value):
     # We integrate along a ray, factorizing the integrand as a product of:
@@ -139,13 +143,11 @@ def _log_prob_2(concentration, value):
     # This is the log of a definite integral, computed by mathematica:
     # Integrate[x/(E^((x-t)^2/2) Sqrt[2 Pi]), {x, 0, Infinity}]
     # = (t + Sqrt[2/Pi]/E^(t^2/2) + t Erf[t/Sqrt[2]])/2
-    para_part = (
-        (
-            t2.mul(-0.5).exp().mul((2 / math.pi) ** 0.5)
-            + t * (1 + (t * 0.5 ** 0.5).erf())
-        )
-        .mul(0.5)
-        .log()
+    # = (Sqrt[2/Pi]/E^(t^2/2) + t (1 + Erf[t/Sqrt[2]]))/2
+    # = (Sqrt[2/Pi]/E^(t^2/2) + t Erfc[-t/Sqrt[2]])/2
+    para_part = _safe_log(
+        (t2.mul(-0.5).exp().mul((2 / math.pi) ** 0.5) + t * (t * -(0.5**0.5)).erfc())
+        / 2
     )
 
     return para_part + perp_part
@@ -164,9 +166,32 @@ def _log_prob_3(concentration, value):
     # This is the log of a definite integral, computed by mathematica:
     # Integrate[x^2/(E^((x-t)^2/2) Sqrt[2 Pi]), {x, 0, Infinity}]
     # = t/(E^(t^2/2) Sqrt[2 Pi]) + ((1 + t^2) (1 + Erf[t/Sqrt[2]]))/2
-    para_part = (
+    # = t/(E^(t^2/2) Sqrt[2 Pi]) + ((1 + t^2) Erfc[-t/Sqrt[2]])/2
+    para_part = _safe_log(
         t * t2.mul(-0.5).exp() / (2 * math.pi) ** 0.5
-        + (1 + t2) * (1 + (t * 0.5 ** 0.5).erf()) / 2
-    ).log()
+        + (1 + t2) * (t * -(0.5**0.5)).erfc() / 2
+    )
+
+    return para_part + perp_part
+
+
+@ProjectedNormal._register_log_prob(dim=4)
+def _log_prob_4(concentration, value):
+    # We integrate along a ray, factorizing the integrand as a product of:
+    # a truncated normal distribution over coordinate t parallel to the ray, and
+    # a bivariate normal distribution over coordinate r perpendicular to the ray.
+    t = _dot(concentration, value)
+    t2 = t.square()
+    r2 = _dot(concentration, concentration) - t2
+    perp_part = r2.mul(-0.5) - 1.5 * math.log(2 * math.pi)
+
+    # This is the log of a definite integral, computed by mathematica:
+    # Integrate[x^3/(E^((x-t)^2/2) Sqrt[2 Pi]), {x, 0, Infinity}]
+    # = (2 + t^2)/(E^(t^2/2) Sqrt[2 Pi]) + (t (3 + t^2) (1 + Erf[t/Sqrt[2]]))/2
+    # = (2 + t^2)/(E^(t^2/2) Sqrt[2 Pi]) + (t (3 + t^2) Erfc[-t/Sqrt[2]])/2
+    para_part = _safe_log(
+        (2 + t2) * t2.mul(-0.5).exp() / (2 * math.pi) ** 0.5
+        + t * (3 + t2) * (t * -(0.5**0.5)).erfc() / 2
+    )
 
     return para_part + perp_part

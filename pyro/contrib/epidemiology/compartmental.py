@@ -1076,12 +1076,12 @@ class CompartmentalModel(ABC):
 
         # Manually perform variable elimination.
         logp = reduce(operator.add, logp.values())
-        logp = logp.reshape(Q ** C, Q ** C, T, -1)  # prev, curr, T, batch
+        logp = logp.reshape(Q**C, Q**C, T, -1)  # prev, curr, T, batch
         logp = logp.permute(3, 2, 0, 1).squeeze(0)  # batch, T, prev, curr
         logp = pyro.distributions.hmm._sequential_logmatmulexp(
             logp
         )  # batch, prev, curr
-        logp = logp.reshape(-1, Q ** C * Q ** C).logsumexp(-1).sum()
+        logp = logp.reshape(-1, Q**C * Q**C).logsumexp(-1).sum()
         warn_if_nan(logp)
         pyro.factor("transition", logp)
 

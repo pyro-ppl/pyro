@@ -328,7 +328,7 @@ def model_3(sequences, lengths, args, batch_size=None, include_prior=True):
         num_sequences, max_length, data_dim = map(int, sequences.shape)
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
-    hidden_dim = int(args.hidden_dim ** 0.5)  # split between w and x
+    hidden_dim = int(args.hidden_dim**0.5)  # split between w and x
     with handlers.mask(mask=include_prior):
         probs_w = pyro.sample(
             "probs_w", dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1).to_event(1)
@@ -383,7 +383,7 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
         num_sequences, max_length, data_dim = map(int, sequences.shape)
         assert lengths.shape == (num_sequences,)
         assert lengths.max() <= max_length
-    hidden_dim = int(args.hidden_dim ** 0.5)  # split between w and x
+    hidden_dim = int(args.hidden_dim**0.5)  # split between w and x
     with handlers.mask(mask=include_prior):
         probs_w = pyro.sample(
             "probs_w", dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1).to_event(1)
@@ -626,6 +626,7 @@ def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
                         dist.Bernoulli(probs_y[x_curr.squeeze(-1)]),
                         obs=Vindex(sequences)[batch, t],
                     )
+                x_prev = x_curr
 
 
 # Let's see how vectorizing time dimension changes the shapes of sample sites:
@@ -644,11 +645,11 @@ def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
 #                      value       16  1  1  1 |
 #                   y_0 dist       16 10  1 51 |
 #                      value          10  1 51 |
-#  x_slice(0, 71, None) dist          10 71  1 |
+#  x_slice(0, 71, None) dist       16 10 71  1 |
 #                      value    16  1  1  1  1 |
 #  y_slice(0, 71, None) dist    16  1 10 71 51 |
 #                      value          10 71 51 |
-#  x_slice(1, 72, None) dist          10 71  1 |
+#  x_slice(1, 72, None) dist    16  1 10 71  1 |
 #                      value 16  1  1  1  1  1 |
 #  y_slice(1, 72, None) dist 16  1  1 10 71 51 |
 #                      value          10 71 51 |
@@ -819,7 +820,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.8.3")
     parser = argparse.ArgumentParser(
         description="MAP Baum-Welch learning Bach Chorales"
     )

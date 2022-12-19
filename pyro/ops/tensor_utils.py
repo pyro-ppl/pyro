@@ -6,7 +6,16 @@ import math
 import torch
 from torch.fft import irfft, rfft
 
+from .. import settings
+
 _ROOT_TWO_INVERSE = 1.0 / math.sqrt(2.0)
+CHOLESKY_RELATIVE_JITTER = 4.0  # in units of finfo.eps
+
+
+@settings.register("cholesky_relative_jitter", __name__, "CHOLESKY_RELATIVE_JITTER")
+def _validate_jitter(value):
+    assert isinstance(value, (float, int))
+    assert 0 <= value
 
 
 def as_complex(x):
@@ -393,9 +402,19 @@ def inverse_haar_transform(x):
     return x
 
 
-def cholesky(x):
+def safe_cholesky(x):
     if x.size(-1) == 1:
+        if CHOLESKY_RELATIVE_JITTER:
+            x = x.clamp(min=torch.finfo(x.dtype).tiny)
         return x.sqrt()
+
+    if CHOLESKY_RELATIVE_JITTER:
+        # Add adaptive jitter.
+        x = x.clone()
+        x_max = x.data.abs().max(-1).values
+        jitter = CHOLESKY_RELATIVE_JITTER * torch.finfo(x.dtype).eps * x_max
+        x.data.diagonal(dim1=-1, dim2=-2).add_(jitter)
+
     return torch.linalg.cholesky(x)
 
 
@@ -420,15 +439,18 @@ def matvecmul(x, y):
 def triangular_solve(x, y, upper=False, transpose=False):
     if y.size(-1) == 1:
         return x / y
-    return x.triangular_solve(y, upper=upper, transpose=transpose).solution
+    if transpose:
+        y = y.transpose(-1, -2)
+        upper = not upper
+    return torch.linalg.solve_triangular(y, x, upper=upper)
 
 
 def precision_to_scale_tril(P):
     Lf = torch.linalg.cholesky(torch.flip(P, (-2, -1)))
     L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
-    L = torch.triangular_solve(
-        torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), L_inv, upper=False
-    )[0]
+    L = torch.linalg.solve_triangular(
+        L_inv, torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), upper=False
+    )
     return L
 
 

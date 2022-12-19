@@ -67,6 +67,13 @@ class GPRegression(GPModel):
     """
 
     def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6):
+        assert isinstance(
+            X, torch.Tensor
+        ), "X needs to be a torch Tensor instead of a {}".format(type(X))
+        if y is not None:
+            assert isinstance(
+                y, torch.Tensor
+            ), "y needs to be a torch Tensor instead of a {}".format(type(y))
         super().__init__(X, y, kernel, mean_function, jitter)
 
         noise = self.X.new_tensor(1.0) if noise is None else noise

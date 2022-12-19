@@ -1,9 +1,9 @@
-ARG base_img=ubuntu:16.04
+ARG base_img=ubuntu:18.04
 FROM ${base_img}
 
 # Optional args
 ARG cuda=0
-ARG python_version=2.7
+ARG python_version=3
 ARG pyro_branch=release
 ARG pytorch_branch=release
 ARG uid=1000
@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
          build-essential \
          cmake \
          git \
-         curl \
+         wget \
          ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
@@ -33,7 +33,7 @@ RUN bash -c 'if [ ${ostype} == Linux ]; then groupadd -r --gid ${gid} ${USER_NAM
 USER ${USER_NAME}
 
 # Install conda
-RUN curl -o ~/miniconda.sh -O \
+RUN wget -O ~/miniconda.sh \
     https://repo.continuum.io/miniconda/Miniconda${python_version%%.*}-latest-Linux-x86_64.sh && \
     bash ~/miniconda.sh -f -b -p ${CONDA_DIR} && \
     rm ~/miniconda.sh && \

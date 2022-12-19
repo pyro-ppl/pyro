@@ -50,7 +50,7 @@ def count_accuracy(X, true_counts, air, batch_size):
         true_counts_m = count_vec_to_mat(true_counts_batch, 2)
         inferred_counts_m = count_vec_to_mat(inferred_counts, 3)
         counts += torch.mm(true_counts_m.t(), inferred_counts_m)
-        error_ind = 1 - (true_counts_batch == inferred_counts)
+        error_ind = 1 - (true_counts_batch == inferred_counts).long()
         error_ix = error_ind.nonzero(as_tuple=False).squeeze()
         error_latents.append(
             latents_to_tensor((z_where, z_pres)).index_select(0, error_ix)
@@ -69,10 +69,10 @@ def count_accuracy(X, true_counts, air, batch_size):
 # between p(steps=n) and p(steps=n+1).
 def make_prior(k):
     assert 0 < k <= 1
-    u = 1 / (1 + k + k ** 2 + k ** 3)
+    u = 1 / (1 + k + k**2 + k**3)
     p0 = 1 - u
     p1 = 1 - (k * u) / p0
-    p2 = 1 - (k ** 2 * u) / (p0 * p1)
+    p2 = 1 - (k**2 * u) / (p0 * p1)
     trial_probs = [p0, p1, p2]
     # dist = [1 - p0, p0 * (1 - p1), p0 * p1 * (1 - p2), p0 * p1 * p2]
     # print(dist)
@@ -272,7 +272,7 @@ def main(**kwargs):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.8.3")
     parser = argparse.ArgumentParser(
         description="Pyro AIR example", argument_default=argparse.SUPPRESS
     )

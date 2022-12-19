@@ -139,7 +139,7 @@ def test_shapes(parallel):
         num_samples=num_samples,
         parallel=parallel,
     )
-    actual = predictive.get_samples()
+    actual = predictive()
     assert set(actual) == set(expected)
     assert actual["x"].shape == expected["x"].shape
     assert actual["y"].shape == expected["y"].shape
@@ -151,7 +151,7 @@ def test_deterministic(with_plate, event_shape):
     def model(y=None):
         with pyro.util.optional(pyro.plate("plate", 3), with_plate):
             x = pyro.sample("x", dist.Normal(0, 1).expand(event_shape).to_event())
-            x2 = pyro.deterministic("x2", x ** 2, event_dim=len(event_shape))
+            x2 = pyro.deterministic("x2", x**2, event_dim=len(event_shape))
 
         pyro.deterministic("x3", x2)
         return pyro.sample("obs", dist.Normal(x2, 0.1).to_event(), obs=y)

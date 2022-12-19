@@ -36,7 +36,9 @@ class MultivariateStudentT(TorchDistribution):
         assert scale_tril.shape[-2:] == (dim, dim)
         if not isinstance(df, torch.Tensor):
             df = loc.new_tensor(df)
-        batch_shape = broadcast_shape(df.shape, loc.shape[:-1], scale_tril.shape[:-2])
+        batch_shape = torch.broadcast_shapes(
+            df.shape, loc.shape[:-1], scale_tril.shape[:-2]
+        )
         event_shape = torch.Size((dim,))
         self.df = df.expand(batch_shape)
         self.loc = loc.expand(batch_shape + event_shape)
@@ -106,12 +108,9 @@ class MultivariateStudentT(TorchDistribution):
         if self._validate_args:
             self._validate_sample(value)
         n = self.loc.size(-1)
-        y = (
-            (value - self.loc)
-            .unsqueeze(-1)
-            .triangular_solve(self.scale_tril, upper=False)
-            .solution.squeeze(-1)
-        )
+        y = torch.linalg.solve_triangular(
+            self.scale_tril, (value - self.loc).unsqueeze(-1), upper=False
+        ).squeeze(-1)
         Z = (
             self.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
             + 0.5 * n * self.df.log()

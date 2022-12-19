@@ -120,7 +120,7 @@ class SineBivariateVonMises(TorchDistribution):
         super().__init__(batch_shape, event_shape, validate_args)
 
         if self._validate_args and torch.any(
-            phi_concentration * psi_concentration <= correlation ** 2
+            phi_concentration * psi_concentration <= correlation**2
         ):
             warnings.warn(
                 f"{self.__class__.__name__} bimodal due to concentration-correlation relation, "
@@ -170,7 +170,7 @@ class SineBivariateVonMises(TorchDistribution):
         corr = self.correlation
         conc = torch.stack((self.phi_concentration, self.psi_concentration))
 
-        eig = 0.5 * (conc[0] - corr ** 2 / conc[1])
+        eig = 0.5 * (conc[0] - corr**2 / conc[1])
         eig = torch.stack((torch.zeros_like(eig), eig))
         eigmin = torch.where(
             eig[1] < 0, eig[1], torch.zeros_like(eig[1], dtype=eig.dtype)
@@ -225,7 +225,7 @@ class SineBivariateVonMises(TorchDistribution):
                 1.0
                 - curr_b0.view(-1, 1) / 2
                 + torch.log(
-                    curr_b0.view(-1, 1) / 2 + (curr_eig.view(2, -1, 1) * x ** 2).sum(0)
+                    curr_b0.view(-1, 1) / 2 + (curr_eig.view(2, -1, 1) * x**2).sum(0)
                 )
             )
             assert lg_inv.shape == lf.shape

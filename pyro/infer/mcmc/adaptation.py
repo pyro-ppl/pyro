@@ -232,7 +232,7 @@ def _triu_inverse(x):
         return x.reciprocal()
     else:
         identity = torch.eye(x.size(-1), dtype=x.dtype, device=x.device)
-        return torch.triangular_solve(identity, x, upper=True)[0]
+        return torch.linalg.solve_triangular(x, identity, upper=True)
 
 
 class BlockMassMatrix:

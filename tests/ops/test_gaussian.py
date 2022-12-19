@@ -15,8 +15,11 @@ from pyro.ops.gaussian import (
     AffineNormal,
     Gaussian,
     gaussian_tensordot,
+    matrix_and_gaussian_to_gaussian,
     matrix_and_mvn_to_gaussian,
     mvn_to_gaussian,
+    sequential_gaussian_filter_sample,
+    sequential_gaussian_tensordot,
 )
 from tests.common import assert_close
 from tests.ops.gaussian import assert_close_gaussian, random_gaussian, random_mvn
@@ -240,7 +243,7 @@ def test_logsumexp(batch_shape, dim):
         - scale / 2
     )
     expected = gaussian.log_density(samples).logsumexp(0) + math.log(
-        scale ** dim / num_samples
+        scale**dim / num_samples
     )
     actual = gaussian.event_logsumexp()
     assert_close(actual, expected, atol=0.05, rtol=0.05)
@@ -376,7 +379,7 @@ def test_gaussian_tensordot(
     nc = y_dim - dot_dims
     try:
         torch.linalg.cholesky(x.precision[..., na:, na:] + y.precision[..., :nb, :nb])
-    except RuntimeError:
+    except Exception:
         pytest.skip("Cannot marginalize the common variables of two Gaussians.")
 
     z = gaussian_tensordot(x, y, dot_dims)
@@ -415,7 +418,7 @@ def test_gaussian_tensordot(
     value_x = pad(value_b, (na, 0))
     value_y = pad(value_b, (0, nc))
     expect = torch.logsumexp(x.log_density(value_x) + y.log_density(value_y), dim=0)
-    expect += math.log(scale ** nb / num_samples)
+    expect += math.log(scale**nb / num_samples)
     actual = z.log_density(torch.zeros(z.batch_shape + (z.dim(),)))
     # TODO(fehiepsi): find some condition to make this test stable, so we can compare large value
     # log densities.
@@ -424,6 +427,7 @@ def test_gaussian_tensordot(
 
 @pytest.mark.stage("funsor")
 @pytest.mark.parametrize("batch_shape", [(), (5,), (4, 2)], ids=str)
+@pytest.mark.filterwarnings("ignore:torch.triangular_solve is deprecated")
 def test_gaussian_funsor(batch_shape):
     # This tests sample distribution, rsample gradients, log_prob, and log_prob
     # gradients for both Pyro's and Funsor's Gaussian.
@@ -487,3 +491,122 @@ def test_gaussian_funsor(batch_shape):
         funsor.ops.mean, "particle"
     )
     check_equal(fp_entropy.data, entropy)
+
+
+@pytest.mark.parametrize("num_steps", list(range(1, 20)))
+@pytest.mark.parametrize("state_dim", [1, 2, 3])
+@pytest.mark.parametrize("batch_shape", [(), (5,), (2, 4)], ids=str)
+def test_sequential_gaussian_tensordot(batch_shape, state_dim, num_steps):
+    g = random_gaussian(batch_shape + (num_steps,), state_dim + state_dim)
+    actual = sequential_gaussian_tensordot(g)
+    assert actual.dim() == g.dim()
+    assert actual.batch_shape == batch_shape
+
+    # Check against hand computation.
+    expected = g[..., 0]
+    for t in range(1, num_steps):
+        expected = gaussian_tensordot(expected, g[..., t], state_dim)
+    assert_close_gaussian(actual, expected)
+
+
+@pytest.mark.parametrize("num_steps", list(range(1, 20)))
+@pytest.mark.parametrize("state_dim", [1, 2, 3])
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
+def test_sequential_gaussian_filter_sample(
+    sample_shape, batch_shape, state_dim, num_steps
+):
+    init = random_gaussian(batch_shape, state_dim, requires_grad=True)
+    trans = random_gaussian(
+        batch_shape + (num_steps,), state_dim + state_dim, requires_grad=True
+    )
+    duration = 1 + num_steps
+
+    # Check shape.
+    sample = sequential_gaussian_filter_sample(init, trans, sample_shape)
+    assert sample.shape == sample_shape + batch_shape + (duration, state_dim)
+
+    # Check gradients.
+    assert sample.requires_grad
+    loss = (torch.randn_like(sample) * sample).sum()
+    params = [init.info_vec, init.precision, trans.info_vec, trans.precision]
+    torch.autograd.grad(loss, params)
+
+
+@pytest.mark.parametrize("num_steps", list(range(1, 20)))
+@pytest.mark.parametrize("state_dim", [1, 2, 3])
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
+@pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
+def test_sequential_gaussian_filter_sample_antithetic(
+    sample_shape, batch_shape, state_dim, num_steps
+):
+    init = random_gaussian(batch_shape, state_dim)
+    trans = random_gaussian(batch_shape + (num_steps,), state_dim + state_dim)
+    duration = 1 + num_steps
+
+    noise = torch.randn(sample_shape + batch_shape + (duration, state_dim))
+    zero = torch.zeros_like(noise)
+    sample = sequential_gaussian_filter_sample(init, trans, sample_shape, noise)
+    mean = sequential_gaussian_filter_sample(init, trans, sample_shape, zero)
+    assert sample.shape == sample_shape + batch_shape + (duration, state_dim)
+    assert mean.shape == sample_shape + batch_shape + (duration, state_dim)
+
+    # Check that antithetic sampling works as expected.
+    noise3 = torch.stack([noise, zero, -noise])
+    sample3 = sequential_gaussian_filter_sample(
+        init, trans, (3,) + sample_shape, noise3
+    )
+    expected = torch.stack([sample, mean, 2 * mean - sample])
+    assert torch.allclose(sample3, expected)
+
+
+@pytest.mark.filterwarnings("ignore:Singular matrix in cholesky")
+@pytest.mark.parametrize("num_steps", [10, 100, 1000, 10000, 100000, 1000000])
+def test_sequential_gaussian_filter_sample_stability(num_steps):
+    # This tests long-chain filtering at low precision.
+    zero = torch.zeros((), dtype=torch.float)
+    eye = torch.eye(4, dtype=torch.float)
+    noise = torch.randn(num_steps, 4, dtype=torch.float, requires_grad=True)
+    trans_matrix = torch.tensor(
+        [
+            [
+                0.8571434617042542,
+                -0.23285813629627228,
+                0.05360094830393791,
+                -0.017088839784264565,
+            ],
+            [
+                0.7609677314758301,
+                0.6596274971961975,
+                -0.022656921297311783,
+                0.05166701227426529,
+            ],
+            [
+                3.0979342460632324,
+                5.446939945220947,
+                -0.3425334692001343,
+                0.01096670888364315,
+            ],
+            [
+                -1.8180007934570312,
+                -0.4965082108974457,
+                -0.006048532668501139,
+                -0.08525419235229492,
+            ],
+        ],
+        dtype=torch.float,
+        requires_grad=True,
+    )
+
+    init = Gaussian(zero, zero.expand(4), eye)
+    trans = matrix_and_gaussian_to_gaussian(
+        trans_matrix, Gaussian(zero, zero.expand(4), eye)
+    ).expand((num_steps - 1,))
+
+    # Check numerically stabilized value.
+    x = sequential_gaussian_filter_sample(init, trans, (), noise)
+    assert torch.isfinite(x).all()
+
+    # Check gradients.
+    grads = torch.autograd.grad(x.sum(), [trans_matrix, noise])
+    assert all(torch.isfinite(g).all() for g in grads)

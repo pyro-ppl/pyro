@@ -5,7 +5,7 @@ import itertools
 from collections import defaultdict
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional, Union
 
 import torch
 
@@ -45,6 +45,12 @@ def is_sample_site(msg):
 class TrackProvenance(Messenger):
     def _pyro_post_sample(self, msg):
         if is_sample_site(msg):
+            provenance = frozenset({msg["name"]})  # track only direct dependencies
+            value = detach_provenance(msg["value"])
+            msg["value"] = ProvenanceTensor(value, provenance)
+
+    def _pyro_post_param(self, msg):
+        if msg["type"] == "param":
             provenance = frozenset({msg["name"]})  # track only direct dependencies
             value = detach_provenance(msg["value"])
             msg["value"] = ProvenanceTensor(value, provenance)
@@ -270,23 +276,42 @@ def get_model_relations(
         model_args = ()
     if model_kwargs is None:
         model_kwargs = {}
+    assert isinstance(model_args, tuple)
+    assert isinstance(model_kwargs, dict)
 
     with torch.random.fork_rng(), torch.no_grad(), pyro.validation_enabled(False):
         with TrackProvenance():
             trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
 
     sample_sample = {}
+    sample_param = {}
     sample_dist = {}
+    param_constraint = {}
     plate_sample = defaultdict(list)
     observed = []
+
+    def _get_type_from_frozenname(frozen_name):
+        return trace.nodes[frozen_name]["type"]
+
     for name, site in trace.nodes.items():
+        if site["type"] == "param":
+            param_constraint[name] = str(site["kwargs"]["constraint"])
+
         if site["type"] != "sample" or site_is_subsample(site):
             continue
+
         sample_sample[name] = [
             upstream
             for upstream in get_provenance(site["fn"].log_prob(site["value"]))
-            if upstream != name
+            if upstream != name and _get_type_from_frozenname(upstream) == "sample"
         ]
+
+        sample_param[name] = [
+            upstream
+            for upstream in get_provenance(site["fn"].log_prob(site["value"]))
+            if upstream != name and _get_type_from_frozenname(upstream) == "param"
+        ]
+
         sample_dist[name] = _get_dist_name(site["fn"])
         for frame in site["cond_indep_stack"]:
             plate_sample[frame.name].append(name)
@@ -313,7 +338,9 @@ def get_model_relations(
 
     return {
         "sample_sample": sample_sample,
+        "sample_param": sample_param,
         "sample_dist": sample_dist,
+        "param_constraint": param_constraint,
         "plate_sample": dict(plate_sample),
         "observed": observed,
     }
@@ -327,7 +354,9 @@ def _get_dist_name(fn):
     return type(fn).__name__
 
 
-def generate_graph_specification(model_relations: dict) -> dict:
+def generate_graph_specification(
+    model_relations: dict, render_params: bool = False
+) -> dict:
     """
     Convert model relations into data structure which can be readily
     converted into a network.
@@ -339,6 +368,14 @@ def generate_graph_specification(model_relations: dict) -> dict:
         rv for rv in model_relations["sample_sample"] if rv not in plate_rvs
     ]  # RVs which are in no plate
 
+    # get set of params
+    params = set()
+    if render_params:
+        for rv, params_list in model_relations["sample_param"].items():
+            for param in params_list:
+                params.add(param)
+        plate_groups[None].extend(params)
+
     # retain node metadata
     node_data = {}
     for rv in model_relations["sample_sample"]:
@@ -346,6 +383,14 @@ def generate_graph_specification(model_relations: dict) -> dict:
             "is_observed": rv in model_relations["observed"],
             "distribution": model_relations["sample_dist"][rv],
         }
+
+    if render_params:
+        for param, constraint in model_relations["param_constraint"].items():
+            node_data[param] = {
+                "is_observed": False,
+                "constraint": constraint,
+                "distribution": None,
+            }
 
     # infer plate structure
     # (when the order of plates cannot be determined from subset relations,
@@ -380,6 +425,10 @@ def generate_graph_specification(model_relations: dict) -> dict:
     for target, source_list in model_relations["sample_sample"].items():
         edge_list.extend([(source, target) for source in source_list])
 
+    if render_params:
+        for target, source_list in model_relations["sample_param"].items():
+            edge_list.extend([(source, target) for source in source_list])
+
     return {
         "plate_groups": plate_groups,
         "plate_data": plate_data,
@@ -388,9 +437,33 @@ def generate_graph_specification(model_relations: dict) -> dict:
     }
 
 
+def _deep_merge(things: list):
+    if len(things) == 1:
+        return things[0]
+
+    # Recurse into dicts.
+    if isinstance(things[0], dict):
+        result = {}
+        for thing in things:
+            for key, value in thing.items():
+                if key not in result:
+                    result[key] = _deep_merge([t[key] for t in things])
+        return result
+
+    # Vote for booleans.
+    if isinstance(things[0], bool):
+        if all(x is True for x in things):
+            return True
+        if all(x is False for x in things):
+            return False
+        return None  # i.e. maybe
+
+    # Otherwise choose arbitrarily.
+    return things[0]
+
+
 def render_graph(
-    graph_specification: dict,
-    render_distributions: bool = False,
+    graph_specification: dict, render_distributions: bool = False
 ) -> "graphviz.Digraph":
     """
     Create a graphviz object given a graph specification.
@@ -426,14 +499,21 @@ def render_graph(
     plate_graph_dict[None] = graph
 
     # add nodes
+    colors = {False: "white", True: "gray", None: "gray:white"}
     for plate, rv_list in plate_groups.items():
         cur_graph = plate_graph_dict[plate]
 
         for rv in rv_list:
-            color = "grey" if node_data[rv]["is_observed"] else "white"
-            cur_graph.node(
-                rv, label=rv, shape="ellipse", style="filled", fillcolor=color
-            )
+            color = colors[node_data[rv]["is_observed"]]
+
+            # For sample_nodes - ellipse
+            if node_data[rv]["distribution"]:
+                shape = "ellipse"
+
+            # For param_nodes - No shape
+            else:
+                shape = "plain"
+            cur_graph.node(rv, label=rv, shape=shape, style="filled", fillcolor=color)
 
     # add leaf nodes first
     while len(plate_data) >= 1:
@@ -460,7 +540,11 @@ def render_graph(
         dist_label = ""
         for rv, data in node_data.items():
             rv_dist = data["distribution"]
-            dist_label += rf"{rv} ~ {rv_dist}\l"
+            if rv_dist:
+                dist_label += rf"{rv} ~ {rv_dist}\l"
+
+            if "constraint" in data and data["constraint"]:
+                dist_label += rf"{rv} : {data['constraint']}\l"
 
         graph.node("distribution_description_node", label=dist_label, shape="plaintext")
 
@@ -470,10 +554,11 @@ def render_graph(
 
 def render_model(
     model: Callable,
-    model_args: Optional[tuple] = None,
-    model_kwargs: Optional[dict] = None,
+    model_args: Optional[Union[tuple, List[tuple]]] = None,
+    model_kwargs: Optional[Union[dict, List[dict]]] = None,
     filename: Optional[str] = None,
     render_distributions: bool = False,
+    render_params: bool = False,
 ) -> "graphviz.Digraph":
     """
     Renders a model using `graphviz <https://graphviz.org>`_ .
@@ -483,16 +568,39 @@ def render_model(
     `model rendering tutorial <https://pyro.ai/examples/model_rendering.html>`_ .
 
     :param model: Model to render.
-    :param model_args: Positional arguments to pass to the model.
-    :param model_kwargs: Keyword arguments to pass to the model.
+    :param model_args: Tuple of positional arguments to pass to the model, or
+        list of tuples for semisupervised models.
+    :param model_kwargs: Dict of keyword arguments to pass to the model, or
+        list of dicts for semisupervised models.
     :param str filename: File to save rendered model in.
     :param bool render_distributions: Whether to include RV distribution
-        annotations in the plot.
+        annotations (and param constraints) in the plot.
+    :param bool render_params: Whether to show params inthe plot.
     :returns: A model graph.
     :rtype: graphviz.Digraph
     """
-    relations = get_model_relations(model, model_args, model_kwargs)
-    graph_spec = generate_graph_specification(relations)
+    # Get model relations.
+    if not isinstance(model_args, list) and not isinstance(model_kwargs, list):
+        relations = [get_model_relations(model, model_args, model_kwargs)]
+    else:  # semisupervised
+        if isinstance(model_args, list):
+            if not isinstance(model_kwargs, list):
+                model_kwargs = [model_kwargs] * len(model_args)
+        elif not isinstance(model_args, list):
+            model_args = [model_args] * len(model_kwargs)
+        assert len(model_args) == len(model_kwargs)
+        relations = [
+            get_model_relations(model, args, kwargs)
+            for args, kwargs in zip(model_args, model_kwargs)
+        ]
+
+    # Get graph specifications.
+    graph_specs = [
+        generate_graph_specification(r, render_params=render_params) for r in relations
+    ]
+    graph_spec = _deep_merge(graph_specs)
+
+    # Render.
     graph = render_graph(graph_spec, render_distributions=render_distributions)
 
     if filename is not None:

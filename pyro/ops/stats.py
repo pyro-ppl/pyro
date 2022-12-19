@@ -93,11 +93,6 @@ def autocorrelation(input, dim=0):
     :param int dim: the dimension to calculate autocorrelation.
     :returns torch.Tensor: autocorrelation of ``input``.
     """
-    if (not input.is_cuda) and (not torch.backends.mkl.is_available()):
-        raise NotImplementedError(
-            "For CPU tensor, this method is only supported " "with MKL installed."
-        )
-
     # Adapted from Stan implementation
     # https://github.com/stan-dev/math/blob/develop/stan/math/prim/mat/fun/autocorrelation.hpp
     N = input.size(dim)
@@ -117,12 +112,18 @@ def autocorrelation(input, dim=0):
     # inverse Fourier transform
     autocorr = irfft(freqvec_gram, n=M2)
 
-    # truncate and normalize the result, then transpose back to original shape
+    # truncate and normalize the result, setting autocorrelation to 1 for all
+    # constant channels
     autocorr = autocorr[..., :N]
     autocorr = autocorr / torch.tensor(
         range(N, 0, -1), dtype=input.dtype, device=input.device
     )
-    autocorr = autocorr / autocorr[..., :1]
+    variance = autocorr[..., :1]
+    constant = (variance == 0).expand_as(autocorr)
+    autocorr = autocorr / variance.clamp(min=torch.finfo(variance.dtype).tiny)
+    autocorr[constant] = 1
+
+    # transpose back to original shape
     return autocorr.transpose(dim, -1)
 
 
@@ -442,4 +443,4 @@ def crps_empirical(pred, truth):
     )
     weight = weight.reshape(weight.shape + (1,) * (diff.dim() - 1))
 
-    return (pred - truth).abs().mean(0) - (diff * weight).sum(0) / num_samples ** 2
+    return (pred - truth).abs().mean(0) - (diff * weight).sum(0) / num_samples**2
