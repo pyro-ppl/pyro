@@ -130,7 +130,7 @@ jobs:
           COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
   examples:
     runs-on: ubuntu-20.04
-    needs: docs
+    needs: [docs, tutorials-html]
     strategy:
       matrix:
         python-version: [3.7]
