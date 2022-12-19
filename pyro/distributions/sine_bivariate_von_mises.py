@@ -137,7 +137,7 @@ class SineBivariateVonMises(TorchDistribution):
         m = torch.arange(50, device=self.phi_loc.device).view(-1, 1)
         fs = (
             SineBivariateVonMises._lbinoms(m.max() + 1).view(-1, 1)
-            + m * torch.log(corr ** 2)
+            + m * torch.log(corr**2)
             - m * torch.log(4 * torch.prod(conc, dim=-1))
         )
         fs += log_I1(m.max(), conc, 51).sum(-1)
