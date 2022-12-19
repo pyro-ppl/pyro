@@ -57,7 +57,7 @@ jobs:
           pip install torch==1.11.0+cpu torchvision==0.12.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
           pip install .[test]
           pip install -r docs/requirements.txt
-          # requirements for tutorials
+          # requirements for tutorials (from .[dev])
           sudo apt-get install pandoc
           pip install nbformat
           pip install nbsphinx>=0.3.2
@@ -69,7 +69,7 @@ jobs:
         run: |
           make docs
           make doctest
-          SPHINXOPTS="-E -W" make tutorial
+          SPHINXOPTS="-E" make tutorial
   unit:
     runs-on: ubuntu-20.04
     needs: docs
