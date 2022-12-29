@@ -7,7 +7,7 @@ from torch.autograd import grad
 
 # Registry for exception handlers that can be used to catch certain failures
 # during computation of `potential_fn` within `potential_grad`.
-_EXCEPTION_HANDLERS = {}
+_EXCEPTION_HANDLERS: Dict[str, Callable[[Exception], bool]] = {}
 
 
 def velocity_verlet(
@@ -102,9 +102,9 @@ def register_exception_handler(
 
     :param name: name of the handler (must be unique).
     :param handler: A callable mapping an exception to a boolean. Exceptions
-        that evaluate to true in any of the handlers are handled in teh computation
+        that evaluate to true in any of the handlers are handled in the computation
         of the potential energy.
-    :param overwrite: If True, overwrite handlers already registerd under the
+    :param overwrite: If True, overwrite handlers already registered under the
         provided name.
     """
     if name in _EXCEPTION_HANDLERS and not overwrite:
@@ -118,9 +118,8 @@ def register_exception_handler(
 def _handle_torch_singular(exception: Exception) -> bool:
     """Exception handler for errors thrown on (numerically) singular matrices."""
     if type(exception) == RuntimeError:
-        return "singular" in str(exception) or "input is not positive-definite" in str(
-            exception
-        )
+        msg = str(exception)
+        return "singular" in msg or "input is not positive-definite" in msg
     return False
 
 
