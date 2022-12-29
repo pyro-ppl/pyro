@@ -1,7 +1,9 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Callable
+import warnings
+
+from typing import Callable, Dict
 
 from torch.autograd import grad
 
@@ -94,23 +96,23 @@ def potential_grad(potential_fn, z):
 
 
 def register_exception_handler(
-    name: str, handler: Callable[[Exception], bool], overwrite: bool = False
+    name: str, handler: Callable[[Exception], bool], warn_on_overwrite: bool = True
 ) -> None:
     """
     Register an exception handler for handling (primarily numerical) errors
     when evaluating the potential function.
 
     :param name: name of the handler (must be unique).
-    :param handler: A callable mapping an exception to a boolean. Exceptions
+    :param handler: A callable mapping an Exception to a boolean. Exceptions
         that evaluate to true in any of the handlers are handled in the computation
         of the potential energy.
-    :param overwrite: If True, overwrite handlers already registered under the
-        provided name.
+    :param warn_on_overwrite: If True, warns when overwriting a handler already
+        registered under the provided name.
     """
-    if name in _EXCEPTION_HANDLERS and not overwrite:
-        raise RuntimeError(
-            f"Exception handler already registered under key {name}. "
-            "Use `overwrite=True` to force overwriting the handler."
+    if name in _EXCEPTION_HANDLERS and warn_on_overwrite:
+        warnings.warn(
+            f"Overwriting Exception handler already registered under key {name}.",
+            RuntimeWarning,
         )
     _EXCEPTION_HANDLERS[name] = handler
 
