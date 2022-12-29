@@ -118,7 +118,8 @@ def register_exception_handler(
 
 def _handle_torch_singular(exception: Exception) -> bool:
     """Exception handler for errors thrown on (numerically) singular matrices."""
-    if type(exception) == RuntimeError:
+    # the actual type of the exception thrown is torch._C._LinAlgError
+    if isinstance(exception, RuntimeError):
         msg = str(exception)
         return "singular" in msg or "input is not positive-definite" in msg
     return False
