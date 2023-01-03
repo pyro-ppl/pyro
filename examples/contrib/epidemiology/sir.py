@@ -334,7 +334,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.3")
+    assert pyro.__version__.startswith("1.8.4")
     parser = argparse.ArgumentParser(
         description="Compartmental epidemiology modeling using HMC"
     )
