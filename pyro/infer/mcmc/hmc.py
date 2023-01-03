@@ -14,7 +14,7 @@ from pyro.infer.autoguide import init_to_uniform
 from pyro.infer.mcmc.adaptation import WarmupAdapter
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.infer.mcmc.util import initialize_model
-from pyro.ops.integrator import potential_grad, velocity_verlet
+from pyro.ops.integrator import _EXCEPTION_HANDLERS, potential_grad, velocity_verlet
 from pyro.util import optional, torch_isnan
 
 
@@ -173,7 +173,16 @@ class HMC(MCMCKernel):
         # We are going to find a step_size which make accept_prob (Metropolis correction)
         # near the target_accept_prob. If accept_prob:=exp(-delta_energy) is small,
         # then we have to decrease step_size; otherwise, increase step_size.
-        potential_energy = self.potential_fn(z)
+        try:
+            potential_energy = self.potential_fn(z)
+        # handle exceptions as defined in the exception registry
+        except Exception as e:
+            if any(h(e) for h in _EXCEPTION_HANDLERS.values()):
+                # skip finding reasonable step size
+                return step_size
+            else:
+                raise e
+
         r, r_unscaled = self._sample_r(name="r_presample_0")
         energy_current = self._kinetic_energy(r_unscaled) + potential_energy
         # This is required so as to avoid issues with autograd when model
