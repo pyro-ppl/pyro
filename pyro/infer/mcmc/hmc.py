@@ -14,8 +14,7 @@ from pyro.infer.autoguide import init_to_uniform
 from pyro.infer.mcmc.adaptation import WarmupAdapter
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.infer.mcmc.util import initialize_model
-from pyro.ops.integrator import (_EXCEPTION_HANDLERS, potential_grad,
-                                 velocity_verlet)
+from pyro.ops.integrator import _EXCEPTION_HANDLERS, potential_grad, velocity_verlet
 from pyro.util import optional, torch_isnan
 
 
