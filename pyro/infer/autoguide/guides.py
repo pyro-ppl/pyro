@@ -32,7 +32,7 @@ from pyro.distributions import constraints
 from pyro.distributions.transforms import affine_autoregressive, iterated
 from pyro.distributions.util import eye_like, sum_rightmost
 from pyro.infer.enum import config_enumerate
-from pyro.nn.module import PyroModule, PyroParam
+from pyro.nn.module import PyroModule, PyroModuleList, PyroParam
 from pyro.ops.hessian import hessian
 from pyro.ops.tensor_utils import periodic_repeat
 from pyro.poutine.util import site_is_subsample
@@ -180,7 +180,7 @@ class AutoGuide(PyroModule):
         raise NotImplementedError
 
 
-class AutoGuideList(AutoGuide, nn.ModuleList):
+class AutoGuideList(AutoGuide, PyroModuleList):
     """
     Container class to combine multiple automatic guides.
 
