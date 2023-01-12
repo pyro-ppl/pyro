@@ -263,6 +263,8 @@ class _PyroModuleMeta(type):
 
 
 class _PyroModuleListMeta(_PyroModuleMeta, ABCMeta): pass
+    # This is needed to avoid a metaclass conflict between PyroModule and
+    # torch.nn.ModuleList.
 
 
 class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
@@ -667,6 +669,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
 
 
 class PyroModuleList(torch.nn.ModuleList, metaclass=_PyroModuleListMeta): pass
+    # A ModuleList for PyroModules that avoids metaclass conflicts.
 
 
 def pyro_method(fn):
