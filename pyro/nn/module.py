@@ -14,8 +14,8 @@ the :class:`PyroSample` struct::
 """
 import functools
 import inspect
+from abc import ABCMeta
 from collections import OrderedDict, namedtuple
-from typing import GenericMeta
 
 import torch
 from torch.distributions import constraints, transform_to
@@ -230,7 +230,7 @@ def _get_pyro_params(module):
         yield name, module._parameters[name]
 
 
-class _PyroModuleMeta(GenericMeta):
+class _PyroModuleMeta(type):
     _pyro_mixin_cache = {}
 
     # Unpickling helper to create an empty object of type PyroModule[Module].
@@ -260,6 +260,9 @@ class _PyroModuleMeta(GenericMeta):
         result.__name__ = "Pyro" + Module.__name__
         _PyroModuleMeta._pyro_mixin_cache[Module] = result
         return result
+
+
+class _PyroModuleListMeta(_PyroModuleList, ABCMeta): pass
 
 
 class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
@@ -661,6 +664,9 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             return
 
         super().__delattr__(name)
+
+
+class PyroModuleList(torch.nn.ModuleList, metaclass=_PyroModuleListMeta): pass
 
 
 def pyro_method(fn):
