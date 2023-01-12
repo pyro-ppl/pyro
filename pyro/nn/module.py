@@ -262,7 +262,7 @@ class _PyroModuleMeta(type):
         return result
 
 
-class _PyroModuleListMeta(_PyroModuleList, ABCMeta): pass
+class _PyroModuleListMeta(_PyroModuleMeta, ABCMeta): pass
 
 
 class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
