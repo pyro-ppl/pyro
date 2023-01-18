@@ -71,17 +71,6 @@ def _HalfCauchy_logprob(self, value):
     return log_prob
 
 
-# TODO fix batch_shape have an extra singleton dimension upstream
-@patch_dependency("torch.distributions.constraints._PositiveDefinite.check")
-def _PositiveDefinite_check(self, value):
-    matrix_shape = value.shape[-2:]
-    batch_shape = value.shape[:-2]
-    flattened_value = value.reshape((-1,) + matrix_shape)
-    return torch.stack(
-        [torch.linalg.eigvalsh(v)[:1] > 0.0 for v in flattened_value]
-    ).view(batch_shape)
-
-
 @patch_dependency("torch.distributions.constraints._CorrCholesky.check")
 def _CorrCholesky_check(self, value):
     row_norm = torch.linalg.norm(value.detach(), dim=-1)
