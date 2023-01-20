@@ -62,7 +62,7 @@ def marginal_guide(design, observation_labels, target_labels):
         torch.eye(3),
         constraint=torch.distributions.constraints.lower_cholesky,
     )
-    pyro.sample("y", dist.MultivariateNormal(mu, scale_tril))
+    pyro.sample("y", dist.MultivariateNormal(mu, scale_tril=scale_tril))
 
 
 def likelihood_guide(theta_dict, design, observation_labels, target_labels):
