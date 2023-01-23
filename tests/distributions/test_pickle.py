@@ -82,7 +82,7 @@ def test_pickle(Dist):
     try:
         dist = Dist(*args)
     except Exception:
-        pytest.skip(msg="cannot construct distribution")
+        pytest.skip(reason="cannot construct distribution")
 
     buffer = io.BytesIO()
     # Note that pickling torch.Size() requires protocol >= 2

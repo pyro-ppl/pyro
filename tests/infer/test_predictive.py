@@ -139,7 +139,7 @@ def test_shapes(parallel):
         num_samples=num_samples,
         parallel=parallel,
     )
-    actual = predictive.get_samples()
+    actual = predictive()
     assert set(actual) == set(expected)
     assert actual["x"].shape == expected["x"].shape
     assert actual["y"].shape == expected["y"].shape

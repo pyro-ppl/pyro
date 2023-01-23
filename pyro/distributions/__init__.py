@@ -38,6 +38,7 @@ from pyro.distributions.empirical import Empirical
 from pyro.distributions.extended import ExtendedBetaBinomial, ExtendedBinomial
 from pyro.distributions.folded import FoldedDistribution
 from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
+from pyro.distributions.grouped_normal_normal import GroupedNormalNormal
 from pyro.distributions.hmm import (
     DiscreteHMM,
     GammaGaussianHMM,
@@ -119,6 +120,7 @@ __all__ = [
     "GaussianHMM",
     "GaussianMRF",
     "GaussianScaleMixture",
+    "GroupedNormalNormal",
     "ImproperUniform",
     "IndependentHMM",
     "InverseGamma",
