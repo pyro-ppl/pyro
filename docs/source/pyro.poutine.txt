@@ -158,6 +158,14 @@ __________________
     :undoc-members:
     :show-inheritance:
 
+SubstituteMessenger
+___________________
+
+.. automodule:: pyro.poutine.substitute_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 TraceMessenger
 _______________
 
