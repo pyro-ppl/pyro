@@ -62,7 +62,6 @@ class BiosequenceDataset(Dataset):
         include_stop=False,
         device=None,
     ):
-
         super().__init__()
 
         # Determine device
@@ -135,11 +134,9 @@ class BiosequenceDataset(Dataset):
         return x
 
     def __len__(self):
-
         return self.data_size
 
     def __getitem__(self, ind):
-
         return (self.seq_data[ind], self.L_data[ind])
 
 

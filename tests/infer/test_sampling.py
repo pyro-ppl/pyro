@@ -15,7 +15,6 @@ from tests.common import assert_equal
 
 class HMMSamplingTestCase(TestCase):
     def setUp(self):
-
         # simple Gaussian-emission HMM
         def model():
             p_latent = pyro.param("p1", torch.tensor([[0.7], [0.3]]))
@@ -24,7 +23,6 @@ class HMMSamplingTestCase(TestCase):
             latents = [torch.ones(1, 1)]
             observes = []
             for t in range(self.model_steps):
-
                 latents.append(
                     pyro.sample(
                         "latent_{}".format(str(t)),
@@ -52,7 +50,6 @@ class HMMSamplingTestCase(TestCase):
 
 class NormalNormalSamplingTestCase(TestCase):
     def setUp(self):
-
         pyro.clear_param_store()
 
         def model():

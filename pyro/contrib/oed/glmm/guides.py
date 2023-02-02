@@ -69,12 +69,10 @@ class LinearModelPosteriorGuide(nn.Module):
         self.softplus = nn.Softplus()
 
     def get_params(self, y_dict, design, target_labels):
-
         y = torch.cat(list(y_dict.values()), dim=-1)
         return self.linear_model_formula(y, design, target_labels)
 
     def linear_model_formula(self, y, design, target_labels):
-
         if self.use_softplus:
             mu = {l: rmv(self.softplus(self.regressor[l]), y) for l in target_labels}
         else:
@@ -84,7 +82,6 @@ class LinearModelPosteriorGuide(nn.Module):
         return mu, scale_tril
 
     def forward(self, y_dict, design, observation_labels, target_labels):
-
         pyro.module("posterior_guide", self)
 
         # Returns two dicts from labels -> tensors
@@ -222,7 +219,6 @@ class SigmoidGuide(LinearModelPosteriorGuide):
         self.h1_bias = nn.Parameter(torch.zeros(n))
 
     def get_params(self, y_dict, design, target_labels):
-
         y = torch.cat(list(y_dict.values()), dim=-1)
 
         # Approx invert transformation on y in expectation
@@ -254,7 +250,6 @@ class NormalInverseGammaGuide(LinearModelPosteriorGuide):
         self.tau_label = tau_label
 
     def get_params(self, y_dict, design, target_labels):
-
         y = torch.cat(list(y_dict.values()), dim=-1)
 
         coefficient_labels = [
@@ -270,7 +265,6 @@ class NormalInverseGammaGuide(LinearModelPosteriorGuide):
         return mu, scale_tril, self.alpha, beta
 
     def forward(self, y_dict, design, observation_labels, target_labels):
-
         pyro.module("ba_guide", self)
 
         mu, scale_tril, alpha, beta = self.get_params(y_dict, design, target_labels)
@@ -303,7 +297,6 @@ class GuideDV(nn.Module):
         self.guide = guide
 
     def forward(self, design, trace, observation_labels, target_labels):
-
         trace.compute_log_prob()
         prior_lp = sum(trace.nodes[l]["log_prob"] for l in target_labels)
         y_dict = {l: trace.nodes[l]["value"] for l in observation_labels}

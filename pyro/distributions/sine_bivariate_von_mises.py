@@ -88,7 +88,6 @@ class SineBivariateVonMises(TorchDistribution):
         weighted_correlation=None,
         validate_args=None,
     ):
-
         assert (correlation is None) != (weighted_correlation is None)
 
         if weighted_correlation is not None:

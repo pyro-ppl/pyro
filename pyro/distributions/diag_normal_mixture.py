@@ -147,7 +147,6 @@ class _MixDiagNormalSample(Function):
     @staticmethod
     @once_differentiable
     def backward(ctx, grad_output):
-
         z, scales, locs, logits, pis = ctx.saved_tensors
         dim = scales.size(-1)
         K = logits.size(-1)

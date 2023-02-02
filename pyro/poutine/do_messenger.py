@@ -58,7 +58,6 @@ class DoMessenger(Messenger):
             msg.get("_intervener_id", None) != self._intervener_id
             and self.data.get(msg["name"]) is not None
         ):
-
             if msg.get("_intervener_id", None) is not None:
                 warnings.warn(
                     "Attempting to intervene on variable {} multiple times,"

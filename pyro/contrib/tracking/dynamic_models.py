@@ -377,7 +377,6 @@ class NcvContinuous(Ncv):
             stochastic integration (for use with EKF).
         """
         if dt not in self._Q_cache:
-
             with torch.no_grad():
                 d = self._dimension
                 dt2 = dt * dt

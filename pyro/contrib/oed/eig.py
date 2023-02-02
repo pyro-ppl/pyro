@@ -537,7 +537,6 @@ def _posterior_ape(
     *args,
     **kwargs
 ):
-
     loss = _posterior_loss(
         model, guide, observation_labels, target_labels, *args, **kwargs
     )
@@ -834,7 +833,6 @@ def opt_eig_ape_loss(
     final_design=None,
     final_num_samples=None,
 ):
-
     if final_design is None:
         final_design = design
     if final_num_samples is None:
@@ -889,7 +887,6 @@ def _donsker_varadhan_loss(model, T, observation_labels, target_labels):
     ewma_log = EwmaLog(alpha=0.90)
 
     def loss_fn(design, num_particles, **kwargs):
-
         try:
             pyro.module("T", T)
         except AssertionError:
@@ -933,7 +930,6 @@ def _posterior_loss(
     """Posterior loss: to evaluate directly use `posterior_eig` setting `num_steps=0`, `eig=False`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
-
         expanded_design = lexpand(design, num_particles)
 
         # Sample from p(y, theta | d)
@@ -970,7 +966,6 @@ def _marginal_loss(model, guide, observation_labels, target_labels):
     """Marginal loss: to evaluate directly use `marginal_eig` setting `num_steps=0`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
-
         expanded_design = lexpand(design, num_particles)
 
         # Sample from p(y | d)
@@ -1002,7 +997,6 @@ def _marginal_likelihood_loss(
     """Marginal_likelihood loss: to evaluate directly use `marginal_likelihood_eig` setting `num_steps=0`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
-
         expanded_design = lexpand(design, num_particles)
 
         # Sample from p(y | d)
@@ -1043,7 +1037,6 @@ def _lfire_loss(
     """LFIRE loss: to evaluate directly use `lfire_eig` setting `num_steps=0`."""
 
     def loss_fn(design, num_particles, evaluation=False, **kwargs):
-
         try:
             pyro.module("h", h)
         except AssertionError:

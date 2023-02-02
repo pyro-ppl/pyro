@@ -92,7 +92,6 @@ def assert_ok(model, guide=None, max_plate_nesting=None, **kwargs):
 
 
 def _check_traces(tr_pyro, tr_funsor):
-
     assert tr_pyro.nodes.keys() == tr_funsor.nodes.keys()
     tr_pyro.compute_log_prob()
     tr_funsor.compute_log_prob()

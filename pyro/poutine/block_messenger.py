@@ -21,7 +21,6 @@ def _block_fn(expose, expose_types, hide, hide_types, hide_all, msg):
         or (msg_type in hide_types)
         or (is_not_exposed and hide_all)
     ):  # noqa: E129
-
         return True
     # otherwise expose
     else:

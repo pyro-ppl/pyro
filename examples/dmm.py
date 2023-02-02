@@ -208,7 +208,6 @@ class DMM(nn.Module):
         mini_batch_seq_lengths,
         annealing_factor=1.0,
     ):
-
         # this is the number of time steps we need to process in the mini-batch
         T_max = mini_batch.size(1)
 
@@ -269,7 +268,6 @@ class DMM(nn.Module):
         mini_batch_seq_lengths,
         annealing_factor=1.0,
     ):
-
         # this is the number of time steps we need to process in the mini-batch
         T_max = mini_batch.size(1)
         # register all PyTorch (sub)modules with pyro

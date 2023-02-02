@@ -234,10 +234,10 @@ def queue(
     :param num_samples: optional number of extended traces for extend_fn to return
     :returns: stochastic function decorated with poutine logic
     """
+
     # TODO rewrite this to use purpose-built trace/replay handlers
     def wrapper(wrapped):
         def _fn(*args, **kwargs):
-
             for i in range(max_tries):
                 assert (
                     not queue.empty()

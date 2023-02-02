@@ -202,7 +202,6 @@ def test_truth():
 
 
 def main(args):
-
     # test_truth()
 
     pragmatic_marginal = pragmatic_listener(args.price)

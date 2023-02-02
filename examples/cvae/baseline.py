@@ -48,7 +48,6 @@ def train(
     early_stop_patience,
     model_path,
 ):
-
     # Train baseline
     baseline_net = BaselineNet(500, 500)
     baseline_net.to(device)

@@ -582,7 +582,6 @@ def test_mixin_factory():
 
 
 def test_to_pyro_module_():
-
     pyro.set_rng_seed(123)
     actual = nn.Sequential(
         nn.Linear(28 * 28, 200),

@@ -18,7 +18,6 @@ def download_seal_data(filename):
 
 
 def prepare_seal(filename, random_effects):
-
     if not os.path.exists(filename):
         download_seal_data(filename)
 

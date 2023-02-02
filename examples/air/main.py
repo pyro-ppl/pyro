@@ -128,7 +128,6 @@ def load_data():
 
 
 def main(**kwargs):
-
     args = argparse.Namespace(**kwargs)
 
     if "save" in args:
@@ -229,7 +228,6 @@ def main(**kwargs):
     examples_to_viz = X[5:10]
 
     for i in range(1, args.num_steps + 1):
-
         loss = svi.step(
             X, batch_size=args.batch_size, z_pres_prior_p=partial(z_pres_prior_p, i)
         )

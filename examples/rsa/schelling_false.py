@@ -67,7 +67,6 @@ def bob(preference, depth):
 
 
 def main(args):
-
     # Here Alice and Bob slightly prefer one location over the other a priori
     shared_preference = torch.tensor([args.preference])
 
