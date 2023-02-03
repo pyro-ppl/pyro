@@ -22,7 +22,6 @@ epsilon = torch.tensor(2**-24)
 def known_covariance_linear_model(
     coef_means, coef_sds, observation_sd, coef_labels="w", observation_label="y"
 ):
-
     if not isinstance(coef_means, list):
         coef_means = [coef_means]
     if not isinstance(coef_sds, list):

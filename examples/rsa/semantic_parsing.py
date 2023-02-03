@@ -325,7 +325,6 @@ def literal_listener_raw(utterance, qud):
 
 
 def main(args):
-
     mll = Marginal(literal_listener_raw, num_samples=args.num_samples)
 
     def is_any_qud(world):

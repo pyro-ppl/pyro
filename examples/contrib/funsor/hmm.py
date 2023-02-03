@@ -178,6 +178,7 @@ def model_0(sequences, lengths, args, batch_size=None, include_prior=True):
 # and randomly subsample data to size batch_size.  To add jit support we
 # silence some warnings and try to avoid dynamic program structure.
 
+
 # Note that this is the "HMM" model in reference [1] (with the difference that
 # in [1] the probabilities probs_x and probs_y are not MAP-regularized with
 # Dirichlet and Beta distributions for any of the models)

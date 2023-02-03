@@ -1139,7 +1139,6 @@ def test_subsample_model_amortized(auto_class):
 @pytest.mark.parametrize("init_fn", [None, init_to_mean, init_to_median])
 @pytest.mark.parametrize("auto_class", [AutoDelta, AutoNormal, AutoGuideList])
 def test_subsample_guide(auto_class, init_fn):
-
     # The model from tutorial/source/easyguide.ipynb
     def model(batch, subsample, full_size):
         num_time_steps = len(batch)
@@ -1190,7 +1189,6 @@ def test_subsample_guide(auto_class, init_fn):
 @pytest.mark.parametrize("independent", [True, False], ids=["independent", "dependent"])
 @pytest.mark.parametrize("auto_class", [AutoDelta, AutoNormal])
 def test_subsample_guide_2(auto_class, independent):
-
     # Simplified from Model2 in tutorial/source/forecasting_iii.ipynb
     def model(data):
         size, size = data.shape

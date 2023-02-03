@@ -92,7 +92,6 @@ def true_ape(ns):
 
 
 def main(num_vi_steps, num_bo_steps, seed):
-
     pyro.set_rng_seed(seed)
     pyro.clear_param_store()
 

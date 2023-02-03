@@ -19,7 +19,6 @@ def simpleprod(lst):
 @pytest.mark.parametrize("batch_size", [None, 5])
 @pytest.mark.parametrize("substitute", [False, True])
 def test_profile_alternate_imp(M, batch_size, substitute):
-
     # --- Setup random model. ---
     pf_arranger = Profile(M)
 
@@ -199,7 +198,6 @@ def test_profile_alternate_imp(M, batch_size, substitute):
 def test_profile_shapes(
     batch_ancestor_seq, batch_insert_seq, batch_insert, batch_delete, batch_substitute
 ):
-
     M, D, B = 5, 2, 3
     K = 2 * M + 1
     batch_size = 6

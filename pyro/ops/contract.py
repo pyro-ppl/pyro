@@ -120,7 +120,6 @@ def _contract_component(ring, tensor_tree, sum_dims, target_dims):
 
         # Split terms at the current ordinal into connected components.
         for terms, dims in _partition_terms(ring, leaf_terms, leaf_dims):
-
             # Eliminate sum dims via a sumproduct contraction.
             term = ring.sumproduct(terms, dims - local_dims)
 

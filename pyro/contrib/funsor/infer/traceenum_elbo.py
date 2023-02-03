@@ -92,7 +92,6 @@ def terms_from_trace(tr):
 @copy_docs_from(_OrigTraceEnum_ELBO)
 class TraceMarkovEnum_ELBO(ELBO):
     def differentiable_loss(self, model, guide, *args, **kwargs):
-
         # get batched, enumerated, to_funsor-ed traces from the guide and model
         with plate(
             size=self.num_particles
@@ -170,7 +169,6 @@ class TraceMarkovEnum_ELBO(ELBO):
 @copy_docs_from(_OrigTraceEnum_ELBO)
 class TraceEnum_ELBO(ELBO):
     def differentiable_loss(self, model, guide, *args, **kwargs):
-
         # get batched, enumerated, to_funsor-ed traces from the guide and model
         with plate(
             size=self.num_particles

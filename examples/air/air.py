@@ -57,7 +57,6 @@ class AIR(nn.Module):
         likelihood_sd=0.3,
         use_cuda=False,
     ):
-
         super().__init__()
 
         self.num_steps = num_steps
@@ -127,7 +126,6 @@ class AIR(nn.Module):
             self.cuda()
 
     def prior(self, n, **kwargs):
-
         state = ModelState(
             x=torch.zeros(n, self.x_size, self.x_size, **self.options),
             z_pres=torch.ones(n, self.z_pres_size, **self.options),
@@ -145,7 +143,6 @@ class AIR(nn.Module):
         return (z_where, z_pres), state.x
 
     def prior_step(self, t, n, prev, z_pres_prior_p=default_z_pres_prior_p):
-
         # Sample presence indicators.
         z_pres = pyro.sample(
             "z_pres_{}".format(t),
@@ -263,7 +260,6 @@ class AIR(nn.Module):
             return z_where, z_pres
 
     def guide_step(self, t, n, prev, inputs):
-
         rnn_input = torch.cat(
             (inputs["embed"], prev.z_where, prev.z_what, prev.z_pres), 1
         )

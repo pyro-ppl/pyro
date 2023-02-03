@@ -189,7 +189,6 @@ def queue(
 
     def wrapper(wrapped):
         def _fn(*args, **kwargs):
-
             for i in range(max_tries):
                 assert (
                     not queue.empty()

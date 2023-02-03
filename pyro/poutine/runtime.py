@@ -207,7 +207,6 @@ def apply_stack(initial_msg):
     pointer = 0
     # go until time to stop?
     for frame in reversed(stack):
-
         pointer = pointer + 1
 
         frame._process_message(msg)
@@ -253,7 +252,6 @@ def effectful(fn=None, type=None):
 
     @functools.wraps(fn)
     def _fn(*args, **kwargs):
-
         name = kwargs.pop("name", None)
         infer = kwargs.pop("infer", {})
 

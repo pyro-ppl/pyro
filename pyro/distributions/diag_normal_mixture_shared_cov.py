@@ -147,7 +147,6 @@ class _MixDiagNormalSharedCovarianceSample(Function):
     @staticmethod
     @once_differentiable
     def backward(ctx, grad_output):
-
         z, coord_scale, locs, component_logits, pis = ctx.saved_tensors
         K = component_logits.size(-1)
         batch_dims = coord_scale.dim() - 1

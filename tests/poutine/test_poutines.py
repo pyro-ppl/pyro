@@ -235,7 +235,6 @@ class BlockHandlerTests(NormalNormalNormalHandlerTestCase):
 
 class QueueHandlerDiscreteTest(TestCase):
     def setUp(self):
-
         # simple Gaussian-mixture HMM
         def model():
             probs = pyro.param("probs", torch.tensor([[0.8], [0.3]]))
@@ -245,7 +244,6 @@ class QueueHandlerDiscreteTest(TestCase):
             latents = [torch.ones(1)]
             observes = []
             for t in range(3):
-
                 latents.append(
                     pyro.sample(
                         "latent_{}".format(str(t)),
@@ -468,7 +466,6 @@ class LiftHandlerTests(TestCase):
 
 class QueueHandlerMixedTest(TestCase):
     def setUp(self):
-
         # Simple model with 1 continuous + 1 discrete + 1 continuous variable.
         def model():
             p = torch.tensor([0.5])
@@ -674,7 +671,6 @@ class UnconditionHandlerTests(NormalNormalNormalHandlerTestCase):
 
 class EscapeHandlerTests(TestCase):
     def setUp(self):
-
         # Simple model with 1 continuous + 1 discrete + 1 continuous variable.
         def model():
             p = torch.tensor([0.5])
@@ -881,7 +877,6 @@ def test_decorator_interface_primitives():
 
 
 def test_decorator_interface_queue():
-
     sites = ["x", "y", "z", "_INPUT", "_RETURN"]
     queue = Queue()
     queue.put(poutine.Trace())

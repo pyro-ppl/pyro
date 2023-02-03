@@ -80,7 +80,6 @@ def test_counterfactual_query(intervene, observe, flip):
 
 def test_plate_duplication_smoke():
     def model(N):
-
         with pyro.plate("x_plate", N):
             z1 = pyro.sample(
                 "z1", dist.MultivariateNormal(torch.zeros(2), torch.eye(2))

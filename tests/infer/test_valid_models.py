@@ -251,7 +251,6 @@ def test_variable_clash_in_guide_error(Elbo):
     "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
 )
 def test_set_has_rsample_ok(has_rsample, Elbo):
-
     # This model has sparse gradients, so users may want to disable
     # reparametrized sampling to reduce variance of gradient estimates.
     # However both versions should be correct, i.e. with or without has_rsample.

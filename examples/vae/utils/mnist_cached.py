@@ -150,7 +150,6 @@ class MNISTCached(MNIST):
         ], "invalid train/test option values"
 
         if mode in ["sup", "unsup", "valid"]:
-
             # transform the training data if transformations are provided
             if transform is not None:
                 self.data = transform(self.data.float())

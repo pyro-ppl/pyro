@@ -11,7 +11,6 @@ from pyro.contrib.mue.dataloaders import BiosequenceDataset, alphabets, write
 @pytest.mark.parametrize("alphabet", ["amino-acid", "dna", "ATC"])
 @pytest.mark.parametrize("include_stop", [False, True])
 def test_biosequencedataset(source_type, alphabet, include_stop):
-
     # Define dataset.
     seqs = ["AATC", "CA", "T"]
 
@@ -73,7 +72,6 @@ T
 
 
 def test_write():
-
     # Define dataset.
     seqs = ["AATC*C", "CA*", "T**"]
     dataset = BiosequenceDataset(seqs, "list", "ACGT*", include_stop=False)

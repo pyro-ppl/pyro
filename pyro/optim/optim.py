@@ -231,7 +231,6 @@ class PyroOptim:
         # if we were passed a fct, we call fct with param info
         # arguments are (module name, param name) e.g. ('mymodule', 'bias')
         if callable(self.pt_clip_args):
-
             # get param name
             param_name = pyro.get_param_store().param_name(param)
             module_name = module_from_param_with_module_name(param_name)

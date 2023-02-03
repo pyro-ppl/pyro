@@ -50,7 +50,7 @@ class MLP(nn.Module):
         layers = []
         in_sizes = [in_size] + out_sizes[0:-1]
         sizes = list(zip(in_sizes, out_sizes))
-        for (i, o) in sizes[0:-1]:
+        for i, o in sizes[0:-1]:
             layers.append(nn.Linear(i, o))
             layers.append(non_linear_layer())
         layers.append(nn.Linear(sizes[-1][0], sizes[-1][1]))
