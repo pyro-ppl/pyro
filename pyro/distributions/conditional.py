@@ -39,10 +39,10 @@ class ConditionalTransformModule(ConditionalTransform, torch.nn.Module):
 
     @property
     def inv(self) -> "ConditionalTransformModule":
-        return InverseConditionalTransformModule(self)
+        return _InverseConditionalTransformModule(self)
 
 
-class InverseConditionalTransformModule(ConditionalTransformModule):
+class _InverseConditionalTransformModule(ConditionalTransformModule):
 
     def __init__(self, transform: ConditionalTransform):
         super().__init__()
@@ -74,7 +74,7 @@ class ConditionalComposeTransformModule(ConditionalTransformModule, torch.nn.Mod
             if isinstance(t, torch.nn.Module):
                 self.append(t)
 
-    def condition(self, context: torch.Tensor):
+    def condition(self, context: torch.Tensor) -> ComposeTransformModule:
         return ComposeTransformModule(
             [t.condition(context) for t in self.transforms]
         ).with_cache(self._cache_size)
