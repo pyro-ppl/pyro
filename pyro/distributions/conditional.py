@@ -75,6 +75,8 @@ class ConditionalComposeTransformModule(
         ...     [ConditionalFlowStack(3, 2, [8, 8], num_flows=4).inv]
         ... )
 
+        >>> context = torch.rand(10, 2)
+        >>> data = torch.rand(10, 3)
         >>> nll = -cond_dist.condition(context).log_prob(data)
     """
 
