@@ -516,13 +516,12 @@ def test_conditional_compose_transform_module(
 
     context = torch.rand(batch_shape + (context_dim,))
     d = cond_dist.condition(context)
+    transform = d.transforms[0]
+    assert isinstance(transform, T.ComposeTransformModule)
 
     data = d.rsample()
     assert data.shape == batch_shape + (input_dim,)
     assert d.log_prob(data).shape == batch_shape
-
-    transform = d.transforms[0]
-    assert isinstance(transform, T.ComposeTransformModule)
 
     actual_params = set(cond_transform.parameters())
     expected_params = set(
