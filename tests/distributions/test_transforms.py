@@ -10,7 +10,6 @@ import torch
 
 import pyro.distributions as dist
 import pyro.distributions.transforms as T
-
 from pyro.distributions import constraints
 from tests.common import assert_close
 
@@ -477,7 +476,6 @@ def test_lower_cholesky_transform(transform, batch_shape, dim):
 @pytest.mark.parametrize("input_dim", [2, 3, 5])
 @pytest.mark.parametrize("context_dim", [2, 3, 5])
 def test_inverse_conditional_transform_module(batch_shape, input_dim, context_dim):
-
     cond_transform = T.conditional_spline(input_dim, context_dim, [6])
 
     noise = torch.rand(batch_shape + (input_dim,))
@@ -499,7 +497,9 @@ def test_inverse_conditional_transform_module(batch_shape, input_dim, context_di
 @pytest.mark.parametrize("input_dim", [2, 3, 5])
 @pytest.mark.parametrize("context_dim", [2, 3, 5])
 @pytest.mark.parametrize("cache_size", [0, 1])
-def test_conditional_compose_transform_module(batch_shape, input_dim, context_dim, cache_size):
+def test_conditional_compose_transform_module(
+    batch_shape, input_dim, context_dim, cache_size
+):
     conditional_transforms = [
         T.AffineTransform(1.0, 2.0),
         T.Spline(input_dim),
@@ -516,8 +516,16 @@ def test_conditional_compose_transform_module(batch_shape, input_dim, context_di
 
     transform = cond_transform.condition(context)
     assert isinstance(transform, T.ComposeTransformModule)
-    assert set() != set(cond_transform.parameters()) == set.union(
-        *(set(t.parameters()) for t in conditional_transforms if isinstance(t, torch.nn.Module))
+    assert (
+        set()
+        != set(cond_transform.parameters())
+        == set.union(
+            *(
+                set(t.parameters())
+                for t in conditional_transforms
+                if isinstance(t, torch.nn.Module)
+            )
+        )
     )
 
     expected = noise

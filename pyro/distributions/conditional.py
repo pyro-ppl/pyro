@@ -43,7 +43,6 @@ class ConditionalTransformModule(ConditionalTransform, torch.nn.Module):
 
 
 class _InverseConditionalTransformModule(ConditionalTransformModule):
-
     def __init__(self, transform: ConditionalTransform):
         super().__init__()
         self._transform = transform
@@ -56,8 +55,9 @@ class _InverseConditionalTransformModule(ConditionalTransformModule):
         return self._transform.condition(context).inv
 
 
-class ConditionalComposeTransformModule(ConditionalTransformModule, torch.nn.ModuleList):
-
+class ConditionalComposeTransformModule(
+    ConditionalTransformModule, torch.nn.ModuleList
+):
     def __init__(self, transforms: list, *, cache_size: int = 0):
         self.transforms = [
             ConstantConditionalTransform(t)
@@ -67,7 +67,7 @@ class ConditionalComposeTransformModule(ConditionalTransformModule, torch.nn.Mod
         ]
         super().__init__()
         if cache_size not in {0, 1}:
-            raise ValueError('cache_size must be 0 or 1')
+            raise ValueError("cache_size must be 0 or 1")
         self._cache_size = cache_size
         # for parameter storage
         for t in transforms:
