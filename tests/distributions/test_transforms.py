@@ -10,6 +10,7 @@ import torch
 
 import pyro.distributions as dist
 import pyro.distributions.transforms as T
+
 from pyro.distributions import constraints
 from tests.common import assert_close
 
@@ -470,3 +471,67 @@ def test_lower_cholesky_transform(transform, batch_shape, dim):
     y2 = transform(x2)
     assert y2.shape == shape
     assert_close(y, y2)
+
+
+@pytest.mark.parametrize("batch_shape", [(), (7,), (6, 7)])
+@pytest.mark.parametrize("input_dim", [2, 3, 5])
+@pytest.mark.parametrize("context_dim", [2, 3, 5])
+def test_inverse_conditional_transform_module(batch_shape, input_dim, context_dim):
+
+    cond_transform = T.conditional_spline(input_dim, context_dim, [6])
+
+    noise = torch.rand(batch_shape + (input_dim,))
+    context = torch.rand(batch_shape + (context_dim,))
+
+    assert_close(
+        cond_transform.inv.condition(context)(noise),
+        cond_transform.condition(context).inv(noise),
+    )
+
+    assert cond_transform.inv.inv is cond_transform
+    assert_close(
+        cond_transform.inv.condition(context).inv(noise),
+        cond_transform.condition(context).inv.inv(noise),
+    )
+
+
+@pytest.mark.parametrize("batch_shape", [(), (7,), (6, 7)])
+@pytest.mark.parametrize("input_dim", [2, 3, 5])
+@pytest.mark.parametrize("context_dim", [2, 3, 5])
+@pytest.mark.parametrize("cache_size", [0, 1])
+def test_conditional_compose_transform_module(batch_shape, input_dim, context_dim, cache_size):
+    conditional_transforms = [
+        T.AffineTransform(1.0, 2.0),
+        T.Spline(input_dim),
+        T.conditional_spline(input_dim, context_dim, [5]),
+        T.SoftplusTransform(),
+        T.conditional_spline(input_dim, context_dim, [6]),
+    ]
+    cond_transform = dist.conditional.ConditionalComposeTransformModule(
+        conditional_transforms, cache_size=cache_size
+    )
+
+    noise = torch.rand(batch_shape + (input_dim,))
+    context = torch.rand(batch_shape + (context_dim,))
+
+    transform = cond_transform.condition(context)
+    assert isinstance(transform, T.ComposeTransformModule)
+    assert set() != set(cond_transform.parameters()) == set.union(
+        *(set(t.parameters()) for t in conditional_transforms if isinstance(t, torch.nn.Module))
+    )
+
+    expected = noise
+    for t in conditional_transforms:
+        expected = (t.condition(context) if hasattr(t, "condition") else t)(expected)
+
+    actual = transform(noise)
+    assert_close(actual, expected)
+
+    assert_close(cond_transform.inv.condition(context)(actual), noise)
+    assert_close(cond_transform.condition(context).inv(expected), noise)
+
+    noise_double = noise.clone().to(dtype=torch.float64)
+    context_double = context.clone().to(dtype=torch.float64)
+
+    out_double = cond_transform.to(dtype=torch.float64).condition(context_double)(noise_double)
+    assert_close(out_double.to(dtype=torch.float32), expected)
