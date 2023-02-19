@@ -28,7 +28,8 @@ class ComposeTransformModule(torch.distributions.ComposeTransform, torch.nn.Modu
     def __init__(self, parts):
         super().__init__(parts)
         for part in parts:
-            self.append(part)
+            if isinstance(part, torch.nn.Module):
+                self.append(part)
 
     def __hash__(self):
         return super(torch.nn.Module, self).__hash__()

@@ -7,6 +7,7 @@ import torch
 import torch.nn
 
 from .torch import TransformedDistribution
+from .torch_transform import ComposeTransformModule
 
 
 class ConditionalDistribution(ABC):
@@ -35,6 +36,48 @@ class ConditionalTransformModule(ConditionalTransform, torch.nn.Module):
 
     def __hash__(self):
         return super().__hash__()
+
+    @property
+    def inv(self) -> "ConditionalTransformModule":
+        return InverseConditionalTransformModule(self)
+
+
+class InverseConditionalTransformModule(ConditionalTransformModule):
+
+    def __init__(self, transform: ConditionalTransform):
+        super().__init__()
+        self._transform = transform
+
+    @property
+    def inv(self) -> ConditionalTransform:
+        return self._transform
+
+    def condition(self, context: torch.Tensor):
+        return self._transform.condition(context).inv
+
+
+class ConditionalComposeTransformModule(ConditionalTransformModule, torch.nn.ModuleList):
+
+    def __init__(self, transforms: list, *, cache_size: int = 0):
+        self.transforms = [
+            ConstantConditionalTransform(t)
+            if not isinstance(t, ConditionalTransform)
+            else t
+            for t in transforms
+        ]
+        super().__init__()
+        if cache_size not in {0, 1}:
+            raise ValueError('cache_size must be 0 or 1')
+        self._cache_size = cache_size
+        # for parameter storage
+        for t in transforms:
+            if isinstance(t, torch.nn.Module):
+                self.append(t)
+
+    def condition(self, context: torch.Tensor):
+        return ComposeTransformModule(
+            [t.condition(context) for t in self.transforms]
+        ).with_cache(self._cache_size)
 
 
 class ConstantConditionalDistribution(ConditionalDistribution):
