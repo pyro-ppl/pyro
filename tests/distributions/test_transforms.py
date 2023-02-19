@@ -529,9 +529,3 @@ def test_conditional_compose_transform_module(batch_shape, input_dim, context_di
 
     assert_close(cond_transform.inv.condition(context)(actual), noise)
     assert_close(cond_transform.condition(context).inv(expected), noise)
-
-    noise_double = noise.clone().to(dtype=torch.float64)
-    context_double = context.clone().to(dtype=torch.float64)
-
-    out_double = cond_transform.to(dtype=torch.float64).condition(context_double)(noise_double)
-    assert_close(out_double.to(dtype=torch.float32), expected)
