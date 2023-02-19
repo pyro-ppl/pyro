@@ -39,10 +39,10 @@ class ConditionalTransformModule(ConditionalTransform, torch.nn.Module):
 
     @property
     def inv(self) -> "ConditionalTransformModule":
-        return _InverseConditionalTransformModule(self)
+        return _ConditionalInverseTransformModule(self)
 
 
-class _InverseConditionalTransformModule(ConditionalTransformModule):
+class _ConditionalInverseTransformModule(ConditionalTransformModule):
     def __init__(self, transform: ConditionalTransform):
         super().__init__()
         self._transform = transform
