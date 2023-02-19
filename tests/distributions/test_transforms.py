@@ -511,23 +511,28 @@ def test_conditional_compose_transform_module(
         conditional_transforms, cache_size=cache_size
     )
 
-    noise = torch.rand(batch_shape + (input_dim,))
+    base_dist = dist.Normal(0, 1).expand(batch_shape + (input_dim,)).to_event(1)
+    cond_dist = dist.ConditionalTransformedDistribution(base_dist, [cond_transform])
+
     context = torch.rand(batch_shape + (context_dim,))
+    d = cond_dist.condition(context)
 
-    transform = cond_transform.condition(context)
+    data = d.rsample()
+    assert data.shape == batch_shape + (input_dim,)
+    assert d.log_prob(data).shape == batch_shape
+
+    transform = d.transforms[0]
     assert isinstance(transform, T.ComposeTransformModule)
-    assert (
-        set()
-        != set(cond_transform.parameters())
-        == set.union(
-            *(
-                set(t.parameters())
-                for t in conditional_transforms
-                if isinstance(t, torch.nn.Module)
-            )
-        )
-    )
 
+    actual_params = set(cond_transform.parameters())
+    expected_params = set(
+        torch.nn.ModuleList(
+            [t for t in conditional_transforms if isinstance(t, torch.nn.Module)]
+        ).parameters()
+    )
+    assert set() != actual_params == expected_params
+
+    noise = base_dist.rsample()
     expected = noise
     for t in conditional_transforms:
         expected = (t.condition(context) if hasattr(t, "condition") else t)(expected)

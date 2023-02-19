@@ -58,7 +58,27 @@ class _ConditionalInverseTransformModule(ConditionalTransformModule):
 class ConditionalComposeTransformModule(
     ConditionalTransformModule, torch.nn.ModuleList
 ):
-    def __init__(self, transforms: list, *, cache_size: int = 0):
+    """
+    Conditional analogue of :class:`~pyro.distributions.torch_transform.ComposeTransformModule` .
+
+    Useful as a base class for specifying complicated conditional distributions::
+
+        >>> class ConditionalFlowStack(dist.conditional.ConditionalComposeTransformModule):
+        ...     def __init__(self, input_dim, context_dim, hidden_dims, num_flows):
+        ...         super().__init__([
+        ...             dist.transforms.conditional_planar(input_dim, context_dim, hidden_dims)
+        ...             for _ in range(num_flows)
+        ...         ], cache_size=1)
+
+        >>> cond_dist = dist.conditional.ConditionalTransformedDistribution(
+        ...     dist.Normal(torch.zeros(3), torch.ones(3)).to_event(1),
+        ...     [ConditionalFlowStack(3, 2, [8, 8], num_flows=4).inv]
+        ... )
+
+        >>> nll = -cond_dist.condition(context).log_prob(data)
+    """
+
+    def __init__(self, transforms, cache_size: int = 0):
         self.transforms = [
             ConstantConditionalTransform(t)
             if not isinstance(t, ConditionalTransform)
