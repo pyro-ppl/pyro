@@ -556,7 +556,7 @@ def render_model(
     model: Callable,
     model_args: Optional[Union[tuple, List[tuple]]] = None,
     model_kwargs: Optional[Union[dict, List[dict]]] = None,
-    filename: Optional[str] = None,
+    filepath: Optional[str] = None,
     render_distributions: bool = False,
     render_params: bool = False,
 ) -> "graphviz.Digraph":
@@ -572,7 +572,7 @@ def render_model(
         list of tuples for semisupervised models.
     :param model_kwargs: Dict of keyword arguments to pass to the model, or
         list of dicts for semisupervised models.
-    :param str filename: File to save rendered model in.
+    :param str filepath: Path to file to save rendered model in.
     :param bool render_distributions: Whether to include RV distribution
         annotations (and param constraints) in the plot.
     :param bool render_params: Whether to show params inthe plot.
@@ -603,10 +603,9 @@ def render_model(
     # Render.
     graph = render_graph(graph_spec, render_distributions=render_distributions)
 
-    if filename is not None:
-        filename = Path(filename)
-        suffix = filename.suffix[1:]  # remove leading period from suffix
-        graph.render(filename.stem, view=False, cleanup=True, format=suffix)
+    if filepath is not None:
+        suffix = Path(filepath).suffix[1:]  # remove leading period from suffix
+        graph.render(os.path.splitext(filepath)[0], view=False, cleanup=True, format=suffix)
 
     return graph
 
