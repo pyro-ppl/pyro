@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import itertools
+import os
 from collections import defaultdict
 from pathlib import Path
 from types import SimpleNamespace
