@@ -606,9 +606,8 @@ def render_model(
 
     if filename is not None:
         suffix = Path(filename).suffix[1:]  # remove leading period from suffix
-        graph.render(
-            os.path.splitext(filename)[0], view=False, cleanup=True, format=suffix
-        )
+        filepath = os.path.splitext(filename)[0]
+        graph.render(filepath, view=False, cleanup=True, format=suffix)
 
     return graph
 
