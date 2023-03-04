@@ -25,10 +25,16 @@ class ComposeTransformModule(torch.distributions.ComposeTransform, torch.nn.Modu
     store when used in :class:`~pyro.nn.module.PyroModule` instances.
     """
 
-    def __init__(self, parts):
-        super().__init__(parts)
+    def __init__(self, parts, cache_size=0):
+        super().__init__(parts, cache_size=cache_size)
         for part in parts:
-            self.append(part)
+            if isinstance(part, torch.nn.Module):
+                self.append(part)
 
     def __hash__(self):
         return super(torch.nn.Module, self).__hash__()
+
+    def with_cache(self, cache_size=1):
+        if cache_size == self._cache_size:
+            return self
+        return ComposeTransformModule(self.parts, cache_size=cache_size)
