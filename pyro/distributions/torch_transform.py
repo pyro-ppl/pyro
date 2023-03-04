@@ -35,6 +35,6 @@ class ComposeTransformModule(torch.distributions.ComposeTransform, torch.nn.Modu
         return super(torch.nn.Module, self).__hash__()
 
     def with_cache(self, cache_size=1):
-        if cache_size == 0:
+        if cache_size == self._cache_size:
             return self
         return ComposeTransformModule(self.parts, cache_size=cache_size)
