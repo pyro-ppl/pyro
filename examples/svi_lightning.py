@@ -47,14 +47,14 @@ class Model(PyroModule):
             return pyro.sample("obs", dist.Normal(loc, scale), obs=data)
 
 
-# We define an ELBO loss, a PyTorch optimizer, and a training step in our PyroLightningModule
-# Note that we are using PyTorch optimizer and we are not using Pyro's SVI machinery
+# We define an ELBO loss, a PyTorch optimizer, and a training step in our PyroLightningModule.
+# Note that we are using a PyTorch optimizer instead of a Pyro optimizer and
+# we are using ``training_step`` instead of Pyro's SVI machinery.
 class PyroLightningModule(pl.LightningModule):
     def __init__(self, model, guide, lr):
         super().__init__()
         self.pyro_model = model
         self.pyro_guide = guide
-        # Create an ELBO loss function
         self.loss_fn = Trace_ELBO().differentiable_loss
         self.lr = lr
 
@@ -66,7 +66,7 @@ class PyroLightningModule(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        """Configure optimizers for the model."""
+        """Configure an optimizer."""
         return torch.optim.Adam(self.pyro_guide.parameters(), lr=self.lr)
 
 
@@ -83,9 +83,9 @@ def main(args):
     dataset = torch.utils.data.TensorDataset(covariates, data)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size)
 
-    # All relevant parameters need to be initialized before `configure_optimizer` is called.
+    # All relevant parameters need to be initialized before ``configure_optimizer`` is called.
     # Since we used AutoNormal guide our parameters have not be initialized yet.
-    # Warm up the guide by running one mini-batch through it.
+    # Therefore we warm up the guide by running one mini-batch through it.
     mini_batch = dataset[: args.batch_size]
     guide(*mini_batch)
 
