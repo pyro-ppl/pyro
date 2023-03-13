@@ -14,6 +14,7 @@ from tests.common import (
     requires_cuda,
     requires_funsor,
     requires_horovod,
+    requires_lightning,
     xfail_param,
 )
 
@@ -279,6 +280,14 @@ HOROVOD_EXAMPLES = [
     ),
 ]
 
+LIGHTNING_EXAMPLES = [
+    "svi_lightning.py --max_epochs=2 --size=400 --accelerator cpu --devices 1 --strategy ddp",
+    pytest.param(
+        "svi_lightning.py --max_epochs=2 --size=400 --accelerator gpu --devices 1 --strategy ddp",
+        marks=[requires_cuda],
+    ),
+]
+
 FUNSOR_EXAMPLES = [
     xfail_param(
         "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=0 --funsor",
@@ -386,6 +395,16 @@ def test_horovod(np, example):
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
     check_call(horovodrun.split() + [sys.executable, filename] + args)
+
+
+@requires_lightning
+@pytest.mark.parametrize("example", LIGHTNING_EXAMPLES)
+def test_lightning(example):
+    logger.info("Running:\n{} python examples/{}".format(example))
+    example = example.split()
+    filename, args = example[0], example[1:]
+    filename = os.path.join(EXAMPLES_DIR, filename)
+    check_call([sys.executable, filename] + args)
 
 
 @requires_funsor
