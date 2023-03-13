@@ -11,7 +11,7 @@
 #   https://lightning.ai/docs/pytorch/latest
 #
 # This assumes you have installed pytorch lightning, e.g. via
-#   pip install pyro[lightning]
+#   pip install pyro-ppl[lightning]
 
 import argparse
 
