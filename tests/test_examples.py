@@ -281,9 +281,9 @@ HOROVOD_EXAMPLES = [
 ]
 
 LIGHTNING_EXAMPLES = [
-    "svi_lightning.py --max_epochs=2 --size=400 --accelerator cpu --devices 1 --strategy ddp",
+    "svi_lightning.py --max_epochs=2 --size=400 --accelerator cpu --devices 1",
     pytest.param(
-        "svi_lightning.py --max_epochs=2 --size=400 --accelerator gpu --devices 1 --strategy ddp",
+        "svi_lightning.py --max_epochs=2 --size=400 --accelerator gpu --devices 1",
         marks=[requires_cuda],
     ),
 ]
@@ -400,7 +400,7 @@ def test_horovod(np, example):
 @requires_lightning
 @pytest.mark.parametrize("example", LIGHTNING_EXAMPLES)
 def test_lightning(example):
-    logger.info("Running:\n{} python examples/{}".format(example))
+    logger.info("Running:\npython examples/{}".format(example))
     example = example.split()
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)

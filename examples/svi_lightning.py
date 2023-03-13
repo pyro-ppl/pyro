@@ -102,7 +102,6 @@ if __name__ == "__main__":
     parser.add_argument("--size", default=1000000, type=int)
     parser.add_argument("--batch_size", default=100, type=int)
     parser.add_argument("--learning_rate", default=0.01, type=float)
-    parser.add_argument("--lightning", action="store_true", default=True)
     parser.add_argument("--seed", default=20200723, type=int)
     parser = pl.Trainer.add_argparse_args(parser)
     args = parser.parse_args()
