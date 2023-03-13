@@ -111,6 +111,10 @@ CPU_EXAMPLES = [
     "sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide auto",
     "sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide easy",
     "svi_horovod.py --num-epochs=2 --size=400 --no-horovod",
+    pytest.param(
+        "svi_lightning.py --max_epochs=2 --size=400 --accelerator cpu --devices 1",
+        marks=[requires_lightning],
+    ),
     "toy_mixture_model_discrete_enumeration.py  --num-steps=1",
     "sparse_regression.py --num-steps=100 --num-data=100 --num-dimensions 11",
     "vae/ss_vae_M2.py --num-epochs=1",
@@ -178,6 +182,10 @@ CUDA_EXAMPLES = [
     "sir_hmc.py -t=2 -w=2 -n=4 -d=2 -p=10000 --sequential --cuda",
     "sir_hmc.py -t=2 -w=2 -n=4 -d=100 -p=10000 --cuda",
     "svi_horovod.py --num-epochs=2 --size=400 --cuda --no-horovod",
+    pytest.param(
+        "svi_lightning.py --max_epochs=2 --size=400 --accelerator gpu --devices 1",
+        marks=[requires_lightning],
+    ),
     "vae/vae.py --num-epochs=1 --cuda",
     "vae/ss_vae_M2.py --num-epochs=1 --cuda",
     "vae/ss_vae_M2.py --num-epochs=1 --aux-loss --cuda",
@@ -277,14 +285,6 @@ HOROVOD_EXAMPLES = [
     "svi_horovod.py --num-epochs=2 --size=400",
     pytest.param(
         "svi_horovod.py --num-epochs=2 --size=400 --cuda", marks=[requires_cuda]
-    ),
-]
-
-LIGHTNING_EXAMPLES = [
-    "svi_lightning.py --max_epochs=2 --size=400 --accelerator cpu --devices 1",
-    pytest.param(
-        "svi_lightning.py --max_epochs=2 --size=400 --accelerator gpu --devices 1",
-        marks=[requires_cuda],
     ),
 ]
 
@@ -395,16 +395,6 @@ def test_horovod(np, example):
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
     check_call(horovodrun.split() + [sys.executable, filename] + args)
-
-
-@requires_lightning
-@pytest.mark.parametrize("example", LIGHTNING_EXAMPLES)
-def test_lightning(example):
-    logger.info("Running:\npython examples/{}".format(example))
-    example = example.split()
-    filename, args = example[0], example[1:]
-    filename = os.path.join(EXAMPLES_DIR, filename)
-    check_call([sys.executable, filename] + args)
 
 
 @requires_funsor
