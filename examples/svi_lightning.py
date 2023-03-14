@@ -51,33 +51,41 @@ class Model(PyroModule):
 # Note that we are using a PyTorch optimizer instead of a Pyro optimizer and
 # we are using ``training_step`` instead of Pyro's SVI machinery.
 class PyroLightningModule(pl.LightningModule):
-    def __init__(self, model, guide, lr):
+    def __init__(self, loss_fn: pyro.infer.elbo.ELBOModule, lr: float):
         super().__init__()
-        self.pyro_model = model
-        self.pyro_guide = guide
-        self.loss_fn = Trace_ELBO().differentiable_loss
+        self.loss_fn = loss_fn
+        self.model = loss_fn.model
+        self.guide = loss_fn.guide
         self.lr = lr
+        self.predictive = pyro.infer.Predictive(
+            self.model, guide=self.guide, num_samples=1
+        )
+
+    def forward(self, *args):
+        return self.predictive(*args)
 
     def training_step(self, batch, batch_idx):
         """Training step for Pyro training."""
-        loss = self.loss_fn(self.pyro_model, self.pyro_guide, *batch)
+        loss = self.loss_fn(*batch)
         # Logging to TensorBoard by default
         self.log("train_loss", loss)
         return loss
 
     def configure_optimizers(self):
         """Configure an optimizer."""
-        return torch.optim.Adam(self.pyro_guide.parameters(), lr=self.lr)
+        return torch.optim.Adam(self.loss_fn.parameters(), lr=self.lr)
 
 
 def main(args):
     # Create a model, synthetic data, a guide, and a lightning module.
     pyro.set_rng_seed(args.seed)
+    pyro.settings.set(module_local_params=True)
     model = Model(args.size)
     covariates = torch.randn(args.size)
     data = model(covariates)
     guide = AutoNormal(model)
-    training_plan = PyroLightningModule(model, guide, args.learning_rate)
+    loss_fn = Trace_ELBO()(model, guide)
+    training_plan = PyroLightningModule(loss_fn, args.learning_rate)
 
     # Create a dataloader.
     dataset = torch.utils.data.TensorDataset(covariates, data)
@@ -85,9 +93,9 @@ def main(args):
 
     # All relevant parameters need to be initialized before ``configure_optimizer`` is called.
     # Since we used AutoNormal guide our parameters have not be initialized yet.
-    # Therefore we warm up the guide by running one mini-batch through it.
+    # Therefore we initialize the model and guide by running one mini-batch through the loss.
     mini_batch = dataset[: args.batch_size]
-    guide(*mini_batch)
+    loss_fn(*mini_batch)
 
     # Run stochastic variational inference using PyTorch Lightning Trainer.
     trainer = pl.Trainer.from_argparse_args(args)
