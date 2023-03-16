@@ -12,7 +12,7 @@
 #   https://horovod.readthedocs.io/en/stable
 #
 # This assumes you have installed horovod, e.g. via
-#   pip install pyro[horovod]
+#   pip install pyro-ppl[horovod]
 # For detailed instructions see
 #   https://horovod.readthedocs.io/en/stable/install.html
 # On my mac laptop I was able to install horovod with

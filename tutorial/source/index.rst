@@ -96,6 +96,7 @@ List of Tutorials
    prior_predictive
    jit
    svi_horovod
+   svi_lightning
 
 .. toctree::
    :maxdepth: 1
