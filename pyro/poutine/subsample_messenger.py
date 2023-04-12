@@ -188,9 +188,9 @@ class SubsampleMessenger(IndepMessenger):
                         value = msg["value"]
                         # When using the GPU, self._indices does not seem to be on the `cuda`, resulting in an error reporting that the Tensor is not on the same device when doing a subsample.
                         # I made the following changes on my device. Since the whole Pyro project is very complex, I am not sure where the source of the bug is. I hope you can fix this bug soon.
-                        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-                        # new_value = value.index_select(dim, self._indices.to(device))
-                        new_value = value.index_select(dim, self._indices)
+                        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                        new_value = value.index_select(dim, self._indices.to(device))
+                        # new_value = value.index_select(dim, self._indices)
                         if msg["type"] == "param":
                             if hasattr(value, "_pyro_unconstrained_param"):
                                 param = value._pyro_unconstrained_param
