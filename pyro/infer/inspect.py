@@ -90,7 +90,7 @@ def get_dependencies(
         linearly many dependencies as in independent sets of parallel edges.
         Prior dependencies follow the original model order.
     -   `posterior_dependencies` is a similar dict, but mapping latent
-        variables to the latent or observed sits on which they depend in the
+        variables to the latent or observed sites on which they depend in the
         posterior. Posterior dependencies are reversed from the model order.
 
     Dependencies elide ``pyro.deterministic`` sites and ``pyro.sample(...,
@@ -117,7 +117,7 @@ def get_dependencies(
 
     Here is an example where two variables ``a`` and ``b`` start out
     conditionally independent in the prior, but become conditionally dependent
-    in the posterior do the so-called collider variable ``c`` on which they
+    in the posterior to the so-called collider variable ``c`` on which they
     both depend. This is called "moralization" in the graphical model
     literature::
 
@@ -143,8 +143,8 @@ def get_dependencies(
 
     Dependencies can be more complex in the presence of plates. So far all the
     dict values have been empty sets of plates, but in the following posterior
-    we see that ``c`` depends on itself across the plate ``p``. This means
-    that, among the elements of ``c``, e.g. ``c[0]`` depends on ``c[1]`` (this
+    we see that ``a`` depends on itself across the plate ``p``. This means
+    that, among the elements of ``a``, e.g. ``a[0]`` depends on ``a[1]`` (this
     is why we explicitly allow variables to depend on themselves)::
 
         def model_3():
