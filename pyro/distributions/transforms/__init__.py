@@ -30,7 +30,11 @@ from .affine_coupling import (
 from .basic import ELUTransform, LeakyReLUTransform, elu, leaky_relu
 from .batchnorm import BatchNorm, batchnorm
 from .block_autoregressive import BlockAutoregressive, block_autoregressive
-from .cholesky import CholeskyTransform, CorrMatrixCholeskyTransform
+from .cholesky import (
+    CholeskyTransform,
+    CorrCholeskyTransform,
+    CorrMatrixCholeskyTransform,
+)
 from .discrete_cosine import DiscreteCosineTransform
 from .generalized_channel_permute import (
     ConditionalGeneralizedChannelPermute,
