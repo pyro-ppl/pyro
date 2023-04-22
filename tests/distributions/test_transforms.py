@@ -418,7 +418,7 @@ def test_cholesky_transform(batch_shape, dim, transform):
         tril_mask = arange < arange.view(-1, 1)
     else:
         tril_mask = arange < arange.view(-1, 1) + 1
-    x = transform.inv(T.CorrLCholeskyTransform()(z))  # creates corr_matrix
+    x = transform.inv(T.CorrCholeskyTransform()(z))  # creates corr_matrix
 
     def vec_to_mat(x_vec):
         x_mat = x_vec.new_zeros(batch_shape + (dim, dim))
