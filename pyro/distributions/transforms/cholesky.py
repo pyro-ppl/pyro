@@ -10,12 +10,12 @@ from .. import constraints
 
 
 class CorrLCholeskyTransform(CorrCholeskyTransform):  # DEPRECATED
-    def __init__(self):
+    def __init__(self, cache_size=0):
         warnings.warn(
             "class CorrLCholeskyTransform is deprecated in favor of CorrCholeskyTransform.",
             FutureWarning,
         )
-        super().__init__()
+        super().__init__(cache_size=cache_size)
 
 
 class CholeskyTransform(Transform):
