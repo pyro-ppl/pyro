@@ -161,7 +161,6 @@ __all__ = [
     "ConditionalRadial",
     "ConditionalSpline",
     "ConditionalSplineAutoregressive",
-    "CorrLCholeskyTransform",
     "CorrMatrixCholeskyTransform",
     "DiscreteCosineTransform",
     "ELUTransform",
