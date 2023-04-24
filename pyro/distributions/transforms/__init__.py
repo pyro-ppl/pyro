@@ -33,6 +33,7 @@ from .block_autoregressive import BlockAutoregressive, block_autoregressive
 from .cholesky import (
     CholeskyTransform,
     CorrCholeskyTransform,
+    CorrLCholeskyTransform,
     CorrMatrixCholeskyTransform,
 )
 from .discrete_cosine import DiscreteCosineTransform
@@ -165,6 +166,7 @@ __all__ = [
     "ConditionalRadial",
     "ConditionalSpline",
     "ConditionalSplineAutoregressive",
+    "CorrLCholeskyTransform",
     "CorrMatrixCholeskyTransform",
     "DiscreteCosineTransform",
     "ELUTransform",
