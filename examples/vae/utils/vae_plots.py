@@ -26,21 +26,38 @@ def plot_conditional_samples_ssvae(ssvae, visdom_session):
 
 
 def plot_llk(train_elbo, test_elbo):
+    from pathlib import Path
+
     import matplotlib.pyplot as plt
-    import numpy as np
     import pandas as pd
-    import scipy as sp
     import seaborn as sns
+
+    Path("vae_results").mkdir(parents=True, exist_ok=True)
 
     plt.figure(figsize=(30, 10))
     sns.set_style("whitegrid")
-    data = np.concatenate(
-        [np.arange(len(test_elbo))[:, sp.newaxis], -test_elbo[:, sp.newaxis]], axis=1
+    df1 = pd.DataFrame(
+        {
+            "Epoch": train_elbo.keys(),
+            "ELBO": [-val for val in train_elbo.values()],
+            "dataset": "Train",
+        }
     )
-    df = pd.DataFrame(data=data, columns=["Training Epoch", "Test ELBO"])
-    g = sns.FacetGrid(df, size=10, aspect=1.5)
-    g.map(plt.scatter, "Training Epoch", "Test ELBO")
-    g.map(plt.plot, "Training Epoch", "Test ELBO")
+    df2 = pd.DataFrame(
+        {
+            "Epoch": test_elbo.keys(),
+            "ELBO": [-val for val in test_elbo.values()],
+            "dataset": "Test",
+        }
+    )
+    df = pd.concat([df1, df2], axis=0)
+
+    # Create the FacetGrid with scatter plot
+    g = sns.FacetGrid(df, height=4, aspect=1.5, hue="dataset")
+    g.map(sns.scatterplot, "Epoch", "ELBO")
+    g.map(sns.lineplot, "Epoch", "ELBO", linestyle="--")
+    g.ax.yaxis.get_major_locator().set_params(integer=True)
+    g.add_legend()
     plt.savefig("./vae_results/test_elbo_vae.png")
     plt.close("all")
 
