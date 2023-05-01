@@ -3,31 +3,40 @@
 
 import functools
 import math
+import warnings
 import weakref
 
 import torch
 
 
 def patch_dependency(target, root_module=torch):
-    parts = target.split(".")
-    assert parts[0] == root_module.__name__
-    module = root_module
-    for part in parts[1:-1]:
-        module = getattr(module, part)
-    name = parts[-1]
-    old_fn = getattr(module, name, None)
-    old_fn = getattr(old_fn, "_pyro_unpatched", old_fn)  # ensure patching is idempotent
+    try:
+        parts = target.split(".")
+        assert parts[0] == root_module.__name__
+        module = root_module
+        for part in parts[1:-1]:
+            module = getattr(module, part)
+        name = parts[-1]
+        old_fn = getattr(module, name, None)
+        # Ensure patching is idempotent.
+        old_fn = getattr(old_fn, "_pyro_unpatched", old_fn)
 
-    def decorator(new_fn):
-        try:
-            functools.update_wrapper(new_fn, old_fn)
-        except Exception:
-            for attr in functools.WRAPPER_ASSIGNMENTS:
-                if hasattr(old_fn, attr):
-                    setattr(new_fn, attr, getattr(old_fn, attr))
-        new_fn._pyro_unpatched = old_fn
-        setattr(module, name, new_fn)
-        return new_fn
+        def decorator(new_fn):
+            try:
+                functools.update_wrapper(new_fn, old_fn)
+            except Exception:
+                for attr in functools.WRAPPER_ASSIGNMENTS:
+                    if hasattr(old_fn, attr):
+                        setattr(new_fn, attr, getattr(old_fn, attr))
+            new_fn._pyro_unpatched = old_fn
+            setattr(module, name, new_fn)
+            return new_fn
+
+    except AttributeError:
+        warnings.warn(f"pyro patch_dependency target is stale: {target}")
+
+        def decorator(new_fn):
+            return new_fn
 
     return decorator
 
