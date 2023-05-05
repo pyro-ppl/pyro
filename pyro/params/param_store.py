@@ -243,8 +243,9 @@ class ParamStoreDict:
         """
         Get the ParamStore state.
         """
+        params = {name: param[...] for name, param in self._params.items()}
         state = {
-            "params": self._params.copy(),
+            "params": params,
             "constraints": self._constraints.copy(),
         }
         return state
