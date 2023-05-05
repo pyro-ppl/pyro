@@ -39,7 +39,7 @@ def _autograd_log_det(ys, x):
 
 @pytest.mark.parametrize("y_shape", [(1,), (3, 1), (6,), (1, 6), (2, 6)])
 def test_unconstrained_to_corr_cholesky_transform(y_shape):
-    transform = transforms.CorrLCholeskyTransform()
+    transform = transforms.CorrCholeskyTransform()
     y = torch.empty(y_shape).uniform_(-4, 4).requires_grad_()
     x = transform(y)
 
