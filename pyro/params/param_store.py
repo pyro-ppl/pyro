@@ -243,10 +243,11 @@ class ParamStoreDict:
         """
         Get the ParamStore state.
         """
-        state = {
-            "params": self._params.copy(),
-            "constraints": self._constraints.copy(),
-        }
+        params = self._params.copy()
+        # Remove weakrefs in preparation for pickling.
+        for param in params.values():
+            param.__dict__.pop("unconstrained", None)
+        state = {"params": params, "constraints": self._constraints.copy()}
         return state
 
     def set_state(self, state: dict):

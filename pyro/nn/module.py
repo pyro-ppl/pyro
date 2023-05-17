@@ -14,6 +14,7 @@ the :class:`PyroSample` struct::
 """
 import functools
 import inspect
+import weakref
 from collections import OrderedDict, namedtuple
 
 import torch
@@ -29,10 +30,6 @@ _MODULE_LOCAL_PARAMS: bool = False
 @pyro.settings.register("module_local_params", __name__, "_MODULE_LOCAL_PARAMS")
 def _validate_module_local_params(value: bool) -> None:
     assert isinstance(value, bool)
-
-
-def _is_module_local_param_enabled() -> bool:
-    return pyro.settings.get("module_local_params")
 
 
 class PyroParam(namedtuple("PyroParam", ("init_value", "constraint", "event_dim"))):
@@ -189,11 +186,11 @@ class _Context:
         self.active = 0
         self.cache = {}
         self.used = False
-        if _is_module_local_param_enabled():
+        if _MODULE_LOCAL_PARAMS:
             self.param_state = {"params": {}, "constraints": {}}
 
     def __enter__(self):
-        if not self.active and _is_module_local_param_enabled():
+        if not self.active and _MODULE_LOCAL_PARAMS:
             self._param_ctx = pyro.get_param_store().scope(state=self.param_state)
             self.param_state = self._param_ctx.__enter__()
         self.active += 1
@@ -203,7 +200,7 @@ class _Context:
         self.active -= 1
         if not self.active:
             self.cache.clear()
-            if _is_module_local_param_enabled():
+            if _MODULE_LOCAL_PARAMS:
                 self._param_ctx.__exit__(type, value, traceback)
                 del self._param_ctx
 
@@ -217,7 +214,7 @@ class _Context:
 
 
 def _get_pyro_params(module):
-    for name in module._parameters:
+    for name, value in module._parameters.items():
         if name.endswith("_unconstrained"):
             constrained_name = name[: -len("_unconstrained")]
             if (
@@ -226,7 +223,7 @@ def _get_pyro_params(module):
             ):
                 yield constrained_name, getattr(module, constrained_name)
                 continue
-        yield name, module._parameters[name]
+        yield name, value
 
 
 class _PyroModuleMeta(type):
@@ -423,12 +420,10 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             are direct members of this module.
         :returns: a generator which yields tuples containing the name and parameter
         """
-        gen = self._named_members(_get_pyro_params, prefix=prefix, recurse=recurse)
-        for elem in gen:
-            yield elem
+        yield from self._named_members(_get_pyro_params, prefix=prefix, recurse=recurse)
 
     def _pyro_set_supermodule(self, name, context):
-        if _is_module_local_param_enabled() and pyro.settings.get("validate_poutine"):
+        if _MODULE_LOCAL_PARAMS and pyro.settings.get("validate_poutine"):
             self._check_module_local_param_usage()
         self._pyro_name = name
         self._pyro_context = context
@@ -449,7 +444,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         if (
             pyro.settings.get("validate_poutine")
             and not self._pyro_context.active
-            and _is_module_local_param_enabled()
+            and _MODULE_LOCAL_PARAMS
         ):
             self._check_module_local_param_usage()
         return result
@@ -503,7 +498,9 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                         _PYRO_PARAM_STORE._param_to_name[unconstrained_value] = fullname
                     return pyro.param(fullname, event_dim=event_dim)
                 else:  # Cannot determine supermodule and hence cannot compute fullname.
-                    return transform_to(constraint)(unconstrained_value)
+                    constrained_value = transform_to(constraint)(unconstrained_value)
+                    constrained_value.unconstrained = weakref.ref(unconstrained_value)
+                    return constrained_value
 
         # PyroSample trigger pyro.sample statements.
         if "_pyro_samples" in self.__dict__:
@@ -660,6 +657,17 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             return
 
         super().__delattr__(name)
+
+    def __getstate__(self):
+        # Remove weakrefs in preparation for pickling.
+        for param in self.parameters(recurse=False):
+            param.__dict__.pop("unconstrained", None)
+        try:
+            __getstate__ = super().__getstate__()
+        except AttributeError:
+            return self.__dict__  # torch<=2.0.1
+        else:
+            return __getstate__()  # torch>2.0.1
 
 
 def pyro_method(fn):
