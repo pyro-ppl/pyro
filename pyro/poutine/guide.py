@@ -30,6 +30,12 @@ class GuideMessenger(TraceMessenger, ABC):
     def model(self):
         return self._model[0]
 
+    def __getstate__(self):
+        # Avoid pickling the trace.
+        state = super().__getstate__()
+        state.pop("trace")
+        return state
+
     def __call__(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
         """
         Draws posterior samples from the guide and replays the model against
