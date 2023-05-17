@@ -44,13 +44,12 @@ def patch_dependency(target, root_module=torch):
 # TODO: Move upstream to allow for pickle serialization of transforms
 @patch_dependency("torch.distributions.transforms.Transform.__getstate__")
 def _Transform__getstate__(self):
-    attrs = {}
-    for k, v in self.__dict__.items():
+    super_ = super(torch.distributions.transforms.Transform, self)
+    state = getattr(super_, "__getstate__", self.__dict__.copy)()
+    for k, v in state.items():
         if isinstance(v, weakref.ref):
-            attrs[k] = None
-        else:
-            attrs[k] = v
-    return attrs
+            state[k] = None
+    return state
 
 
 # TODO move upstream

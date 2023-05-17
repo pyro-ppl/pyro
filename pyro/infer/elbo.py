@@ -66,9 +66,10 @@ class ELBO(object, metaclass=ABCMeta):
         behave unexpectedly relative to standard PyTorch when working with
         :class:`~pyro.nn.PyroModule` s.
 
-        Users are therefore strongly encouraged to use this interface in conjunction
-        with :func:`~pyro.enable_module_local_param` which will override the default
-        implicit sharing of parameters across :class:`~pyro.nn.PyroModule` instances.
+        Users are therefore strongly encouraged to use this interface in
+        conjunction with ``pyro.settings.set(module_local_params=True)`` which
+        will override the default implicit sharing of parameters across
+        :class:`~pyro.nn.PyroModule` instances.
 
     :param num_particles: The number of particles/samples used to form the ELBO
         (gradient) estimators.
