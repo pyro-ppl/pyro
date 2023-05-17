@@ -666,14 +666,9 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
 
     def __getstate__(self):
         # Remove weakrefs in preparation for pickling.
-        for param in self.parameters(recurse=False):
+        for param in self.parameters(recurse=True):
             param.__dict__.pop("unconstrained", None)
-        try:
-            __getstate__ = super().__getstate__()
-        except AttributeError:
-            return self.__dict__  # torch<=2.0.1
-        else:
-            return __getstate__()  # torch>2.0.1
+        return getattr(super(), "__getstate__", self.__dict__.copy)()
 
 
 def pyro_method(fn):
