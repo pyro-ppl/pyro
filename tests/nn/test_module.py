@@ -374,7 +374,9 @@ def test_clear(local_params):
 
         # mutate
         for _, x in m.named_pyro_params():
-            x.unconstrained().data += torch.randn(())
+            if hasattr(x, "unconstrained"):
+                x = x.unconstrained()
+            x.data += torch.randn(x.shape)
         state1 = m()
         for x, y in zip(state0, state1):
             assert not (x == y).all()

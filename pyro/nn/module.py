@@ -14,6 +14,7 @@ the :class:`PyroSample` struct::
 """
 import functools
 import inspect
+import weakref
 from collections import OrderedDict, namedtuple
 
 import torch
@@ -503,7 +504,9 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                         _PYRO_PARAM_STORE._param_to_name[unconstrained_value] = fullname
                     return pyro.param(fullname, event_dim=event_dim)
                 else:  # Cannot determine supermodule and hence cannot compute fullname.
-                    return transform_to(constraint)(unconstrained_value)
+                    constrained_value = transform_to(constraint)(unconstrained_value)
+                    constrained_value.unconstrained = weakref.ref(unconstrained_value)
+                    return constrained_value
 
         # PyroSample trigger pyro.sample statements.
         if "_pyro_samples" in self.__dict__:
@@ -660,6 +663,17 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             return
 
         super().__delattr__(name)
+
+    def __getstate__(self):
+        # Remove weakrefs in preparation for pickling.
+        for param in self.parameters(recurse=False):
+            param.__dict__.pop("unconstrained", None)
+        try:
+            __getstate__ = super().__getstate__()
+        except AttributeError:
+            return self.__dict__  # torch<=2.0.1
+        else:
+            return __getstate__()  # torch>2.0.1
 
 
 def pyro_method(fn):
