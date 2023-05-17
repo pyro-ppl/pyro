@@ -138,10 +138,16 @@ class PyroOptim:
             if self.grad_clip[p] is not None:
                 self.grad_clip[p](p)
 
-            if isinstance(
-                self.optim_objs[p], torch.optim.lr_scheduler._LRScheduler
-            ) or isinstance(
-                self.optim_objs[p], torch.optim.lr_scheduler.ReduceLROnPlateau
+            if (
+                hasattr(torch.optim.lr_scheduler, "_LRScheduler")
+                and isinstance(
+                    self.optim_objs[p], torch.optim.lr_scheduler._LRScheduler
+                )
+                or hasattr(torch.optim.lr_scheduler, "LRScheduler")
+                and isinstance(self.optim_objs[p], torch.optim.lr_scheduler.LRScheduler)
+                or isinstance(
+                    self.optim_objs[p], torch.optim.lr_scheduler.ReduceLROnPlateau
+                )
             ):
                 # if optim object was a scheduler, perform an optimizer step
                 self.optim_objs[p].optimizer.step(*args, **kwargs)
