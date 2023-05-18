@@ -253,7 +253,7 @@ def evaluate_pointwise_pred_density(model, posterior_samples, baseball_dataset):
 
 
 def main(args):
-    baseball_dataset = pd.read_csv(DATA_URL, "\t")
+    baseball_dataset = pd.read_csv(DATA_URL, sep="\t")
     train, _, player_names = train_test_split(baseball_dataset)
     at_bats, hits = train[:, 0], train[:, 1]
     logging.info("Original Dataset:")
