@@ -98,7 +98,12 @@ def main(args):
     loss_fn(*mini_batch)
 
     # Run stochastic variational inference using PyTorch Lightning Trainer.
-    trainer = pl.Trainer.from_argparse_args(args)
+    trainer = pl.Trainer(
+        accelerator=args.accelerator,
+        strategy=args.strategy,
+        devices=args.devices,
+        max_epochs=args.max_epochs,
+    )
     trainer.fit(training_plan, train_dataloaders=dataloader)
 
 
@@ -111,6 +116,10 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", default=100, type=int)
     parser.add_argument("--learning_rate", default=0.01, type=float)
     parser.add_argument("--seed", default=20200723, type=int)
-    parser = pl.Trainer.add_argparse_args(parser)
+    # pl.Trainer arguments.
+    parser.add_argument("--accelerator", default="auto")
+    parser.add_argument("--strategy", default="auto")
+    parser.add_argument("--devices", default="auto")
+    parser.add_argument("--max_epochs", default=None)
     args = parser.parse_args()
     main(args)
