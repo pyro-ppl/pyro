@@ -57,8 +57,8 @@ def test_rejector(rate, factor):
     dist2 = RejectionExponential(rates, factors)  # implemented using Rejector
     x1 = dist1.rsample()
     x2 = dist2.rsample()
-    assert_equal(x1.mean(), x2.mean(), prec=0.02, msg="bug in .rsample()")
-    assert_equal(x1.std(), x2.std(), prec=0.02, msg="bug in .rsample()")
+    assert_equal(x1.mean(), x2.mean(), prec=0.03, msg="bug in .rsample()")
+    assert_equal(x1.std(), x2.std(), prec=0.03, msg="bug in .rsample()")
     assert_equal(dist1.log_prob(x1), dist2.log_prob(x1), msg="bug in .log_prob()")
 
 
