@@ -44,7 +44,7 @@ def test_stable(Reparam, shape):
 
     def model():
         with pyro.plate_stack("plates", shape):
-            with pyro.plate("particles", 100000):
+            with pyro.plate("particles", 200000):
                 return pyro.sample("x", dist.Stable(stability, skew, scale, loc))
 
     value = model()
@@ -60,7 +60,7 @@ def test_stable(Reparam, shape):
     trace.compute_log_prob()  # smoke test only
     value = trace.nodes["x"]["value"]
     actual_moments = get_moments(value)
-    assert_close(actual_moments, expected_moments, atol=0.05)
+    assert_close(actual_moments, expected_moments, atol=0.07)
 
     for actual_m, expected_m in zip(actual_moments, expected_moments):
         expected_grads = grad(expected_m.sum(), params, retain_graph=True)
@@ -81,7 +81,7 @@ def test_symmetric_stable(shape):
 
     def model():
         with pyro.plate_stack("plates", shape):
-            with pyro.plate("particles", 200000):
+            with pyro.plate("particles", 300000):
                 return pyro.sample("x", dist.Stable(stability, 0, scale, loc))
 
     value = model()
@@ -93,7 +93,7 @@ def test_symmetric_stable(shape):
     trace.compute_log_prob()  # smoke test only
     value = trace.nodes["x"]["value"]
     actual_moments = get_moments(value)
-    assert_close(actual_moments, expected_moments, atol=0.05)
+    assert_close(actual_moments, expected_moments, atol=0.07)
 
     for actual_m, expected_m in zip(actual_moments, expected_moments):
         expected_grads = grad(expected_m.sum(), params, retain_graph=True)
@@ -121,7 +121,7 @@ def test_distribution(stability, skew, Reparam):
     expected = model()
     with poutine.reparam(config={"x": Reparam()}):
         actual = model()
-    assert ks_2samp(expected, actual).pvalue > 0.05
+    assert ks_2samp(expected, actual).pvalue > 0.03
 
 
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])

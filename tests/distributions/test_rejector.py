@@ -49,7 +49,7 @@ def compute_elbo_grad(model, guide, variables):
 @pytest.mark.parametrize("rate", [0.5, 1.0, 2.0])
 @pytest.mark.parametrize("factor", [0.25, 0.5, 1.0])
 def test_rejector(rate, factor):
-    num_samples = 100000
+    num_samples = 200000
     rates = torch.tensor(rate).expand(num_samples, 1)
     factors = torch.tensor(factor).expand(num_samples, 1)
 
