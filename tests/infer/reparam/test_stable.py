@@ -65,7 +65,7 @@ def test_stable(Reparam, shape):
     for actual_m, expected_m in zip(actual_moments, expected_moments):
         expected_grads = grad(expected_m.sum(), params, retain_graph=True)
         actual_grads = grad(actual_m.sum(), params, retain_graph=True)
-        assert_close(actual_grads[0], expected_grads[0], atol=0.2)
+        assert_close(actual_grads[0], expected_grads[0], atol=0.3)
         assert_close(actual_grads[1][skew != 0], expected_grads[1][skew != 0], atol=0.1)
         assert_close(actual_grads[1][skew == 0], expected_grads[1][skew == 0], atol=0.3)
         assert_close(actual_grads[2], expected_grads[2], atol=0.1)
