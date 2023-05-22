@@ -228,7 +228,7 @@ def test_elbo_jit(backend):
     """
     pyro.set_rng_seed(0)
     data = torch.tensor(0.5)
-    elbo_test_case(backend, jit=True, expected_elbo=0.4780, data=data, steps=15)
+    elbo_test_case(backend, jit=True, expected_elbo=0.4780, data=data, steps=50)
 
 
 @pytest.mark.parametrize(
