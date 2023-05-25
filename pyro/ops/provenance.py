@@ -46,18 +46,19 @@ class ProvenanceTensor(torch.Tensor):
         assert not isinstance(data, ProvenanceTensor)
         if not provenance:
             return data
-        return super().__new__(cls)
+        return super().__new__(cls, data)
 
     def __init__(self, data, provenance=frozenset()):
         assert isinstance(provenance, frozenset)
+        super().__init__()
         if isinstance(data, ProvenanceTensor):
             provenance |= data._provenance
-            data = data._t
-        self._t = data
         self._provenance = provenance
 
     def __repr__(self):
-        return "Provenance:\n{}\nTensor:\n{}".format(self._provenance, self._t)
+        return "Provenance:\n{}\nTensor:\n{}".format(
+            self._provenance, detach_provenance(self)
+        )
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
@@ -93,7 +94,12 @@ def track_provenance(x, provenance: frozenset):
     return x
 
 
-track_provenance.register(torch.Tensor)(ProvenanceTensor)
+@track_provenance.register
+def _track_provenance_tensor(x: torch.Tensor, provenance: frozenset):
+    x = x.view(x.shape)
+    x.__class__ = ProvenanceTensor
+    x._provenance = provenance
+    return x
 
 
 @track_provenance.register(frozenset)
@@ -126,7 +132,10 @@ def extract_provenance(x) -> Tuple[object, frozenset]:
 
 @extract_provenance.register(ProvenanceTensor)
 def _extract_provenance_tensor(x):
-    return x._t, x._provenance
+    x.__class__ = torch.Tensor
+    val = x.view(x.shape)
+    x.__class__ = ProvenanceTensor
+    return val, x._provenance
 
 
 @extract_provenance.register(frozenset)
