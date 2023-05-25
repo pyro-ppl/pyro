@@ -46,11 +46,12 @@ class ProvenanceTensor(torch.Tensor):
         assert not isinstance(data, ProvenanceTensor)
         if not provenance:
             return data
-        return super().__new__(cls, data)
+        ret = data.view(data.shape)
+        ret.__class__ = cls
+        return ret
 
     def __init__(self, data, provenance=frozenset()):
         assert isinstance(provenance, frozenset)
-        super().__init__()
         if isinstance(data, ProvenanceTensor):
             provenance |= data._provenance
         self._provenance = provenance
@@ -94,12 +95,7 @@ def track_provenance(x, provenance: frozenset):
     return x
 
 
-@track_provenance.register
-def _track_provenance_tensor(x: torch.Tensor, provenance: frozenset):
-    x = x.view(x.shape)
-    x.__class__ = ProvenanceTensor
-    x._provenance = provenance
-    return x
+track_provenance.register(torch.Tensor)(ProvenanceTensor)
 
 
 @track_provenance.register(frozenset)
