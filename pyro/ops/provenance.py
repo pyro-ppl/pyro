@@ -59,6 +59,8 @@ class ProvenanceTensor(torch.Tensor):
         if isinstance(data, ProvenanceTensor):
             provenance |= data._provenance
         self._provenance = provenance
+        if hasattr(data, "unconstrained"):
+            self._t.unconstrained = data.unconstrained
 
     def __repr__(self):
         return "Provenance:\n{}\nTensor:\n{}".format(self._provenance, self._t)
