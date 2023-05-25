@@ -47,6 +47,10 @@ class ProvenanceTensor(torch.Tensor):
         if not provenance:
             return data
         ret = data.view(data.shape)
+        ret._t = data.view(data.shape)  # this makes sure that detach_provenance always
+        # returns the same object. This is important when
+        # using the tensor as key in a dict, e.g. the global
+        # param store
         ret.__class__ = cls
         return ret
 
@@ -57,9 +61,7 @@ class ProvenanceTensor(torch.Tensor):
         self._provenance = provenance
 
     def __repr__(self):
-        return "Provenance:\n{}\nTensor:\n{}".format(
-            self._provenance, detach_provenance(self)
-        )
+        return "Provenance:\n{}\nTensor:\n{}".format(self._provenance, self._t)
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
@@ -128,10 +130,7 @@ def extract_provenance(x) -> Tuple[object, frozenset]:
 
 @extract_provenance.register(ProvenanceTensor)
 def _extract_provenance_tensor(x):
-    x.__class__ = torch.Tensor
-    val = x.view(x.shape)
-    x.__class__ = ProvenanceTensor
-    return val, x._provenance
+    return x._t, x._provenance
 
 
 @extract_provenance.register(frozenset)
