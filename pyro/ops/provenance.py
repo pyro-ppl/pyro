@@ -47,7 +47,7 @@ class ProvenanceTensor(torch.Tensor):
         if not provenance:
             return data
         ret = data.view(data.shape)
-        ret._t = data.view(data.shape)  # this makes sure that detach_provenance always
+        ret._t = data  # this makes sure that detach_provenance always
         # returns the same object. This is important when
         # using the tensor as key in a dict, e.g. the global
         # param store
