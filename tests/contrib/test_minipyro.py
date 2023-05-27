@@ -245,6 +245,8 @@ def test_elbo_equivalence(backend, jit):
 
 
 def elbo_test_case(backend, jit, expected_elbo, data, steps=None):
+    if torch.__version__.startswith("2"):
+        pytest.xfail(reason="https://github.com/pyro-ppl/pyro/issues/3221")
     with pyro_backend(backend):
         Elbo = infer.JitTrace_ELBO if jit else infer.Trace_ELBO
         elbo = Elbo(ignore_jit_warnings=True)
