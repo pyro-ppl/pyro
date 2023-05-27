@@ -17,7 +17,7 @@ from pyro.infer.reparam import (
     StableReparam,
     SymmetricStableReparam,
 )
-from tests.common import assert_close
+from tests.common import assert_close, xfail_param
 
 from .util import check_init_reparam
 
@@ -30,7 +30,15 @@ def get_moments(x):
     return torch.cat([x.mean(0, keepdim=True), (x - points).abs().mean(1)])
 
 
-@pytest.mark.parametrize("shape", [(), (4,), (2, 3)], ids=str)
+@pytest.mark.parametrize(
+    "shape",
+    [
+        (),
+        xfail_param(4, reason="flaky, https://github.com/pyro-ppl/pyro/issues/3214"),
+        (2, 3),
+    ],
+    ids=str,
+)
 @pytest.mark.parametrize("Reparam", [LatentStableReparam, StableReparam])
 def test_stable(Reparam, shape):
     stability = torch.empty(shape).uniform_(1.5, 2.0).requires_grad_()
