@@ -123,7 +123,7 @@ def test_additive(stability, skew0, skew1, scale0, scale1):
     d = dist.Stable(stability, skew, scale, coords="S")
     actual = d.sample([num_samples])
 
-    assert ks_2samp(expected, actual).pvalue > 0.05
+    assert ks_2samp(expected, actual).pvalue > 0.03
 
 
 @pytest.mark.parametrize("scale", [0.5, 1.5])

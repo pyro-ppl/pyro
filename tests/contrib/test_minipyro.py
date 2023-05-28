@@ -228,7 +228,7 @@ def test_elbo_jit(backend):
     """
     pyro.set_rng_seed(0)
     data = torch.tensor(0.5)
-    elbo_test_case(backend, jit=True, expected_elbo=0.4780, data=data, steps=15)
+    elbo_test_case(backend, jit=True, expected_elbo=0.4780, data=data, steps=50)
 
 
 @pytest.mark.parametrize(
@@ -245,6 +245,8 @@ def test_elbo_equivalence(backend, jit):
 
 
 def elbo_test_case(backend, jit, expected_elbo, data, steps=None):
+    if torch.__version__.startswith("2"):
+        pytest.xfail(reason="https://github.com/pyro-ppl/pyro/issues/3221")
     with pyro_backend(backend):
         Elbo = infer.JitTrace_ELBO if jit else infer.Trace_ELBO
         elbo = Elbo(ignore_jit_warnings=True)
