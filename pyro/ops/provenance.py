@@ -46,14 +46,15 @@ class ProvenanceTensor(torch.Tensor):
         assert not isinstance(data, ProvenanceTensor)
         if not provenance:
             return data
-        return super().__new__(cls)
+        ret = data.as_subclass(cls)
+        ret._t = data  # this makes sure that detach_provenance always
+        # returns the same object. This is important when
+        # using the tensor as key in a dict, e.g. the global
+        # param store
+        return ret
 
     def __init__(self, data, provenance=frozenset()):
         assert isinstance(provenance, frozenset)
-        if isinstance(data, ProvenanceTensor):
-            provenance |= data._provenance
-            data = data._t
-        self._t = data
         self._provenance = provenance
 
     def __repr__(self):
