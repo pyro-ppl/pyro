@@ -1,10 +1,11 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-from functools import singledispatch
+from functools import partial, singledispatch
 from typing import Tuple
 
 import torch
+from torch.utils._pytree import tree_flatten, tree_map, tree_unflatten
 
 
 class ProvenanceTensor(torch.Tensor):
@@ -46,40 +47,21 @@ class ProvenanceTensor(torch.Tensor):
         assert not isinstance(data, ProvenanceTensor)
         if not provenance:
             return data
-        ret = data.as_subclass(cls)
-        ret._t = data  # this makes sure that detach_provenance always
-        # returns the same object. This is important when
-        # using the tensor as key in a dict, e.g. the global
-        # param store
-        return ret
-
-    def __init__(self, data, provenance=frozenset()):
-        assert isinstance(provenance, frozenset)
-        self._provenance = provenance
+        t = data.as_subclass(cls)
+        t._provenance = provenance
+        return t
 
     def __repr__(self):
-        return "Provenance:\n{}\nTensor:\n{}".format(self._provenance, self._t)
+        return "Provenance:\n{}\nTensor:\n{}".format(
+            self._provenance, super().__repr__()
+        )
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
-        if kwargs is None:
-            kwargs = {}
-        # collect provenance information from args
-        provenance = frozenset()
-        # extract ProvenanceTensor._t data from args and kwargs
-        _args = []
-        for arg in args:
-            _arg, _provenance = extract_provenance(arg)
-            _args.append(_arg)
-            provenance |= _provenance
-        _kwargs = {}
-        for k, v in kwargs.items():
-            _v, _provenance = extract_provenance(v)
-            _kwargs[k] = _v
-            provenance |= provenance
-        ret = func(*_args, **_kwargs)
-        _ret = track_provenance(ret, provenance)
-        return _ret
+        result = super().__torch_function__(func, types, args, kwargs)
+        return track_provenance(
+            detach_provenance(result), get_provenance([args, kwargs])
+        )
 
 
 @singledispatch
@@ -101,8 +83,9 @@ track_provenance.register(torch.Tensor)(ProvenanceTensor)
 @track_provenance.register(list)
 @track_provenance.register(set)
 @track_provenance.register(tuple)
-def _track_provenance_list(x, provenance: frozenset):
-    return type(x)(track_provenance(part, provenance) for part in x)
+@track_provenance.register(dict)
+def _track_provenance_pytree(x, provenance: frozenset):
+    return tree_map(partial(track_provenance, provenance=provenance), x)
 
 
 @track_provenance.register
@@ -127,22 +110,22 @@ def extract_provenance(x) -> Tuple[object, frozenset]:
 
 @extract_provenance.register(ProvenanceTensor)
 def _extract_provenance_tensor(x):
-    return x._t, x._provenance
+    return x.as_subclass(torch.Tensor), getattr(x, "_provenance", frozenset())
 
 
 @extract_provenance.register(frozenset)
 @extract_provenance.register(list)
 @extract_provenance.register(set)
 @extract_provenance.register(tuple)
-def _extract_provenance_list(x):
+@extract_provenance.register(dict)
+def _extract_provenance_pytree(x):
+    flat_args, spec = tree_flatten(x)
+    xs = []
     provenance = frozenset()
-    values = []
-    for part in x:
-        v, p = extract_provenance(part)
-        values.append(v)
+    for x, p in map(extract_provenance, flat_args):
+        xs.append(x)
         provenance |= p
-    value = type(x)(values)
-    return value, provenance
+    return tree_unflatten(xs, spec), provenance
 
 
 def get_provenance(x) -> frozenset:
