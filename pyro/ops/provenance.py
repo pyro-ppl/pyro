@@ -47,21 +47,22 @@ class ProvenanceTensor(torch.Tensor):
         assert not isinstance(data, ProvenanceTensor)
         if not provenance:
             return data
-        t = data.as_subclass(cls)
-        t._provenance = provenance
-        return t
+        ret = data.as_subclass(cls)
+        ret._t = data  # this makes sure that detach_provenance always
+        # returns the same object. This is important when
+        # using the tensor as key in a dict, e.g. the global
+        # param store
+        ret._provenance = provenance
+        return ret
 
     def __repr__(self):
-        return "Provenance:\n{}\nTensor:\n{}".format(
-            self._provenance, super().__repr__()
-        )
+        return "Provenance:\n{}\nTensor:\n{}".format(self._provenance, self._t)
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
-        result = super().__torch_function__(func, types, args, kwargs)
-        return track_provenance(
-            detach_provenance(result), get_provenance([args, kwargs])
-        )
+        _args, _kwargs = detach_provenance([args, kwargs or {}])
+        ret = func(*_args, **_kwargs)
+        return track_provenance(ret, get_provenance([args, kwargs]))
 
 
 @singledispatch
@@ -80,8 +81,12 @@ track_provenance.register(torch.Tensor)(ProvenanceTensor)
 
 
 @track_provenance.register(frozenset)
-@track_provenance.register(list)
 @track_provenance.register(set)
+def _track_provenance_set(x, provenance: frozenset):
+    return type(x)(track_provenance(part, provenance) for part in x)
+
+
+@track_provenance.register(list)
 @track_provenance.register(tuple)
 @track_provenance.register(dict)
 def _track_provenance_pytree(x, provenance: frozenset):
@@ -110,12 +115,23 @@ def extract_provenance(x) -> Tuple[object, frozenset]:
 
 @extract_provenance.register(ProvenanceTensor)
 def _extract_provenance_tensor(x):
-    return x.as_subclass(torch.Tensor), getattr(x, "_provenance", frozenset())
+    return x._t, x._provenance
 
 
 @extract_provenance.register(frozenset)
-@extract_provenance.register(list)
 @extract_provenance.register(set)
+def _extract_provenance_set(x):
+    provenance = frozenset()
+    values = []
+    for part in x:
+        v, p = extract_provenance(part)
+        values.append(v)
+        provenance |= p
+    value = type(x)(values)
+    return value, provenance
+
+
+@extract_provenance.register(list)
 @extract_provenance.register(tuple)
 @extract_provenance.register(dict)
 def _extract_provenance_pytree(x):
