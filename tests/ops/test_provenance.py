@@ -57,7 +57,7 @@ def test_provenance_tensor(dtype1, dtype2):
         {"a": torch.tensor([0, 1]), "b": torch.tensor([2, 3])},
         {
             "a": track_provenance(torch.tensor([0, 1]), frozenset("y")),
-            "b": torch.tensor([2, 3]),
+            "b": [torch.tensor([2, 3]), torch.tensor([4, 5])],
         },
     ],
 )
