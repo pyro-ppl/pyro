@@ -64,7 +64,6 @@ def generate_data(small_test, include_stop, device):
 
 
 def main(args):
-
     pyro.set_rng_seed(args.rng_seed)
 
     # Load dataset.

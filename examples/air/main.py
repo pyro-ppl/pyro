@@ -128,7 +128,6 @@ def load_data():
 
 
 def main(**kwargs):
-
     args = argparse.Namespace(**kwargs)
 
     if "save" in args:
@@ -229,7 +228,6 @@ def main(**kwargs):
     examples_to_viz = X[5:10]
 
     for i in range(1, args.num_steps + 1):
-
         loss = svi.step(
             X, batch_size=args.batch_size, z_pres_prior_p=partial(z_pres_prior_p, i)
         )
@@ -272,7 +270,7 @@ def main(**kwargs):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.4")
+    assert pyro.__version__.startswith("1.8.5")
     parser = argparse.ArgumentParser(
         description="Pyro AIR example", argument_default=argparse.SUPPRESS
     )

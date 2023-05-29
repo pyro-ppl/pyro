@@ -32,6 +32,7 @@ from .batchnorm import BatchNorm, batchnorm
 from .block_autoregressive import BlockAutoregressive, block_autoregressive
 from .cholesky import (
     CholeskyTransform,
+    CorrCholeskyTransform,
     CorrLCholeskyTransform,
     CorrMatrixCholeskyTransform,
 )
@@ -90,17 +91,11 @@ def _transform_to_sphere(constraint):
     return Normalize()
 
 
-@biject_to.register(constraints.corr_cholesky)
-@transform_to.register(constraints.corr_cholesky)
-def _transform_to_corr_cholesky(constraint):
-    return CorrLCholeskyTransform()
-
-
 @biject_to.register(constraints.corr_matrix)
 @transform_to.register(constraints.corr_matrix)
 def _transform_to_corr_matrix(constraint):
     return ComposeTransform(
-        [CorrLCholeskyTransform(), CorrMatrixCholeskyTransform().inv]
+        [CorrCholeskyTransform(), CorrMatrixCholeskyTransform().inv]
     )
 
 

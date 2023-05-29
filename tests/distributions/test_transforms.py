@@ -418,7 +418,7 @@ def test_cholesky_transform(batch_shape, dim, transform):
         tril_mask = arange < arange.view(-1, 1)
     else:
         tril_mask = arange < arange.view(-1, 1) + 1
-    x = transform.inv(T.CorrLCholeskyTransform()(z))  # creates corr_matrix
+    x = transform.inv(T.CorrCholeskyTransform()(z))  # creates corr_matrix
 
     def vec_to_mat(x_vec):
         x_mat = x_vec.new_zeros(batch_shape + (dim, dim))
@@ -470,3 +470,74 @@ def test_lower_cholesky_transform(transform, batch_shape, dim):
     y2 = transform(x2)
     assert y2.shape == shape
     assert_close(y, y2)
+
+
+@pytest.mark.parametrize("batch_shape", [(), (7,), (6, 7)])
+@pytest.mark.parametrize("input_dim", [2, 3, 5])
+@pytest.mark.parametrize("context_dim", [2, 3, 5])
+def test_inverse_conditional_transform_module(batch_shape, input_dim, context_dim):
+    cond_transform = T.conditional_spline(input_dim, context_dim, [6])
+
+    noise = torch.rand(batch_shape + (input_dim,))
+    context = torch.rand(batch_shape + (context_dim,))
+
+    assert_close(
+        cond_transform.inv.condition(context)(noise),
+        cond_transform.condition(context).inv(noise),
+    )
+
+    assert cond_transform.inv.inv is cond_transform
+    assert_close(
+        cond_transform.inv.condition(context).inv(noise),
+        cond_transform.condition(context).inv.inv(noise),
+    )
+
+
+@pytest.mark.parametrize("batch_shape", [(), (7,), (6, 7)])
+@pytest.mark.parametrize("input_dim", [2, 3, 5])
+@pytest.mark.parametrize("context_dim", [2, 3, 5])
+@pytest.mark.parametrize("cache_size", [0, 1])
+def test_conditional_compose_transform_module(
+    batch_shape, input_dim, context_dim, cache_size
+):
+    conditional_transforms = [
+        T.AffineTransform(1.0, 2.0),
+        T.Spline(input_dim),
+        T.conditional_spline(input_dim, context_dim, [5]),
+        T.SoftplusTransform(),
+        T.conditional_spline(input_dim, context_dim, [6]),
+    ]
+    cond_transform = dist.conditional.ConditionalComposeTransformModule(
+        conditional_transforms, cache_size=cache_size
+    )
+
+    base_dist = dist.Normal(0, 1).expand(batch_shape + (input_dim,)).to_event(1)
+    cond_dist = dist.ConditionalTransformedDistribution(base_dist, [cond_transform])
+
+    context = torch.rand(batch_shape + (context_dim,))
+    d = cond_dist.condition(context)
+    transform = d.transforms[0]
+    assert isinstance(transform, T.ComposeTransformModule)
+
+    data = d.rsample()
+    assert data.shape == batch_shape + (input_dim,)
+    assert d.log_prob(data).shape == batch_shape
+
+    actual_params = set(cond_transform.parameters())
+    expected_params = set(
+        torch.nn.ModuleList(
+            [t for t in conditional_transforms if isinstance(t, torch.nn.Module)]
+        ).parameters()
+    )
+    assert set() != actual_params == expected_params
+
+    noise = base_dist.rsample()
+    expected = noise
+    for t in conditional_transforms:
+        expected = (t.condition(context) if hasattr(t, "condition") else t)(expected)
+
+    actual = transform(noise)
+    assert_close(actual, expected)
+
+    assert_close(cond_transform.inv.condition(context)(actual), noise)
+    assert_close(cond_transform.condition(context).inv(expected), noise)

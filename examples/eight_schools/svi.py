@@ -81,7 +81,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.4")
+    assert pyro.__version__.startswith("1.8.5")
     parser = argparse.ArgumentParser(description="Eight Schools SVI")
     parser.add_argument(
         "--lr", type=float, default=0.01, help="learning rate (default: 0.01)"

@@ -16,7 +16,6 @@ from tests.common import (
 @requires_cuda
 def test_sample(dist):
     for idx in range(len(dist.dist_params)):
-
         # Compute CPU value.
         with tensors_default_to("cpu"):
             params = dist.get_dist_params(idx)
@@ -41,7 +40,6 @@ def test_rsample(dist):
     if not dist.pyro_dist.has_rsample:
         return
     for idx in range(len(dist.dist_params)):
-
         # Compute CPU value.
         with tensors_default_to("cpu"):
             params = dist.get_dist_params(idx)
@@ -81,7 +79,6 @@ def test_rsample(dist):
 @requires_cuda
 def test_log_prob(dist):
     for idx in range(len(dist.dist_params)):
-
         # Compute CPU value.
         with tensors_default_to("cpu"):
             data = dist.get_test_data(idx)

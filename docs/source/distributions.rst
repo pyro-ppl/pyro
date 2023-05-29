@@ -466,13 +466,6 @@ CholeskyTransform
     :undoc-members:
     :show-inheritance:
 
-CorrLCholeskyTransform
-----------------------
-.. autoclass:: pyro.distributions.transforms.CorrLCholeskyTransform
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 CorrMatrixCholeskyTransform
 ---------------------------
 .. autoclass:: pyro.distributions.transforms.CorrMatrixCholeskyTransform

@@ -230,7 +230,7 @@ class Group:
         self.event_shape = torch.Size([sum(self._site_sizes.values())])
 
     def __getstate__(self):
-        state = self.__dict__.copy()
+        state = getattr(super(), "__getstate__", self.__dict__.copy)()
         state["_guide"] = state["_guide"]()  # weakref -> ref
         return state
 

@@ -31,7 +31,6 @@ pytestmark = pytest.mark.stage("integration", "integration_batch_2")
 
 # conjugate model to test AutoGuide logic from end-to-end (this has a non-mean-field posterior)
 class AutoGaussianChain(GaussianChain):
-
     # this is gross but we need to convert between different posterior factorizations
     def compute_target(self, N):
         self.target_auto_mus = torch.zeros(N + 1)

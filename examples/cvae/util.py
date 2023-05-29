@@ -47,7 +47,6 @@ def visualize(
     num_samples,
     image_path=None,
 ):
-
     # Load sample random data
     datasets, _, dataset_sizes = get_data(
         num_quadrant_inputs=num_quadrant_inputs, batch_size=num_images
@@ -121,7 +120,6 @@ def generate_table(
     num_particles,
     col_name,
 ):
-
     # Load sample random data
     datasets, dataloaders, dataset_sizes = get_data(
         num_quadrant_inputs=num_quadrant_inputs, batch_size=32

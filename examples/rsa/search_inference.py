@@ -168,7 +168,6 @@ def pqueue(fn, queue):
         )
 
     def _fn(*args, **kwargs):
-
         for i in range(int(1e6)):
             assert (
                 not queue.empty()

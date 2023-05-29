@@ -60,7 +60,6 @@ def generate_data(small_test, include_stop, device):
 
 
 def main(args):
-
     # Load dataset.
     if args.cpu_data or not args.cuda:
         device = torch.device("cpu")

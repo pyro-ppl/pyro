@@ -325,7 +325,6 @@ def literal_listener_raw(utterance, qud):
 
 
 def main(args):
-
     mll = Marginal(literal_listener_raw, num_samples=args.num_samples)
 
     def is_any_qud(world):
@@ -351,7 +350,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.4")
+    assert pyro.__version__.startswith("1.8.5")
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument("-n", "--num-samples", default=10, type=int)
     args = parser.parse_args()

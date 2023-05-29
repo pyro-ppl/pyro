@@ -356,7 +356,6 @@ def test_simple_recur():
 
 
 def test_no_param():
-
     pyro.clear_param_store()
 
     @autoname

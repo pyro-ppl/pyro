@@ -12,7 +12,7 @@
 #   https://horovod.readthedocs.io/en/stable
 #
 # This assumes you have installed horovod, e.g. via
-#   pip install pyro[horovod]
+#   pip install pyro-ppl[horovod]
 # For detailed instructions see
 #   https://horovod.readthedocs.io/en/stable/install.html
 # On my mac laptop I was able to install horovod with
@@ -154,7 +154,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.4")
+    assert pyro.__version__.startswith("1.8.5")
     parser = argparse.ArgumentParser(description="Distributed training via Horovod")
     parser.add_argument("-o", "--outfile")
     parser.add_argument("-s", "--size", default=1000000, type=int)

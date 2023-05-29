@@ -170,7 +170,6 @@ def test_nested_traces():
 
 
 def test_no_param():
-
     pyro.clear_param_store()
 
     @scope

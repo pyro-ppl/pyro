@@ -48,7 +48,6 @@ def guide_generic(config):
 
     N_c = config["sizes"]["group"]
     with pyro.plate("group", N_c, dim=-1):
-
         if config["group"]["random"] == "continuous":
             pyro.sample(
                 "eps_g",
@@ -59,7 +58,6 @@ def guide_generic(config):
         with pyro.plate("individual", N_s, dim=-2), poutine.mask(
             mask=config["individual"]["mask"]
         ):
-
             # individual-level random effects
             if config["individual"]["random"] == "continuous":
                 pyro.sample(
@@ -158,7 +156,6 @@ def model_generic(config):
 
     N_c = config["sizes"]["group"]
     with pyro.plate("group", N_c, dim=-1):
-
         # group-level random effects
         if config["group"]["random"] == "discrete":
             # group-level discrete effect
@@ -179,7 +176,6 @@ def model_generic(config):
         with pyro.plate("individual", N_s, dim=-2), poutine.mask(
             mask=config["individual"]["mask"]
         ):
-
             # individual-level random effects
             if config["individual"]["random"] == "discrete":
                 # individual-level discrete effect

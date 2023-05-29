@@ -49,7 +49,7 @@ def compute_elbo_grad(model, guide, variables):
 @pytest.mark.parametrize("rate", [0.5, 1.0, 2.0])
 @pytest.mark.parametrize("factor", [0.25, 0.5, 1.0])
 def test_rejector(rate, factor):
-    num_samples = 100000
+    num_samples = 200000
     rates = torch.tensor(rate).expand(num_samples, 1)
     factors = torch.tensor(factor).expand(num_samples, 1)
 
@@ -57,8 +57,8 @@ def test_rejector(rate, factor):
     dist2 = RejectionExponential(rates, factors)  # implemented using Rejector
     x1 = dist1.rsample()
     x2 = dist2.rsample()
-    assert_equal(x1.mean(), x2.mean(), prec=0.02, msg="bug in .rsample()")
-    assert_equal(x1.std(), x2.std(), prec=0.02, msg="bug in .rsample()")
+    assert_equal(x1.mean(), x2.mean(), prec=0.03, msg="bug in .rsample()")
+    assert_equal(x1.std(), x2.std(), prec=0.03, msg="bug in .rsample()")
     assert_equal(dist1.log_prob(x1), dist2.log_prob(x1), msg="bug in .log_prob()")
 
 

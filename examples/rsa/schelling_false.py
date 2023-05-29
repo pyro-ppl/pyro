@@ -67,7 +67,6 @@ def bob(preference, depth):
 
 
 def main(args):
-
     # Here Alice and Bob slightly prefer one location over the other a priori
     shared_preference = torch.tensor([args.preference])
 
@@ -96,7 +95,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.4")
+    assert pyro.__version__.startswith("1.8.5")
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument("-n", "--num-samples", default=10, type=int)
     parser.add_argument("--depth", default=3, type=int)

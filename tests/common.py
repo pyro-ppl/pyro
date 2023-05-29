@@ -69,6 +69,14 @@ requires_horovod = pytest.mark.skipif(
 )
 
 try:
+    import pytorch_lightning
+except ImportError:
+    pytorch_lightning = None
+requires_lightning = pytest.mark.skipif(
+    pytorch_lightning is None, reason="pytorch lightning is not available"
+)
+
+try:
     import funsor
 except ImportError:
     funsor = None

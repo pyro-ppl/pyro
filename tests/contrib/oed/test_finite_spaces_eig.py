@@ -47,20 +47,17 @@ def true_eig():
 
 
 def posterior_guide(y_dict, design, observation_labels, target_labels):
-
     y = torch.cat(list(y_dict.values()), dim=-1)
     a, b = pyro.param("a", torch.tensor(0.0)), pyro.param("b", torch.tensor(0.0))
     pyro.sample("theta", dist.Bernoulli(logits=a + b * y))
 
 
 def marginal_guide(design, observation_labels, target_labels):
-
     logit_p = pyro.param("logit_p", torch.tensor(0.0))
     pyro.sample("y", dist.Bernoulli(logits=logit_p))
 
 
 def likelihood_guide(theta_dict, design, observation_labels, target_labels):
-
     theta = torch.cat(list(theta_dict.values()), dim=-1)
     a, b = pyro.param("a", torch.tensor(0.0)), pyro.param("b", torch.tensor(0.0))
     pyro.sample("y", dist.Bernoulli(logits=a + b * theta))

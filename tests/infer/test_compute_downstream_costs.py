@@ -20,7 +20,6 @@ from tests.common import assert_equal
 def _brute_force_compute_downstream_costs(
     model_trace, guide_trace, non_reparam_nodes  #
 ):
-
     guide_nodes = [
         x for x in guide_trace.nodes if guide_trace.nodes[x]["type"] == "sample"
     ]

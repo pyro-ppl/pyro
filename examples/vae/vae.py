@@ -147,8 +147,8 @@ def main(args):
     if args.visdom_flag:
         vis = visdom.Visdom()
 
-    train_elbo = []
-    test_elbo = []
+    train_elbo = {}
+    test_elbo = {}
     # training loop
     for epoch in range(args.num_epochs):
         # initialize loss accumulator
@@ -165,7 +165,7 @@ def main(args):
         # report training diagnostics
         normalizer_train = len(train_loader.dataset)
         total_epoch_loss_train = epoch_loss / normalizer_train
-        train_elbo.append(total_epoch_loss_train)
+        train_elbo[epoch] = total_epoch_loss_train
         print(
             "[epoch %03d]  average training loss: %.4f"
             % (epoch, total_epoch_loss_train)
@@ -203,20 +203,20 @@ def main(args):
             # report test diagnostics
             normalizer_test = len(test_loader.dataset)
             total_epoch_loss_test = test_loss / normalizer_test
-            test_elbo.append(total_epoch_loss_test)
+            test_elbo[epoch] = total_epoch_loss_test
             print(
                 "[epoch %03d]  average test loss: %.4f" % (epoch, total_epoch_loss_test)
             )
+            plot_llk(train_elbo, test_elbo)
 
         if epoch == args.tsne_iter:
             mnist_test_tsne(vae=vae, test_loader=test_loader)
-            plot_llk(np.array(train_elbo), np.array(test_elbo))
 
     return vae
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.4")
+    assert pyro.__version__.startswith("1.8.5")
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument(

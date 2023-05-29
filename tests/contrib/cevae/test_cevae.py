@@ -40,6 +40,8 @@ def test_smoke(num_data, feature_dim, outcome_dist):
 @pytest.mark.parametrize("outcome_dist", DIST_NETS)
 @pytest.mark.parametrize("jit", [False, True], ids=["python", "jit"])
 def test_serialization(jit, feature_dim, outcome_dist):
+    if torch.__version__.startswith("2") and jit:
+        pytest.xfail(reason="https://github.com/pyro-ppl/pyro/issues/3221")
     x, t, y = generate_data(num_data=32, feature_dim=feature_dim)
     if outcome_dist == "exponential":
         y.clamp_(min=1e-20)

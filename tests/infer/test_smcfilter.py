@@ -187,7 +187,6 @@ def score_latent(zs, ys):
 
 
 def test_likelihood_ratio():
-
     model = HarmonicModel()
     guide = HarmonicGuide()
 

@@ -9,7 +9,6 @@ from pyro.distributions import Categorical, DiscreteHMM
 
 
 def test_hmm_log_prob():
-
     a0 = torch.tensor([0.9, 0.08, 0.02])
     a = torch.tensor([[0.1, 0.8, 0.1], [0.5, 0.3, 0.2], [0.4, 0.4, 0.2]])
     e = torch.tensor([[0.99, 0.01], [0.01, 0.99], [0.5, 0.5]])
@@ -83,7 +82,6 @@ def test_hmm_log_prob():
 @pytest.mark.parametrize("batch_observation", [False, True])
 @pytest.mark.parametrize("batch_data", [False, True])
 def test_shapes(batch_initial, batch_transition, batch_observation, batch_data):
-
     # Dimensions.
     batch_size = 3
     state_dim, observation_dim, num_steps = 4, 5, 6
@@ -239,7 +237,6 @@ def test_samples(batch_data):
 
 
 def indiv_filter(a0, a, e, x):
-
     alph = torch.zeros((x.shape[0], a0.shape[0]))
     for j in range(a0.shape[0]):
         vec = a0[j]
@@ -258,7 +255,6 @@ def indiv_filter(a0, a, e, x):
 
 
 def indiv_smooth(a0, a, e, x):
-
     alph = indiv_filter(a0, a, e, x)
     beta = torch.zeros(alph.shape)
     beta[-1, :] = 1.0
@@ -300,7 +296,6 @@ def indiv_map_states(a0, a, e, x):
 
 
 def test_state_infer():
-
     # HMM parameters.
     a0 = torch.tensor([0.9, 0.08, 0.02])
     a = torch.tensor([[0.1, 0.8, 0.1], [0.5, 0.3, 0.2], [0.4, 0.4, 0.2]])
@@ -498,7 +493,6 @@ def test_sample_given_states():
 
 
 def test_sample_states():
-
     # Effectively deterministic to check sampler.
     eps = 1e-10
     a0 = torch.tensor([1 - eps, eps / 2, eps / 2])

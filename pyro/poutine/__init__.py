@@ -18,6 +18,7 @@ from .handlers import (
     replay,
     scale,
     seed,
+    substitute,
     trace,
     uncondition,
 )
@@ -47,6 +48,7 @@ __all__ = [
     "queue",
     "scale",
     "seed",
+    "substitute",
     "trace",
     "Trace",
     "uncondition",

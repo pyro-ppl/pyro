@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        python-version: [3.7]
+        python-version: [3.8]
     steps:
     - uses: actions/checkout@v2
     - name: Set up Python ${{ matrix.python-version }}
@@ -39,7 +39,7 @@ jobs:
     needs: lint
     strategy:
       matrix:
-        python-version: [3.7]
+        python-version: [3.8]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -67,7 +67,7 @@ jobs:
     needs: lint
     strategy:
       matrix:
-        python-version: [3.7]
+        python-version: [3.8]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -101,7 +101,7 @@ jobs:
     needs: docs
     strategy:
       matrix:
-        python-version: [3.7]
+        python-version: [3.8]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -116,7 +116,7 @@ jobs:
           python -m pip install --upgrade pip wheel 'setuptools!=58.5.*,<60'
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch==1.11.0+cpu torchvision==0.12.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install .[test]
           pip install --upgrade coveralls
           pip freeze
@@ -133,7 +133,7 @@ jobs:
     needs: [docs, tutorials-html]
     strategy:
       matrix:
-        python-version: [3.7]
+        python-version: [3.8]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -150,7 +150,7 @@ jobs:
           python -m pip install --upgrade pip wheel 'setuptools!=58.5.*,<60'
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch==1.11.0+cpu torchvision==0.12.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install .[test]
           pip install --upgrade coveralls
           pip freeze
@@ -169,7 +169,7 @@ jobs:
     needs: docs
     strategy:
       matrix:
-        python-version: [3.7]
+        python-version: [3.8]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -184,7 +184,7 @@ jobs:
           python -m pip install --upgrade pip wheel 'setuptools!=58.5.*,<60'
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch==1.11.0+cpu torchvision==0.12.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install .[test]
           pip install --upgrade coveralls
           pip freeze
@@ -201,7 +201,7 @@ jobs:
     needs: docs
     strategy:
       matrix:
-        python-version: [3.7]
+        python-version: [3.8]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -216,7 +216,7 @@ jobs:
           python -m pip install --upgrade pip wheel 'setuptools!=58.5.*,<60'
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch==1.11.0+cpu torchvision==0.12.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install .[test]
           pip install --upgrade coveralls
           pip freeze
@@ -233,7 +233,7 @@ jobs:
     needs: docs
     strategy:
       matrix:
-        python-version: [3.7]
+        python-version: [3.8]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}
@@ -248,7 +248,7 @@ jobs:
           python -m pip install --upgrade pip wheel 'setuptools!=58.5.*,<60'
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch==1.11.0+cpu torchvision==0.12.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install .[test]
           pip install -e .[funsor]
           pip install --upgrade coveralls
@@ -267,7 +267,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        python-version: [3.7]
+        python-version: [3.8]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python ${{ matrix.python-version }}

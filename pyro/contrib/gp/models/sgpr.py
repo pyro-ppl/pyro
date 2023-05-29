@@ -98,7 +98,6 @@ class SparseGPRegression(GPModel):
     def __init__(
         self, X, y, kernel, Xu, noise=None, mean_function=None, approx=None, jitter=1e-6
     ):
-
         assert isinstance(
             X, torch.Tensor
         ), "X needs to be a torch Tensor instead of a {}".format(type(X))

@@ -253,7 +253,7 @@ def evaluate_pointwise_pred_density(model, posterior_samples, baseball_dataset):
 
 
 def main(args):
-    baseball_dataset = pd.read_csv(DATA_URL, "\t")
+    baseball_dataset = pd.read_csv(DATA_URL, sep="\t")
     train, _, player_names = train_test_split(baseball_dataset)
     at_bats, hits = train[:, 0], train[:, 1]
     logging.info("Original Dataset:")
@@ -392,7 +392,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.4")
+    assert pyro.__version__.startswith("1.8.5")
     parser = argparse.ArgumentParser(description="Baseball batting average using HMC")
     parser.add_argument("-n", "--num-samples", nargs="?", default=200, type=int)
     parser.add_argument("--num-chains", nargs="?", default=4, type=int)

@@ -77,7 +77,6 @@ class ProfileHMM(nn.Module):
         self.statearrange = Profile(latent_seq_length)
 
     def model(self, seq_data, local_scale):
-
         # Latent sequence.
         precursor_seq = pyro.sample(
             "precursor_seq",
@@ -316,7 +315,6 @@ class Encoder(nn.Module):
         self.f1_sd = nn.Linear(self.input_size, z_dim)
 
     def forward(self, data):
-
         data = data.reshape(-1, self.input_size)
         z_loc = self.f1_mn(data)
         z_scale = softplus(self.f1_sd(data))
@@ -452,7 +450,6 @@ class FactorMuE(nn.Module):
         self.statearrange = Profile(latent_seq_length)
 
     def decoder(self, z, W, B, inverse_temp):
-
         # Project.
         v = torch.mm(z, W) + B
 
@@ -489,7 +486,6 @@ class FactorMuE(nn.Module):
         return out
 
     def model(self, seq_data, local_scale, local_prior_scale):
-
         # ARD prior.
         if self.ARD_prior:
             # Relevance factors

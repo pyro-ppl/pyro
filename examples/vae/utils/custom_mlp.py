@@ -168,13 +168,11 @@ class MLP(nn.Module):
                     else output_activation
                 )
         else:
-
             # we're going to have a bunch of separate layers we can spit out (a tuple of outputs)
             out_layers = []
 
             # multiple outputs? handle separately
             for out_ix, out_size in enumerate(output_size):
-
                 # for a single output object, we create a linear layer and some weights
                 split_layer = []
 

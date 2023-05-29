@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import itertools
+import os
 from collections import defaultdict
 from pathlib import Path
 from types import SimpleNamespace
@@ -89,7 +90,7 @@ def get_dependencies(
         linearly many dependencies as in independent sets of parallel edges.
         Prior dependencies follow the original model order.
     -   `posterior_dependencies` is a similar dict, but mapping latent
-        variables to the latent or observed sits on which they depend in the
+        variables to the latent or observed sites on which they depend in the
         posterior. Posterior dependencies are reversed from the model order.
 
     Dependencies elide ``pyro.deterministic`` sites and ``pyro.sample(...,
@@ -116,7 +117,7 @@ def get_dependencies(
 
     Here is an example where two variables ``a`` and ``b`` start out
     conditionally independent in the prior, but become conditionally dependent
-    in the posterior do the so-called collider variable ``c`` on which they
+    in the posterior to the so-called collider variable ``c`` on which they
     both depend. This is called "moralization" in the graphical model
     literature::
 
@@ -142,8 +143,8 @@ def get_dependencies(
 
     Dependencies can be more complex in the presence of plates. So far all the
     dict values have been empty sets of plates, but in the following posterior
-    we see that ``c`` depends on itself across the plate ``p``. This means
-    that, among the elements of ``c``, e.g. ``c[0]`` depends on ``c[1]`` (this
+    we see that ``a`` depends on itself across the plate ``p``. This means
+    that, among the elements of ``a``, e.g. ``a[0]`` depends on ``a[1]`` (this
     is why we explicitly allow variables to depend on themselves)::
 
         def model_3():
@@ -572,7 +573,7 @@ def render_model(
         list of tuples for semisupervised models.
     :param model_kwargs: Dict of keyword arguments to pass to the model, or
         list of dicts for semisupervised models.
-    :param str filename: File to save rendered model in.
+    :param str filename: Name of file or path to file to save rendered model in.
     :param bool render_distributions: Whether to include RV distribution
         annotations (and param constraints) in the plot.
     :param bool render_params: Whether to show params inthe plot.
@@ -604,9 +605,9 @@ def render_model(
     graph = render_graph(graph_spec, render_distributions=render_distributions)
 
     if filename is not None:
-        filename = Path(filename)
-        suffix = filename.suffix[1:]  # remove leading period from suffix
-        graph.render(filename.stem, view=False, cleanup=True, format=suffix)
+        suffix = Path(filename).suffix[1:]  # remove leading period from suffix
+        filepath = os.path.splitext(filename)[0]
+        graph.render(filepath, view=False, cleanup=True, format=suffix)
 
     return graph
 
