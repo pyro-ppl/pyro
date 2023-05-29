@@ -4,7 +4,7 @@
 import pytest
 import torch
 
-from pyro.ops.provenance import ProvenanceTensor
+from pyro.ops.provenance import ProvenanceTensor, get_provenance, track_provenance
 from tests.common import assert_equal, requires_cuda
 
 
@@ -43,3 +43,26 @@ def test_provenance_tensor(dtype1, dtype2):
 
     assert x.shape == y.shape == z.shape
     assert_equal(x, z.cpu())
+
+
+@pytest.mark.parametrize(
+    "x",
+    [
+        torch.tensor([1, 2, 3]),
+        track_provenance(torch.tensor([1, 2, 3]), frozenset("y")),
+        frozenset([torch.tensor([0, 1]), torch.tensor([2, 3])]),
+        set([torch.tensor([0, 1]), torch.tensor([2, 3])]),
+        [torch.tensor([0, 1]), torch.tensor([2, 3])],
+        (torch.tensor([0, 1]), torch.tensor([2, 3])),
+        {"a": torch.tensor([0, 1]), "b": torch.tensor([2, 3])},
+        {
+            "a": track_provenance(torch.tensor([0, 1]), frozenset("y")),
+            "b": [torch.tensor([2, 3]), torch.tensor([4, 5])],
+        },
+    ],
+)
+def test_track_provenance(x):
+    new_provenance = frozenset("x")
+    old_provenance = get_provenance(x)
+    provenance = old_provenance | new_provenance
+    assert provenance == get_provenance(track_provenance(x, new_provenance))
