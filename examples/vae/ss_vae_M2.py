@@ -63,7 +63,7 @@ class SSVAE(nn.Module):
         self.aux_loss_multiplier = aux_loss_multiplier
 
         # define and instantiate the neural networks representing
-        # the paramters of various distributions in the model
+        # the parameters of various distributions in the model
         self.setup_networks()
 
     def setup_networks(self):
@@ -142,7 +142,7 @@ class SSVAE(nn.Module):
             # parametrized distribution p(x|y,z) = bernoulli(decoder(y,z))
             # where `decoder` is a neural network. We disable validation
             # since the decoder output is a relaxed Bernoulli value.
-            loc = self.decoder.forward([zs, ys])
+            loc = self.decoder([zs, ys])
             pyro.sample(
                 "x", dist.Bernoulli(loc, validate_args=False).to_event(1), obs=xs
             )
@@ -168,12 +168,12 @@ class SSVAE(nn.Module):
             # (and score) the digit with the variational distribution
             # q(y|x) = categorical(alpha(x))
             if ys is None:
-                alpha = self.encoder_y.forward(xs)
+                alpha = self.encoder_y(xs)
                 ys = pyro.sample("y", dist.OneHotCategorical(alpha))
 
             # sample (and score) the latent handwriting-style with the variational
             # distribution q(z|x,y) = normal(loc(x,y),scale(x,y))
-            loc, scale = self.encoder_z.forward([xs, ys])
+            loc, scale = self.encoder_z([xs, ys])
             pyro.sample("z", dist.Normal(loc, scale).to_event(1))
 
     def classifier(self, xs):
@@ -185,7 +185,7 @@ class SSVAE(nn.Module):
         """
         # use the trained model q(y|x) = categorical(alpha(x))
         # compute all class probabilities for the image(s)
-        alpha = self.encoder_y.forward(xs)
+        alpha = self.encoder_y(xs)
 
         # get the index (digit) that corresponds to
         # the maximum predicted class probability
@@ -207,7 +207,7 @@ class SSVAE(nn.Module):
         with pyro.plate("data"):
             # this here is the extra term to yield an auxiliary loss that we do gradient descent on
             if ys is not None:
-                alpha = self.encoder_y.forward(xs)
+                alpha = self.encoder_y(xs)
                 with pyro.poutine.scale(scale=self.aux_loss_multiplier):
                     pyro.sample("y_aux", dist.OneHotCategorical(alpha), obs=ys)
 
@@ -332,7 +332,7 @@ def main(args):
     # build a list of all losses considered
     losses = [loss_basic]
 
-    # aux_loss: whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)
+    # aux_loss: whether to use the auxiliary loss from NIPS 14 paper (Kingma et al.)
     if args.aux_loss:
         elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
         loss_aux = SVI(
@@ -444,7 +444,7 @@ if __name__ == "__main__":
         "--aux-loss",
         action="store_true",
         help="whether to use the auxiliary loss from NIPS 14 paper "
-        "(Kingma et al). It is not used by default ",
+        "(Kingma et al.). It is not used by default ",
     )
     parser.add_argument(
         "-alm",
