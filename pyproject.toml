@@ -1,0 +1,10 @@
+[tool.black]
+include = '''
+(
+  pyro/.*\.py
+  | examples/.*\.py
+  | tests/.*\.py
+  | scripts/.*\.py
+  | profiler/.*\.py
+)
+'''

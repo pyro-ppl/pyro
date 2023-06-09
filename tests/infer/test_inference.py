@@ -1005,3 +1005,72 @@ def test_non_nested_plating_sum():
         loss = svi.step(data, weights)
         if step % 20 == 0:
             logger.info("step {} loss = {:0.4g}".format(step, loss))
+
+
+@pytest.mark.stage("integration", "integration_batch_2")
+class OneWayNormalRandomEffects(TestCase):
+    def setUp(self) -> None:
+        self.n_groups = 3
+        self.n_experiments = 5
+        self.data = torch.tensor(
+            [
+                [4.1, 3.5, 0.2, -3.3, 3.3],
+                [2.4, -6.5, -0.7, 4.4, -4.8],
+                [1.1, -0.6, 1.3, -1.3, -1.1],
+            ]
+        )
+        self.group_locs = torch.tensor([[3.0], [-2.0], [0.0]])
+        self.group_prec = torch.tensor([[0.2], [0.1], [0.3]])
+        self.obs_prec = torch.tensor(6.0)
+        obs_prec = self.obs_prec * self.n_experiments
+        self.post_group_locs = (
+            self.data.mean(1, keepdim=True) * obs_prec
+            + self.group_locs * self.group_prec
+        ) / (obs_prec + self.group_prec)
+
+    def test_renyi_reparameterized(self):
+        self.do_elbo_test(True, 10_000, RenyiELBO(num_particles=2))
+
+    def test_renyi_vectorized(self):
+        self.do_elbo_test(
+            True,
+            15_000,
+            RenyiELBO(num_particles=2, vectorize_particles=True, max_plate_nesting=3),
+        )
+
+    def test_renyi_nonreparameterized(self):
+        self.do_elbo_test(False, 15000, RenyiELBO(alpha=0.2, num_particles=2))
+
+    def do_elbo_test(self, reparameterized, n_steps, loss, debug=False):
+        def model():
+            with pyro.plate("groups", self.n_groups, dim=-2):
+                group_loc = pyro.sample(
+                    "group_loc",
+                    dist.Normal(self.group_locs, torch.pow(self.group_prec, -0.5)),
+                )
+                with pyro.plate("data", self.n_experiments, dim=-1):
+                    pyro.sample(
+                        "y",
+                        dist.Normal(group_loc, torch.pow(self.obs_prec, -0.5)),
+                        obs=self.data,
+                    )
+
+        def guide():
+            gloc = pyro.param(
+                "group_loc_param",
+                self.post_group_locs + torch.tensor([[0.05], [-0.08], [0.14]]),
+            )
+            with pyro.plate("groups", self.n_groups, dim=-2):
+                Normal = (
+                    dist.Normal if reparameterized else fakes.NonreparameterizedNormal
+                )
+                pyro.sample("group_loc", Normal(gloc, torch.pow(self.group_prec, -0.5)))
+
+        adam = optim.Adam({"lr": 0.0005, "betas": (0.97, 0.999)})
+        svi = SVI(model, guide, adam, loss=loss)
+
+        for k in range(n_steps):
+            svi.step()
+
+        group_loc_error = param_abs_error("group_loc_param", self.post_group_locs)
+        assert_equal(0.0, group_loc_error, prec=0.08)

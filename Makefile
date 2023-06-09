@@ -19,7 +19,7 @@ tutorial: FORCE
 
 lint: FORCE
 	flake8
-	black --check *.py pyro examples tests scripts profiler
+	black --check .
 	isort --check .
 	python scripts/update_headers.py --check
 	mypy --install-types --non-interactive pyro scripts
@@ -28,7 +28,7 @@ license: FORCE
 	python scripts/update_headers.py
 
 format: license FORCE
-	black *.py pyro examples tests scripts profiler
+	black .
 	isort .
 
 version: FORCE

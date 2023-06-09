@@ -103,17 +103,21 @@ def get_plate_stacks(trace):
     }
 
 
-def get_dependent_plate_dims(sites):
+def get_nonparticle_plate_dims(sites):
     """
-    Return a list of unique dims for plates that are not common to all sites.
+    Return a list of unique dims of all plates except vectorized particles
     """
     plate_sets = [
         site["cond_indep_stack"] for site in sites if site["type"] == "sample"
     ]
     all_plates = set().union(*plate_sets)
-    common_plates = all_plates.intersection(*plate_sets)
-    sum_plates = all_plates - common_plates
-    sum_dims = sorted({f.dim for f in sum_plates if f.dim is not None})
+    sum_dims = sorted(
+        {
+            f.dim
+            for f in all_plates
+            if f.dim is not None and f.name != "num_particles_vectorized"
+        }
+    )
     return sum_dims
 
 

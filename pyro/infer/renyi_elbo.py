@@ -9,7 +9,7 @@ import torch
 from pyro.distributions.util import is_identically_zero
 from pyro.infer.elbo import ELBO
 from pyro.infer.enum import get_importance_trace
-from pyro.infer.util import get_dependent_plate_dims, is_validation_enabled, torch_sum
+from pyro.infer.util import get_nonparticle_plate_dims, is_validation_enabled, torch_sum
 from pyro.util import check_if_enumerated, warn_if_nan
 
 
@@ -104,7 +104,7 @@ class RenyiELBO(ELBO):
         # grab a vectorized trace from the generator
         for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
             elbo_particle = 0.0
-            sum_dims = get_dependent_plate_dims(model_trace.nodes.values())
+            sum_dims = get_nonparticle_plate_dims(model_trace.nodes.values())
 
             # compute elbo
             for name, site in model_trace.nodes.items():
@@ -152,7 +152,7 @@ class RenyiELBO(ELBO):
         for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
             elbo_particle = 0
             surrogate_elbo_particle = 0
-            sum_dims = get_dependent_plate_dims(model_trace.nodes.values())
+            sum_dims = get_nonparticle_plate_dims(model_trace.nodes.values())
 
             # compute elbo and surrogate elbo
             for name, site in model_trace.nodes.items():
