@@ -43,6 +43,9 @@ class ProvenanceTensor(torch.Tensor):
     :param frozenset provenance: An initial provenance set.
     """
 
+    _t: torch.Tensor
+    _provenance: frozenset
+
     def __new__(cls, data: torch.Tensor, provenance=frozenset(), **kwargs):
         assert not isinstance(data, ProvenanceTensor)
         if not provenance:
