@@ -277,7 +277,7 @@ def test_loss(Elbo):
         loc_loc = pyro.param("loc_loc", lambda: torch.tensor(1.0))
         scale_loc = pyro.param("scale_loc", lambda: torch.tensor(-1.0))
         pyro.sample("loc", dist.Normal(loc_loc, 2))
-        pyro.sample("scale", dist.LogNormal(-1, 0.1))
+        pyro.sample("scale", dist.LogNormal(scale_loc, 0.1))
 
     elbo = Elbo(
         num_particles=10_000,
