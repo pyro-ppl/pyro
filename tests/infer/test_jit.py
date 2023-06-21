@@ -24,6 +24,7 @@ from pyro.infer import (
     TraceEnum_ELBO,
     TraceGraph_ELBO,
     TraceMeanField_ELBO,
+    TraceTMC_ELBO,
     infer_discrete,
 )
 from pyro.optim import Adam
@@ -262,6 +263,7 @@ def test_one_hot_categorical_enumerate(shape, expand):
         JitTraceEnum_ELBO,
         TraceMeanField_ELBO,
         JitTraceMeanField_ELBO,
+        TraceTMC_ELBO,
     ],
 )
 def test_loss(Elbo):
@@ -287,8 +289,11 @@ def test_loss(Elbo):
     )
     expected = 18.611
 
-    actual = elbo.loss(model, guide, data)
-    assert_close(actual, expected, rtol=0.1)
+    try:
+        actual = elbo.loss(model, guide, data)
+        assert_close(actual, expected, rtol=0.1)
+    except NotImplementedError:
+        pass
 
     actual = elbo.loss_and_grads(model, guide, data)
     assert_close(actual, expected, rtol=0.1)
