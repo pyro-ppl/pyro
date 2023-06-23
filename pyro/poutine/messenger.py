@@ -85,7 +85,7 @@ class Messenger:
         Derived versions cannot be overridden to take arguments
         and must always return self.
         """
-        if not (self in _PYRO_STACK):
+        if self not in _PYRO_STACK:
             # if this poutine is not already installed,
             # put it on the bottom of the stack.
             _PYRO_STACK.append(self)
