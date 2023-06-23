@@ -900,7 +900,7 @@ class AutoMultivariateNormal(AutoContinuous):
 
     def _loc_scale(self, *args, **kwargs):
         scale_tril = self.scale[..., None] * self.scale_tril
-        scale = scale_tril.pow(2).sum(-1)
+        scale = scale_tril.pow(2).sum(-1).sqrt()
         assert scale.shape == self.loc.shape
         return self.loc, scale
 
