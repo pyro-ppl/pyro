@@ -166,7 +166,7 @@ class EnumMessenger(Messenger):
                     param_dims.update(self._value_dims[name])
             self._markov_depths[msg["name"]] = msg["infer"]["_markov_depth"]
         self._param_dims[msg["name"]] = param_dims
-        if msg["is_observed"] or msg["infer"].get("enumerate") != "parallel":
+        if msg["is_observed"] or msg["infer"].get("enumerate") not in ["parallel", "sequential"]:
             return
 
         # Compute an enumerated value (at an arbitrary dim).
