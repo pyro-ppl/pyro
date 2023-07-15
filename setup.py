@@ -112,6 +112,7 @@ setup(
             "black>=21.4b0",
             "nbval",
             "pytest-cov",
+            "pytest-xdist",
             "pytest>=5.0",
             "ruff",
             "scipy>=1.1",
