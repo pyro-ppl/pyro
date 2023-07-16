@@ -123,7 +123,7 @@ def enumerate_site(msg):
 class EnumMessenger(Messenger):
     """
     Enumerates in parallel over discrete sample sites marked
-    ``infer={"enumerate": "parallel"}``.
+    ``infer={"enumerate": "parallel"}`` or ``infer={"enumerate": "sequential"}``.
 
     :param int first_available_dim: The first tensor dimension (counting
         from the right) that is available for parallel enumeration. This
@@ -166,7 +166,10 @@ class EnumMessenger(Messenger):
                     param_dims.update(self._value_dims[name])
             self._markov_depths[msg["name"]] = msg["infer"]["_markov_depth"]
         self._param_dims[msg["name"]] = param_dims
-        if msg["is_observed"] or msg["infer"].get("enumerate") not in ["parallel", "sequential"]:
+        if msg["is_observed"] or msg["infer"].get("enumerate") not in [
+            "parallel",
+            "sequential",
+        ]:
             return
 
         # Compute an enumerated value (at an arbitrary dim).
