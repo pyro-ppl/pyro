@@ -334,6 +334,13 @@ class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
         return constraints.interval(self._unbroadcasted_low, self._unbroadcasted_high)
 
 
+def doctest_disable(docstring):
+    _ = ""
+    for line in docstring.splitlines():
+        _ += line + "#doctest: +DISABLE"
+    return _
+
+
 # Programmatically load all distributions from PyTorch.
 __all__ = []
 for _name, _Dist in torch.distributions.__dict__.items():
@@ -346,18 +353,25 @@ for _name, _Dist in torch.distributions.__dict__.items():
 
     try:
         _PyroDist = locals()[_name]
+        torchDistDocstring = _Dist.__doc__
+
     except KeyError:
         _PyroDist = type(_name, (_Dist, TorchDistributionMixin), {})
         _PyroDist.__module__ = __name__
         locals()[_name] = _PyroDist
+        torchDistDocstring = None
 
     _PyroDist.__doc__ = """
     Wraps :class:`{}.{}` with
     :class:`~pyro.distributions.torch_distribution.TorchDistributionMixin`.
+
     """.format(
         _Dist.__module__, _Dist.__name__
+    ) + (
+        "\n\n" + doctest_disable(torchDistDocstring)
+        if torchDistDocstring is not None
+        else ""
     )
-
     __all__.append(_name)
 
 
