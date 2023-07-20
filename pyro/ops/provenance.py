@@ -95,7 +95,7 @@ def _track_provenance_set(x, provenance: frozenset):
 def _track_provenance_pytree(x, provenance: frozenset):
     # avoid max-recursion depth error for torch<=2.0
     flat_args, _ = tree_flatten(x)
-    if flat_args[0] is x:
+    if not flat_args or flat_args[0] is x:
         return x
 
     return tree_map(partial(track_provenance, provenance=provenance), x)
@@ -145,7 +145,7 @@ def _extract_provenance_set(x):
 def _extract_provenance_pytree(x):
     # avoid max-recursion depth error for torch<=2.0
     flat_args, _ = tree_flatten(x)
-    if flat_args[0] is x:
+    if not flat_args or flat_args[0] is x:
         return x, frozenset()
 
     flat_args, spec = tree_flatten(x)
