@@ -18,7 +18,7 @@ def identify_dense_edges(trace):
             continue
         if node["type"] == "sample":
             for past_name, past_node in trace.nodes.items():
-                if site_is_subsample(node):
+                if site_is_subsample(past_node):
                     continue
                 if past_node["type"] == "sample":
                     if past_name == name:

@@ -846,6 +846,20 @@ def test_plate_error_on_enter():
     assert len(_DIM_ALLOCATOR._stack) == 0, "stack was not cleaned on error"
 
 
+@pytest.mark.parametrize(
+    "graph_type, expected", [("flat", set()), ("dense", {"x", "y"})]
+)
+def test_trace_plate(graph_type: str, expected: set):
+    def model():
+        with pyro.plate("plate", 2):
+            x = pyro.sample("x", dist.Normal(0, 1))
+            pyro.sample("y", dist.Normal(x, 1))
+
+    trace = poutine.trace(model, graph_type=graph_type).get_trace()
+    nodes = set().union(*trace._succ.values(), *trace._pred.values())
+    assert nodes == expected
+
+
 def test_decorator_interface_primitives():
     @poutine.trace
     def model():
