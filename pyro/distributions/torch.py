@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+import re
+import textwrap
 
 import torch
 
@@ -334,11 +336,14 @@ class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
         return constraints.interval(self._unbroadcasted_low, self._unbroadcasted_high)
 
 
-def doctest_disable(docstring):
-    _ = ""
-    for line in docstring.splitlines():
-        _ += line + "#doctest: +DISABLE"
-    return _
+def _cat_docstrings(*docstrings):
+    result = "\n".join(textwrap.dedent(s.lstrip("\n")) for s in docstrings)
+    result = re.sub("\n\n+", "\n\n", result)
+    # Drop torch-specific lines.
+    result = "".join(
+        line for line in result.splitlines(keepends=True) if "xdoctest" not in line
+    )
+    return result
 
 
 # Programmatically load all distributions from PyTorch.
@@ -353,13 +358,10 @@ for _name, _Dist in torch.distributions.__dict__.items():
 
     try:
         _PyroDist = locals()[_name]
-        torchDistDocstring = _Dist.__doc__
-
     except KeyError:
         _PyroDist = type(_name, (_Dist, TorchDistributionMixin), {})
         _PyroDist.__module__ = __name__
         locals()[_name] = _PyroDist
-        torchDistDocstring = None
 
     _PyroDist.__doc__ = """
     Wraps :class:`{}.{}` with
@@ -367,11 +369,8 @@ for _name, _Dist in torch.distributions.__dict__.items():
 
     """.format(
         _Dist.__module__, _Dist.__name__
-    ) + (
-        "\n\n" + doctest_disable(torchDistDocstring)
-        if torchDistDocstring is not None
-        else ""
     )
+    _PyroDist.__doc__ = _cat_docstrings(_PyroDist.__doc__, _Dist.__doc__)
     __all__.append(_name)
 
 

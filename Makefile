@@ -38,7 +38,9 @@ scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python tutorial/source/cleannb.py
 
 doctest: FORCE
-	python -m pytest -p tests.doctest_fixtures --doctest-modules -o filterwarnings=ignore pyro
+	# We skip testing pyro.distributions.torch wrapper classes because
+	# they include torch docstrings which are tested upstream.
+	python -m pytest -p tests.doctest_fixtures --doctest-modules -o filterwarnings=ignore pyro --ignore=pyro/distributions/torch.py
 
 perf-test: FORCE
 	bash scripts/perf_test.sh ${ref}
