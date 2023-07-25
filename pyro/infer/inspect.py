@@ -57,7 +57,6 @@ class TrackProvenance(Messenger):
             msg["value"] = ProvenanceTensor(value, provenance)
 
 
-@torch.enable_grad()
 def get_dependencies(
     model: Callable,
     model_args: Optional[tuple] = None,
@@ -179,7 +178,7 @@ def get_dependencies(
 
     # Collect sites with tracked provenance.
     with torch.random.fork_rng(), torch.no_grad(), pyro.validation_enabled(False):
-        with TrackProvenance():
+        with poutine.block(), TrackProvenance():
             trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
     sample_sites = [msg for msg in trace.nodes.values() if is_sample_site(msg)]
 
@@ -281,7 +280,7 @@ def get_model_relations(
     assert isinstance(model_kwargs, dict)
 
     with torch.random.fork_rng(), torch.no_grad(), pyro.validation_enabled(False):
-        with TrackProvenance():
+        with poutine.block(), TrackProvenance():
             trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
 
     sample_sample = {}
