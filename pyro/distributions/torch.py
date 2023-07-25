@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+import re
+import textwrap
 
 import torch
 
@@ -334,6 +336,16 @@ class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
         return constraints.interval(self._unbroadcasted_low, self._unbroadcasted_high)
 
 
+def _cat_docstrings(*docstrings):
+    result = "\n".join(textwrap.dedent(s.lstrip("\n")) for s in docstrings)
+    result = re.sub("\n\n+", "\n\n", result)
+    # Drop torch-specific lines.
+    result = "".join(
+        line for line in result.splitlines(keepends=True) if "xdoctest" not in line
+    )
+    return result
+
+
 # Programmatically load all distributions from PyTorch.
 __all__ = []
 for _name, _Dist in torch.distributions.__dict__.items():
@@ -354,10 +366,11 @@ for _name, _Dist in torch.distributions.__dict__.items():
     _PyroDist.__doc__ = """
     Wraps :class:`{}.{}` with
     :class:`~pyro.distributions.torch_distribution.TorchDistributionMixin`.
+
     """.format(
         _Dist.__module__, _Dist.__name__
     )
-
+    _PyroDist.__doc__ = _cat_docstrings(_PyroDist.__doc__, _Dist.__doc__)
     __all__.append(_name)
 
 
