@@ -164,7 +164,9 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, "Pyro.tex", u"Pyro Documentation", u"Uber AI Labs", "manual"),
+    # Disabled pdf builds to unblock readthedocs failed builds;
+    # see https://github.com/pyro-ppl/pyro/issues/3248
+    # (master_doc, "Pyro.tex", u"Pyro Documentation", u"Uber AI Labs", "manual"),
 ]
 
 # -- Options for manual page output ---------------------------------------
