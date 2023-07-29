@@ -177,7 +177,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.5")
+    assert pyro.__version__.startswith("1.8.6")
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument("-n", "--num-samples", default=10, type=int)
     args = parser.parse_args()
