@@ -47,6 +47,7 @@ extensions = [
     "sphinx.ext.graphviz",  #
     "sphinx.ext.autodoc",
     "sphinx.ext.doctest",
+    'sphinx.ext.napoleon',
 ]
 
 # Disable documentation inheritance so as to avoid inheriting

@@ -102,7 +102,7 @@ setup(
         "numpy>=1.7",
         "opt_einsum>=2.3.2",
         "pyro-api>=0.1.1",
-        "torch>=2.0.1",
+        "torch>=1.11.0",
         "tqdm>=4.36",
     ],
     extras_require={
@@ -110,18 +110,17 @@ setup(
         "test": EXTRAS_REQUIRE
         + [
             "black>=21.4b0",
-            "flake8",
             "nbval",
-            "pytest>=5.0",
             "pytest-cov",
+            "pytest-xdist",
+            "pytest>=5.0",
+            "ruff",
             "scipy>=1.1",
         ],
         "profile": ["prettytable", "pytest-benchmark", "snakeviz"],
         "dev": EXTRAS_REQUIRE
         + [
             "black>=21.4b0",
-            "flake8",
-            "isort>=5.0",
             "mypy>=0.812",
             "nbformat",
             "nbsphinx>=0.3.2",
@@ -129,8 +128,9 @@ setup(
             "nbval",
             "ninja",
             "pypandoc",
-            "pytest>=5.0",
             "pytest-xdist",
+            "pytest>=5.0",
+            "ruff",
             "scipy>=1.1",
             "sphinx",
             "sphinx_rtd_theme",

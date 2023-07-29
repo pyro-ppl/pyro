@@ -18,9 +18,8 @@ tutorial: FORCE
 	$(MAKE) -C tutorial html
 
 lint: FORCE
-	flake8
+	ruff check .
 	black --check *.py pyro examples tests scripts profiler
-	isort --check .
 	python scripts/update_headers.py --check
 	mypy --install-types --non-interactive pyro scripts
 
@@ -28,8 +27,8 @@ license: FORCE
 	python scripts/update_headers.py
 
 format: license FORCE
+	ruff check --fix .
 	black *.py pyro examples tests scripts profiler
-	isort .
 
 version: FORCE
 	python scripts/update_version.py
@@ -39,7 +38,9 @@ scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python tutorial/source/cleannb.py
 
 doctest: FORCE
-	python -m pytest -p tests.doctest_fixtures --doctest-modules -o filterwarnings=ignore pyro
+	# We skip testing pyro.distributions.torch wrapper classes because
+	# they include torch docstrings which are tested upstream.
+	python -m pytest -p tests.doctest_fixtures --doctest-modules -o filterwarnings=ignore pyro --ignore=pyro/distributions/torch.py
 
 perf-test: FORCE
 	bash scripts/perf_test.sh ${ref}

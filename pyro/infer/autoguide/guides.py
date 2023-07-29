@@ -899,7 +899,10 @@ class AutoMultivariateNormal(AutoContinuous):
         return dist.MultivariateNormal(self.loc, scale_tril=scale_tril)
 
     def _loc_scale(self, *args, **kwargs):
-        return self.loc, self.scale * self.scale_tril.diag()
+        scale_tril = self.scale[..., None] * self.scale_tril
+        scale = scale_tril.pow(2).sum(-1).sqrt()
+        assert scale.shape == self.loc.shape
+        return self.loc, scale
 
 
 class AutoDiagonalNormal(AutoContinuous):
