@@ -249,7 +249,8 @@ class GammaPoisson(TorchDistribution):
 
     def __init__(self, concentration, rate, validate_args=None):
         concentration, rate = broadcast_all(concentration, rate)
-        self._gamma = Gamma(concentration, rate)
+        self._gamma = Gamma(concentration, rate, validate_args=False)
+        self._gamma._validate_args = validate_args
         super().__init__(self._gamma._batch_shape, validate_args=validate_args)
 
     @property
