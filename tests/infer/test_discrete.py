@@ -361,7 +361,7 @@ def test_enum(infer, temperature, enum):
             infer={"enumerate": enum_option},
         )
         d_ch = dist.Normal(y, 1.0)
-        x_ch_pre = pyro.sample("x_ch_pre", d_ch, obs=x_ch_obs)
+        pyro.sample("x_ch_pre", d_ch, obs=x_ch_obs)
         return y
 
     y_posts = []
