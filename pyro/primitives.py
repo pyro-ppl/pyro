@@ -205,13 +205,23 @@ def deterministic(name, value, event_dim=None):
     :param torch.Tensor value: Value of the site.
     :param int event_dim: Optional event dimension, defaults to `value.ndim`.
     """
-    event_dim = value.ndim if event_dim is None else event_dim
-    return sample(
-        name,
-        dist.Delta(value, event_dim=event_dim).mask(False),
-        obs=value,
-        infer={"_deterministic": True},
-    )
+    msg = {
+        "type": "deterministic",
+        "name": name,
+        "value": value,
+        "is_observed": True,
+        "infer": {"_deterministic": True},
+        "scale": 1.0,
+        "mask": None,
+        "cond_indep_stack": (),
+        "done": False,
+        "stop": False,
+        "continuation": None,
+    }
+
+    # ...and use apply_stack to send it to the Messengers
+    apply_stack(msg)
+    return msg["value"]
 
 
 @effectful(type="subsample")

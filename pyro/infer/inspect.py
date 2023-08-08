@@ -60,6 +60,15 @@ class TrackProvenance(Messenger):
             value = detach_provenance(msg["value"])
             msg["value"] = ProvenanceTensor(value, provenance)
 
+    def _pyro_post_deterministic(self, msg):
+        if msg["type"] == "deterministic":
+            provenance = frozenset({msg["name"]})  # track only direct dependencies
+            value = detach_provenance(msg["value"])
+            msg["args"] = (msg["value"],)
+            msg["kwargs"] = {}
+            msg["value"] = ProvenanceTensor(value, provenance)
+            msg["fn"] = lambda x: x
+
 
 @torch.enable_grad()
 def get_dependencies(
@@ -302,22 +311,32 @@ def get_model_relations(
         if site["type"] == "param":
             param_constraint[name] = str(site["kwargs"]["constraint"])
 
-        if site["type"] != "sample" or site_is_subsample(site):
+        if site["type"] not in ["sample", "deterministic"] or site_is_subsample(site):
             continue
 
+        provenance = get_provenance(
+            site["fn"].log_prob(site["value"])
+            if site["type"] == "sample"
+            else site["args"][0]
+        )
         sample_sample[name] = [
             upstream
-            for upstream in get_provenance(site["fn"].log_prob(site["value"]))
-            if upstream != name and _get_type_from_frozenname(upstream) == "sample"
+            for upstream in provenance
+            if upstream != name
+            and _get_type_from_frozenname(upstream) in ["sample", "deterministic"]
         ]
 
         sample_param[name] = [
             upstream
-            for upstream in get_provenance(site["fn"].log_prob(site["value"]))
+            for upstream in provenance
             if upstream != name and _get_type_from_frozenname(upstream) == "param"
         ]
 
-        sample_dist[name] = _get_dist_name(site["fn"])
+        sample_dist[name] = (
+            _get_dist_name(site["fn"])
+            if not site["type"] == "deterministic"
+            else "Deterministic"
+        )
         for frame in site["cond_indep_stack"]:
             plate_sample[frame.name].append(name)
         if site["is_observed"]:
@@ -493,11 +512,24 @@ def render_graph(
             # For sample_nodes - ellipse
             if node_data[rv]["distribution"]:
                 shape = "ellipse"
+                rv_label = rv
 
             # For param_nodes - No shape
             else:
                 shape = "plain"
-            cur_graph.node(rv, label=rv, shape=shape, style="filled", fillcolor=color)
+                rv_label = rv.replace(
+                    "$params", ""
+                )  # incase of neural network parameters
+
+            # use different symbol for Deterministic site
+            node_style = (
+                "filled,dashed"
+                if node_data[rv]["distribution"] == "Deterministic"
+                else "filled"
+            )
+            cur_graph.node(
+                rv, label=rv_label, shape=shape, style=node_style, fillcolor=color
+            )
 
     # add leaf nodes first
     while len(plate_data) >= 1:
