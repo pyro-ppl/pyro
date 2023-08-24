@@ -574,8 +574,12 @@ class CEVAE(nn.Module):
         self.whiten = PreWhitener(x)
 
         dataset = TensorDataset(x, t, y)
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True,
-                                generator=torch.Generator(device=x.device))
+        dataloader = DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            generator=torch.Generator(device=x.device),
+        )
         logger.info("Training with {} minibatches per epoch".format(len(dataloader)))
         num_steps = num_epochs * len(dataloader)
         optim = ClippedAdam(
