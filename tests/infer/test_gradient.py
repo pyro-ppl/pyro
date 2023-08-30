@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+from collections import defaultdict
 
 import numpy as np
 import pytest
@@ -29,7 +30,6 @@ from pyro.optim import Adam
 from tests.common import assert_equal, xfail_if_not_implemented, xfail_param
 
 logger = logging.getLogger(__name__)
-
 
 def DiffTrace_ELBO(*args, **kwargs):
     return Trace_ELBO(*args, **kwargs).differentiable_loss
@@ -207,6 +207,99 @@ def test_subsample_gradient(
     expected_grads = {
         "loc": scale * np.array([0.5, -2.0]),
         "scale": scale * np.array([2.0]),
+    }
+    for name in sorted(params):
+        logger.info("expected {} = {}".format(name, expected_grads[name]))
+        logger.info("actual   {} = {}".format(name, actual_grads[name]))
+    assert_equal(actual_grads, expected_grads, prec=precision)
+
+
+# Not including the unobserved site in the guide triggers a warning
+# that can make the test fail if we do not deactivate UserWarning.
+@pytest.mark.filterwarnings("ignore::UserWarning")
+@pytest.mark.parametrize(
+    "with_x_unobserved",
+    [True, False],
+)
+@pytest.mark.parametrize(
+    "mask",
+    [[True, True], [True, False], [False, True]],
+)
+@pytest.mark.parametrize(
+    "reparameterized,has_rsample",
+    [(True, None), (True, False), (True, True), (False, None)],
+    ids=["reparam", "reparam-False", "reparam-True", "nonreparam"],
+    )
+@pytest.mark.parametrize(
+    "Elbo,local_samples",
+    [
+        (Trace_ELBO, False),
+        (DiffTrace_ELBO, False),
+        (TraceGraph_ELBO, False),
+        (TraceMeanField_ELBO, False),
+        (TraceEnum_ELBO, False),
+        (TraceEnum_ELBO, True),
+    ],
+)
+def test_mask_gradient(
+    Elbo, reparameterized, has_rsample, local_samples, mask, with_x_unobserved,
+):
+    pyro.clear_param_store()
+    data = torch.tensor([-0.5, 2.0])
+    precision = 0.08
+    Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
+
+    def model(data, mask):
+        z = pyro.sample("z", Normal(0, 1))
+        with pyro.plate("data", len(data)):
+            pyro.sample("x", Normal(z, 1), obs=data, obs_mask=mask)
+
+    def guide(data, mask):
+        scale = pyro.param("scale", lambda: torch.tensor([1.0]))
+        loc = pyro.param("loc", lambda: torch.tensor([1.0]))
+        z_dist = Normal(loc, scale)
+        if has_rsample is not None:
+            z_dist.has_rsample_(has_rsample)
+        z = pyro.sample("z", z_dist)
+        if with_x_unobserved:
+            with pyro.plate("data", len(data)):
+                with pyro.poutine.mask(mask=~mask):
+                    pyro.sample("x_unobserved", Normal(z, 1))
+
+    num_particles = 50000
+    accumulation = 1
+    if local_samples:
+        # One has to limit the amount of samples in this
+        # test because the memory footprint is large.
+        guide = config_enumerate(guide, num_samples=5000)
+        accumulation = num_particles // 5000
+        num_particles = 1
+
+    optim = Adam({"lr": 0.1})
+    elbo = Elbo(
+        max_plate_nesting=1,  # set this to ensure rng agrees across runs
+        num_particles=num_particles,
+        vectorize_particles=True,
+        strict_enumeration_warning=False,
+    )
+    actual_grads = defaultdict(lambda: np.zeros(1))
+    for _ in range(accumulation):
+        inference = SVI(model, guide, optim, loss=elbo)
+        with xfail_if_not_implemented():
+            inference.loss_and_grads(
+                model, guide, data=data, mask=torch.tensor(mask)
+            )
+    params = dict(pyro.get_param_store().named_parameters())
+    actual_grads = {
+        name: param.grad.detach().cpu().numpy() / accumulation
+        for name, param in params.items()
+    }
+
+    # grad(loc) = (n+1) * loc - (x1 + ... + xn)
+    # grad(scale) = (n+1) * scale - 1 / scale
+    expected_grads = {
+        "loc": sum(mask) + 1. - data[mask].sum(0, keepdim=True).numpy(),
+        "scale": sum(mask) + 1 - np.ones(1)
     }
     for name in sorted(params):
         logger.info("expected {} = {}".format(name, expected_grads[name]))

@@ -25,6 +25,6 @@ class ScoreParts(
         :type mask: torch.BoolTensor or None
         """
         log_prob = scale_and_mask(self.log_prob, scale, mask)
-        score_function = self.score_function  # not scaled
+        score_function = scale_and_mask(self.score_function, 1.0, mask)  # not scaled
         entropy_term = scale_and_mask(self.entropy_term, scale, mask)
         return ScoreParts(log_prob, score_function, entropy_term)
