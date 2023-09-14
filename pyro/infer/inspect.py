@@ -43,8 +43,20 @@ def is_sample_site(msg):
     return True
 
 
+def site_is_deterministic(msg: dict) -> bool:
+    return msg["type"] == "sample" and msg["infer"].get("_deterministic", False)
+
+
 class TrackProvenance(Messenger):
     def _pyro_post_sample(self, msg):
+        if site_is_deterministic(msg):
+            provenance = frozenset({msg["name"]})  # track only direct dependencies
+            value = detach_provenance(msg["value"])
+            msg["args"] = (*msg["args"], msg["value"],)
+            msg["kwargs"] = {}
+            msg["value"] = ProvenanceTensor(value, provenance)
+            # msg["fn"] = lambda x: x
+
         if is_sample_site(msg):
             provenance = frozenset({msg["name"]})  # track only direct dependencies
             value = detach_provenance(msg["value"])
@@ -193,9 +205,7 @@ def get_dependencies(
     # Find direct prior dependencies among latent and observed sites.
     prior_dependencies = {n: {n: set()} for n in plates}  # no deps yet
     for i, downstream in enumerate(sample_sites):
-        upstreams = [
-            u for u in sample_sites[:i] if not u["is_observed"] if u["value"].numel()
-        ]
+        upstreams = [u for u in sample_sites[:i] if not u["is_observed"] if u["value"].numel()]
         if not upstreams:
             continue
         log_prob = downstream["fn"].log_prob(downstream["value"])
@@ -301,10 +311,16 @@ def get_model_relations(
         if site["type"] != "sample" or site_is_subsample(site):
             continue
 
+        provenance = get_provenance(
+            site["fn"].log_prob(site["value"])
+            if not site_is_deterministic(site)
+            else site["args"][-1]
+        )
         sample_sample[name] = [
             upstream
-            for upstream in get_provenance(site["fn"].log_prob(site["value"]))
-            if upstream != name and _get_type_from_frozenname(upstream) == "sample"
+            for upstream in provenance
+            if upstream != name
+            and _get_type_from_frozenname(upstream) == "sample"
         ]
 
         sample_param[name] = [
@@ -313,7 +329,11 @@ def get_model_relations(
             if upstream != name and _get_type_from_frozenname(upstream) == "param"
         ]
 
-        sample_dist[name] = _get_dist_name(site["fn"])
+        sample_dist[name] = (
+            _get_dist_name(site["fn"])
+            if not site_is_deterministic(site)
+            else "Deterministic"
+        )
         for frame in site["cond_indep_stack"]:
             plate_sample[frame.name].append(name)
         if site["is_observed"]:
@@ -348,9 +368,7 @@ def get_model_relations(
 
 
 def _get_dist_name(fn):
-    while isinstance(
-        fn, (dist.Independent, dist.ExpandedDistribution, dist.MaskedDistribution)
-    ):
+    while isinstance(fn, (dist.Independent, dist.ExpandedDistribution, dist.MaskedDistribution)):
         fn = fn.base_dist
     return type(fn).__name__
 
@@ -510,11 +528,23 @@ def render_graph(
             # For sample_nodes - ellipse
             if node_data[rv]["distribution"]:
                 shape = "ellipse"
+                rv_label = rv
 
             # For param_nodes - No shape
             else:
                 shape = "plain"
-            cur_graph.node(rv, label=rv, shape=shape, style="filled", fillcolor=color)
+                rv_label = rv.replace(
+                    "$params", ""
+                )  # incase of neural network parameters
+            # use different symbol for Deterministic site
+            node_style = (
+                "filled,dashed"
+                if node_data[rv]["distribution"] == "Deterministic"
+                else "filled"
+            )
+            cur_graph.node(
+                rv, label=rv_label, shape=shape, style=node_style, fillcolor=color
+            )
 
     # add leaf nodes first
     while len(plate_data) >= 1:
@@ -596,9 +626,7 @@ def render_model(
         ]
 
     # Get graph specifications.
-    graph_specs = [
-        generate_graph_specification(r, render_params=render_params) for r in relations
-    ]
+    graph_specs = [generate_graph_specification(r, render_params=render_params) for r in relations]
     graph_spec = _deep_merge(graph_specs)
 
     # Render.
