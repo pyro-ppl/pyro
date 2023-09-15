@@ -112,7 +112,6 @@ def test_grad_hard(num_nodes):
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_nodes", [1, 2, 3, 4, 5, 6, 7, 8])
 def test_mode(num_nodes, dtype):
-    pytest.importorskip("lap")
     logits = torch.randn(num_nodes, num_nodes, dtype=dtype) * 10
     d = dist.OneOneMatching(logits)
     values = d.enumerate_support()
@@ -125,7 +124,6 @@ def test_mode(num_nodes, dtype):
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_nodes", [3, 5, 8, 13, 100, 1000])
 def test_mode_smoke(num_nodes, dtype):
-    pytest.importorskip("lap")
     logits = torch.randn(num_nodes, num_nodes, dtype=dtype) * 10
     d = dist.OneOneMatching(logits)
     value = d.mode()
@@ -136,7 +134,6 @@ def test_mode_smoke(num_nodes, dtype):
 @pytest.mark.parametrize("num_nodes", [2, 3, 4, 5, 6])
 @pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
 def test_sample(num_nodes, dtype, bp_iters):
-    pytest.importorskip("lap")
     logits = torch.randn(num_nodes, num_nodes, dtype=dtype) * 10
     d = dist.OneOneMatching(logits, bp_iters=bp_iters)
 

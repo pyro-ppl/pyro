@@ -75,7 +75,7 @@ EXTRAS_REQUIRE = [
     "scikit-learn",
     "seaborn>=0.11.0",
     "wget",
-    "lap",  # Requires setuptools<60
+    "scipy>=1.1",
     # 'biopython>=1.54',
     # 'scanpy>=1.4',  # Requires HDF5
     # 'scvi>=0.6',  # Requires loopy and other fragile packages
@@ -115,7 +115,6 @@ setup(
             "pytest-xdist",
             "pytest>=5.0",
             "ruff",
-            "scipy>=1.1",
         ],
         "profile": ["prettytable", "pytest-benchmark", "snakeviz"],
         "dev": EXTRAS_REQUIRE
@@ -131,7 +130,6 @@ setup(
             "pytest-xdist",
             "pytest>=5.0",
             "ruff",
-            "scipy>=1.1",
             "sphinx",
             "sphinx_rtd_theme",
             "yapf",
