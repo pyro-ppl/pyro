@@ -119,6 +119,7 @@ def test_mode(num_nodes, dtype):
     expected = values[i]
     actual = d.mode()
     assert_equal(actual, expected)
+    assert (actual == expected).all()
 
 
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)

@@ -164,12 +164,14 @@ def assert_tensors_equal(a, b, prec=0.0, msg=""):
     assert a.size() == b.size(), msg
     if isinstance(prec, numbers.Number) and prec == 0:
         assert (a == b).all(), msg
+        return
     if a.numel() == 0 and b.numel() == 0:
         return
     b = b.type_as(a)
     b = b.cuda(device=a.get_device()) if a.is_cuda else b.cpu()
     if not a.dtype.is_floating_point:
-        return (a == b).all()
+        assert (a == b).all(), msg
+        return
     # check that NaNs are in the same locations
     nan_mask = a != a
     assert torch.equal(nan_mask, b != b), msg

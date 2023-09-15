@@ -169,6 +169,6 @@ def maximum_weight_matching(logits):
     from scipy.optimize import linear_sum_assignment
 
     cost = -logits.cpu()
-    value = linear_sum_assignment(cost.numpy())[0]
+    value = linear_sum_assignment(cost.numpy())[1]
     value = torch.tensor(value, dtype=torch.long, device=logits.device)
     return value
