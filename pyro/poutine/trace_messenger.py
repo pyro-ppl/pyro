@@ -137,9 +137,6 @@ class TraceMessenger(Messenger):
     def _pyro_post_param(self, msg):
         self.trace.add_node(msg["name"], **msg.copy())
 
-    def _pyro_post_deterministic(self, msg):
-        self.trace.add_node(msg["name"], **msg.copy())
-        
 
 class TraceHandler:
     """

@@ -48,16 +48,16 @@ def site_is_deterministic(msg: dict) -> bool:
 
 
 class TrackProvenance(Messenger):
+    def __init__(self, *, include_deterministic=False):
+        self.include_deterministic = include_deterministic
+
     def _pyro_post_sample(self, msg):
-        if site_is_deterministic(msg):
+        if self.include_deterministic and site_is_deterministic(msg):
             provenance = frozenset({msg["name"]})  # track only direct dependencies
             value = detach_provenance(msg["value"])
-            msg["args"] = (*msg["args"], msg["value"],)
-            msg["kwargs"] = {}
             msg["value"] = ProvenanceTensor(value, provenance)
-            # msg["fn"] = lambda x: x
 
-        if is_sample_site(msg):
+        elif is_sample_site(msg):
             provenance = frozenset({msg["name"]})  # track only direct dependencies
             value = detach_provenance(msg["value"])
             msg["value"] = ProvenanceTensor(value, provenance)
@@ -74,6 +74,7 @@ def get_dependencies(
     model: Callable,
     model_args: Optional[tuple] = None,
     model_kwargs: Optional[dict] = None,
+    include_deterministic: bool = False,
 ) -> Dict[str, object]:
     r"""
     Infers dependency structure about a conditioned model.
@@ -181,6 +182,7 @@ def get_dependencies(
     :param callable model: A model.
     :param tuple model_args: Optional tuple of model args.
     :param dict model_kwargs: Optional dict of model kwargs.
+    :param bool include_deterministic: Whether to include deterministic sites.
     :returns: A dictionary of metadata (see above).
     :rtype: dict
     """
@@ -191,7 +193,7 @@ def get_dependencies(
 
     # Collect sites with tracked provenance.
     with torch.random.fork_rng(), torch.no_grad(), pyro.validation_enabled(False):
-        with TrackProvenance():
+        with TrackProvenance(include_deterministic=include_deterministic):
             trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
     sample_sites = [msg for msg in trace.nodes.values() if is_sample_site(msg)]
 
@@ -205,7 +207,9 @@ def get_dependencies(
     # Find direct prior dependencies among latent and observed sites.
     prior_dependencies = {n: {n: set()} for n in plates}  # no deps yet
     for i, downstream in enumerate(sample_sites):
-        upstreams = [u for u in sample_sites[:i] if not u["is_observed"] if u["value"].numel()]
+        upstreams = [
+            u for u in sample_sites[:i] if not u["is_observed"] if u["value"].numel()
+        ]
         if not upstreams:
             continue
         log_prob = downstream["fn"].log_prob(downstream["value"])
@@ -248,6 +252,7 @@ def get_model_relations(
     model: Callable,
     model_args: Optional[tuple] = None,
     model_kwargs: Optional[dict] = None,
+    include_deterministic: bool = False,
 ):
     """
     Infer relations of RVs and plates from given model and optionally data.
@@ -281,6 +286,7 @@ def get_model_relations(
     :param callable model: A model to inspect.
     :param model_args: Optional tuple of model args.
     :param model_kwargs: Optional dict of model kwargs.
+    :param bool include_deterministic: Whether to include deterministic sites.
     :rtype: dict
     """
     if model_args is None:
@@ -291,7 +297,7 @@ def get_model_relations(
     assert isinstance(model_kwargs, dict)
 
     with torch.random.fork_rng(), torch.no_grad(), pyro.validation_enabled(False):
-        with TrackProvenance():
+        with TrackProvenance(include_deterministic=include_deterministic):
             trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
 
     sample_sample = {}
@@ -314,13 +320,12 @@ def get_model_relations(
         provenance = get_provenance(
             site["fn"].log_prob(site["value"])
             if not site_is_deterministic(site)
-            else site["args"][-1]
+            else site["fn"].base_dist.log_prob(site["value"])
         )
         sample_sample[name] = [
             upstream
             for upstream in provenance
-            if upstream != name
-            and _get_type_from_frozenname(upstream) == "sample"
+            if upstream != name and _get_type_from_frozenname(upstream) == "sample"
         ]
 
         sample_param[name] = [
@@ -368,7 +373,9 @@ def get_model_relations(
 
 
 def _get_dist_name(fn):
-    while isinstance(fn, (dist.Independent, dist.ExpandedDistribution, dist.MaskedDistribution)):
+    while isinstance(
+        fn, (dist.Independent, dist.ExpandedDistribution, dist.MaskedDistribution)
+    ):
         fn = fn.base_dist
     return type(fn).__name__
 
@@ -590,6 +597,7 @@ def render_model(
     filename: Optional[str] = None,
     render_distributions: bool = False,
     render_params: bool = False,
+    include_deterministic: bool = False,
 ) -> "graphviz.Digraph":
     """
     Renders a model using `graphviz <https://graphviz.org>`_ .
@@ -607,12 +615,20 @@ def render_model(
     :param bool render_distributions: Whether to include RV distribution
         annotations (and param constraints) in the plot.
     :param bool render_params: Whether to show params inthe plot.
+    :param bool include_deterministic: Whether to include deterministic sites.
     :returns: A model graph.
     :rtype: graphviz.Digraph
     """
     # Get model relations.
     if not isinstance(model_args, list) and not isinstance(model_kwargs, list):
-        relations = [get_model_relations(model, model_args, model_kwargs)]
+        relations = [
+            get_model_relations(
+                model,
+                model_args,
+                model_kwargs,
+                include_deterministic=include_deterministic,
+            )
+        ]
     else:  # semisupervised
         if isinstance(model_args, list):
             if not isinstance(model_kwargs, list):
@@ -621,12 +637,16 @@ def render_model(
             model_args = [model_args] * len(model_kwargs)
         assert len(model_args) == len(model_kwargs)
         relations = [
-            get_model_relations(model, args, kwargs)
+            get_model_relations(
+                model, args, kwargs, include_deterministic=include_deterministic
+            )
             for args, kwargs in zip(model_args, model_kwargs)
         ]
 
     # Get graph specifications.
-    graph_specs = [generate_graph_specification(r, render_params=render_params) for r in relations]
+    graph_specs = [
+        generate_graph_specification(r, render_params=render_params) for r in relations
+    ]
     graph_spec = _deep_merge(graph_specs)
 
     # Render.
