@@ -6,7 +6,7 @@ import os
 from collections import defaultdict
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, List, Optional, Union, Collection
 
 import torch
 
@@ -23,22 +23,23 @@ except ImportError:
     graphviz = SimpleNamespace(Digraph=object)  # for type hints
 
 
-def is_sample_site(msg):
+def is_sample_site(msg, *, include_deterministic=False):
     if msg["type"] != "sample":
         return False
     if site_is_subsample(msg):
         return False
 
-    # Ignore masked observations.
-    if msg["is_observed"] and msg["mask"] is False:
-        return False
+    if not include_deterministic:
+        # Ignore masked observations.
+        if msg["is_observed"] and msg["mask"] is False:
+            return False
 
-    # Exclude deterministic sites.
-    fn = msg["fn"]
-    while hasattr(fn, "base_dist"):
-        fn = fn.base_dist
-    if type(fn).__name__ == "Delta":
-        return False
+        # Exclude deterministic sites.
+        fn = msg["fn"]
+        while hasattr(fn, "base_dist"):
+            fn = fn.base_dist
+        if type(fn).__name__ == "Delta":
+            return False
 
     return True
 
@@ -57,7 +58,7 @@ class TrackProvenance(Messenger):
             value = detach_provenance(msg["value"])
             msg["value"] = ProvenanceTensor(value, provenance)
 
-        elif is_sample_site(msg):
+        elif is_sample_site(msg, include_deterministic=self.include_deterministic):
             provenance = frozenset({msg["name"]})  # track only direct dependencies
             value = detach_provenance(msg["value"])
             msg["value"] = ProvenanceTensor(value, provenance)
@@ -357,10 +358,15 @@ def get_model_relations(
         return plate_samples
 
     plate_sample = _resolve_plate_samples(plate_sample)
-    # convert set to list to keep order of variables
-    plate_sample = {
-        k: [name for name in trace.nodes if name in v] for k, v in plate_sample.items()
-    }
+
+    # Normalize order of variables.
+    def sort_by_time(names: Collection[str]) -> List[str]:
+        return [name for name in trace.nodes if name in names]
+
+    sample_sample = {k: sort_by_time(v) for k, v in sample_sample.items()}
+    sample_param = {k: sort_by_time(v) for k, v in sample_param.items()}
+    plate_sample = {k: sort_by_time(v) for k, v in plate_sample.items()}
+    observed = sort_by_time(observed)
 
     return {
         "sample_sample": sample_sample,
@@ -540,9 +546,7 @@ def render_graph(
             # For param_nodes - No shape
             else:
                 shape = "plain"
-                rv_label = rv.replace(
-                    "$params", ""
-                )  # incase of neural network parameters
+
             # use different symbol for Deterministic site
             node_style = (
                 "filled,dashed"
@@ -597,7 +601,7 @@ def render_model(
     filename: Optional[str] = None,
     render_distributions: bool = False,
     render_params: bool = False,
-    include_deterministic: bool = False,
+    render_deterministic: bool = False,
 ) -> "graphviz.Digraph":
     """
     Renders a model using `graphviz <https://graphviz.org>`_ .
@@ -615,7 +619,7 @@ def render_model(
     :param bool render_distributions: Whether to include RV distribution
         annotations (and param constraints) in the plot.
     :param bool render_params: Whether to show params inthe plot.
-    :param bool include_deterministic: Whether to include deterministic sites.
+    :param bool render_deterministic: Whether to include deterministic sites.
     :returns: A model graph.
     :rtype: graphviz.Digraph
     """
@@ -626,7 +630,7 @@ def render_model(
                 model,
                 model_args,
                 model_kwargs,
-                include_deterministic=include_deterministic,
+                include_deterministic=render_deterministic,
             )
         ]
     else:  # semisupervised
@@ -638,7 +642,7 @@ def render_model(
         assert len(model_args) == len(model_kwargs)
         relations = [
             get_model_relations(
-                model, args, kwargs, include_deterministic=include_deterministic
+                model, args, kwargs, include_deterministic=render_deterministic
             )
             for args, kwargs in zip(model_args, model_kwargs)
         ]
