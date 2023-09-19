@@ -6,7 +6,7 @@ import os
 from collections import defaultdict
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Callable, Dict, List, Optional, Union, Collection
+from typing import Callable, Collection, Dict, List, Optional, Union
 
 import torch
 
@@ -546,6 +546,7 @@ def render_graph(
             # For param_nodes - No shape
             else:
                 shape = "plain"
+                rv_label = rv.replace("$params", "")
 
             # use different symbol for Deterministic site
             node_style = (
