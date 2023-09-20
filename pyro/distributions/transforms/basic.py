@@ -53,7 +53,7 @@ class LeakyReLUTransform(Transform):
     Bijective transform via the mapping :math:`y = \text{LeakyReLU}(x)`.
     """
     domain = constraints.real
-    codomain = constraints.positive
+    codomain = constraints.real
     bijective = True
     sign = +1
 
