@@ -175,7 +175,6 @@ def test_grad_phylo(num_leaves):
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_destins", [1, 2, 3, 4, 5])
 def test_mode_full(num_destins, dtype):
-    pytest.importorskip("lap")
     num_sources = 2 * num_destins
     logits = torch.randn(num_sources, num_destins, dtype=dtype) * 10
     d = dist.OneTwoMatching(logits)
@@ -189,7 +188,6 @@ def test_mode_full(num_destins, dtype):
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_leaves", [2, 3, 4, 5, 6])
 def test_mode_phylo(num_leaves, dtype):
-    pytest.importorskip("lap")
     logits, times = random_phylo_logits(num_leaves, dtype)
     d = dist.OneTwoMatching(logits)
     values = d.enumerate_support()
@@ -202,7 +200,6 @@ def test_mode_phylo(num_leaves, dtype):
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_destins", [3, 5, 8, 13, 100, 1000])
 def test_mode_full_smoke(num_destins, dtype):
-    pytest.importorskip("lap")
     num_sources = 2 * num_destins
     logits = torch.randn(num_sources, num_destins, dtype=dtype) * 10
     d = dist.OneTwoMatching(logits)
@@ -213,7 +210,6 @@ def test_mode_full_smoke(num_destins, dtype):
 @pytest.mark.parametrize("dtype", [torch.float, torch.double], ids=str)
 @pytest.mark.parametrize("num_leaves", [3, 5, 8, 13, 100, 1000])
 def test_mode_phylo_smoke(num_leaves, dtype):
-    pytest.importorskip("lap")
     logits, times = random_phylo_logits(num_leaves, dtype)
     d = dist.OneTwoMatching(logits, bp_iters=10)
     value = d.mode()
@@ -224,7 +220,6 @@ def test_mode_phylo_smoke(num_leaves, dtype):
 @pytest.mark.parametrize("num_destins", [2, 3, 4])
 @pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
 def test_sample_full(num_destins, dtype, bp_iters):
-    pytest.importorskip("lap")
     num_sources = 2 * num_destins
     logits = torch.randn(num_sources, num_destins, dtype=dtype) * 10
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
@@ -251,7 +246,6 @@ def test_sample_full(num_destins, dtype, bp_iters):
 @pytest.mark.parametrize("num_leaves", [3, 4, 5])
 @pytest.mark.parametrize("bp_iters", [None, BP_ITERS], ids=["exact", "bp"])
 def test_sample_phylo(num_leaves, dtype, bp_iters):
-    pytest.importorskip("lap")
     logits, times = random_phylo_logits(num_leaves, dtype)
     num_sources, num_destins = logits.shape
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)

@@ -160,19 +160,15 @@ class OneOneMatching(TorchDistribution):
     def mode(self):
         """
         Computes a maximum probability matching.
-
-        .. note:: This requires the `lap <https://pypi.org/project/lap/>`_
-            package and runs on CPU.
         """
         return maximum_weight_matching(self.logits)
 
 
 @torch.no_grad()
 def maximum_weight_matching(logits):
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=ImportWarning)
-        import lap
+    from scipy.optimize import linear_sum_assignment
+
     cost = -logits.cpu()
-    value = lap.lapjv(cost.numpy())[1]
+    value = linear_sum_assignment(cost.numpy())[1]
     value = torch.tensor(value, dtype=torch.long, device=logits.device)
     return value
