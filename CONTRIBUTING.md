@@ -44,7 +44,7 @@ To run a single test from the command line
 ```sh
 pytest -vs {path_to_test}::{test_name}
 # or in cuda mode
-CUDA_TEST=1 PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vs {path_to_test}::{test_name}
+CUDA_TEST=1 PYRO_DTYPE=torch.float64 PYRO_DEVICE=cuda pytest -vs {path_to_test}::{test_name}
 ```
 
 To ensure documentation builds correctly, run
