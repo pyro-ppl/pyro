@@ -856,8 +856,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     torch.set_default_dtype(torch.double if args.double else torch.float)
-    if args.double:
-        torch.set_default_dtype(torch.float64)
     if args.cuda:
         torch.set_default_device("cuda")
 
