@@ -11,7 +11,7 @@ import pyro
 
 DTYPE = getattr(torch, os.environ.get("PYRO_DTYPE", "float64"))
 torch.set_default_dtype(DTYPE)
-torch.set_default_device(os.environ.get("PYRO_DEVICE", "cuda"))
+torch.set_default_device(os.environ.get("PYRO_DEVICE", "cpu"))
 
 
 def pytest_configure(config):
