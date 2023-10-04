@@ -9,7 +9,8 @@ import torch
 
 import pyro
 
-torch.set_default_dtype(os.environ.get("PYRO_DTYPE", "torch.float64"))
+DTYPE = getattr(torch, os.environ.get("PYRO_DTYPE", "float64"))
+torch.set_default_dtype(DTYPE)
 torch.set_default_device(os.environ.get("PYRO_DEVICE", "cuda"))
 
 
