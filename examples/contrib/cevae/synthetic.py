@@ -45,7 +45,7 @@ def generate_data(args):
 
 def main(args):
     if args.cuda:
-        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        torch.set_default_device("cuda")
 
     # Generate synthetic data.
     pyro.set_rng_seed(args.seed)

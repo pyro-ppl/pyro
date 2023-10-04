@@ -31,7 +31,7 @@ from pyro.distributions import Gamma, Normal, Poisson
 from pyro.infer import SVI, TraceMeanField_ELBO
 from pyro.infer.autoguide import AutoDiagonalNormal, init_to_feasible
 
-torch.set_default_tensor_type("torch.FloatTensor")
+torch.set_default_dtype(torch.float32)
 pyro.util.set_rng_seed(0)
 
 

@@ -78,7 +78,7 @@ def main(args):
         if args.cuda:
             torch.cuda.set_device(hvd.local_rank())
     if args.cuda:
-        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        torch.set_default_device("cuda")
     device = torch.tensor(0).device
 
     if args.horovod:

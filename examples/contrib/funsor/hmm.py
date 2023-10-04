@@ -670,7 +670,7 @@ models = {
 
 def main(args):
     if args.cuda:
-        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        torch.set_default_device("cuda")
 
     logging.info("Loading data")
     data = poly.load_data(poly.JSB_CHORALES)

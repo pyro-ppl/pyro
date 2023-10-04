@@ -82,7 +82,7 @@ class Parameterized(PyroModule):
         >>> assert "b_scale_unconstrained" in dict(linear.named_parameters())
 
     Note that by default, data of a parameter is a float :class:`torch.Tensor`
-    (unless we use :func:`torch.set_default_tensor_type` to change default
+    (unless we use :func:`torch.set_default_dtype` to change default
     tensor type). To cast these parameters to a correct data type or GPU device,
     we can call methods such as :meth:`~torch.nn.Module.double` or
     :meth:`~torch.nn.Module.cuda`. See :class:`torch.nn.Module` for more

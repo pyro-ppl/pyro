@@ -69,11 +69,11 @@ requires_horovod = pytest.mark.skipif(
 )
 
 try:
-    import pytorch_lightning
+    import lightning
 except ImportError:
-    pytorch_lightning = None
+    lightning = None
 requires_lightning = pytest.mark.skipif(
-    pytorch_lightning is None, reason="pytorch lightning is not available"
+    lightning is None, reason="pytorch lightning is not available"
 )
 
 try:
@@ -91,23 +91,6 @@ def get_cpu_type(t):
 def get_gpu_type(t):
     assert t.__module__ == "torch"
     return getattr(torch.cuda, t.__name__)
-
-
-@contextlib.contextmanager
-def tensors_default_to(host):
-    """
-    Context manager to temporarily use Cpu or Cuda tensors in PyTorch.
-
-    :param str host: Either "cuda" or "cpu".
-    """
-    assert host in ("cpu", "cuda"), host
-    old_module, name = torch.Tensor().type().rsplit(".", 1)
-    new_module = "torch.cuda" if host == "cuda" else "torch"
-    torch.set_default_tensor_type("{}.{}".format(new_module, name))
-    try:
-        yield
-    finally:
-        torch.set_default_tensor_type("{}.{}".format(old_module, name))
 
 
 @contextlib.contextmanager

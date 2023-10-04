@@ -21,7 +21,7 @@ def random_mvn(batch_shape, dim, requires_grad=False):
 
 def main(args):
     if args.cuda:
-        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        torch.set_default_device("cuda")
 
     hidden_dim = args.hidden_dim
     obs_dim = args.obs_dim

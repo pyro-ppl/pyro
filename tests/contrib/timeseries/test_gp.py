@@ -40,7 +40,7 @@ from tests.common import assert_equal
 )
 @pytest.mark.parametrize("T", [11, 37])
 def test_timeseries_models(model, nu_statedim, obs_dim, T):
-    torch.set_default_tensor_type("torch.DoubleTensor")
+    torch.set_default_dtype(torch.float64)
     dt = 0.1 + torch.rand(1).item()
 
     if model == "lcmgp":
