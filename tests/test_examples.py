@@ -123,7 +123,10 @@ CPU_EXAMPLES = [
     "vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential",
     "vae/vae.py --num-epochs=1",
     "vae/vae_comparison.py --num-epochs=1",
-    "cvae/main.py --num-quadrant-inputs=1 --num-epochs=1",
+    pytest.param(
+        "cvae/main.py --num-quadrant-inputs=1 --num-epochs=1",
+        marks=pytest.mark.skip(reason="https://github.com/pyro-ppl/pyro/issues/3273"),
+    ),
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=0 ",
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 ",
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 ",
