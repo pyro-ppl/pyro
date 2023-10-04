@@ -31,6 +31,7 @@ from tests.common import assert_equal, xfail_if_not_implemented, xfail_param
 
 logger = logging.getLogger(__name__)
 
+
 def DiffTrace_ELBO(*args, **kwargs):
     return Trace_ELBO(*args, **kwargs).differentiable_loss
 
@@ -229,7 +230,7 @@ def test_subsample_gradient(
     "reparameterized,has_rsample",
     [(True, None), (True, False), (True, True), (False, None)],
     ids=["reparam", "reparam-False", "reparam-True", "nonreparam"],
-    )
+)
 @pytest.mark.parametrize(
     "Elbo,local_samples",
     [
@@ -242,7 +243,12 @@ def test_subsample_gradient(
     ],
 )
 def test_mask_gradient(
-    Elbo, reparameterized, has_rsample, local_samples, mask, with_x_unobserved,
+    Elbo,
+    reparameterized,
+    has_rsample,
+    local_samples,
+    mask,
+    with_x_unobserved,
 ):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
@@ -286,9 +292,7 @@ def test_mask_gradient(
     for _ in range(accumulation):
         inference = SVI(model, guide, optim, loss=elbo)
         with xfail_if_not_implemented():
-            inference.loss_and_grads(
-                model, guide, data=data, mask=torch.tensor(mask)
-            )
+            inference.loss_and_grads(model, guide, data=data, mask=torch.tensor(mask))
     params = dict(pyro.get_param_store().named_parameters())
     actual_grads = {
         name: param.grad.detach().cpu().numpy() / accumulation
@@ -298,8 +302,8 @@ def test_mask_gradient(
     # grad(loc) = (n+1) * loc - (x1 + ... + xn)
     # grad(scale) = (n+1) * scale - 1 / scale
     expected_grads = {
-        "loc": sum(mask) + 1. - data[mask].sum(0, keepdim=True).numpy(),
-        "scale": sum(mask) + 1 - np.ones(1)
+        "loc": sum(mask) + 1.0 - data[mask].sum(0, keepdim=True).numpy(),
+        "scale": sum(mask) + 1 - np.ones(1),
     }
     for name in sorted(params):
         logger.info("expected {} = {}".format(name, expected_grads[name]))
