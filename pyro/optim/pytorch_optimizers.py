@@ -34,11 +34,7 @@ for _name, _Optim in torch.optim.__dict__.items():
     del _PyroOptim
 
 # Load all schedulers from PyTorch
-# breaking change in torch >= 1.14: LRScheduler is new base class
-if hasattr(torch.optim.lr_scheduler, "LRScheduler"):
-    _torch_scheduler_base = torch.optim.lr_scheduler.LRScheduler  # type: ignore
-else:  # for torch < 1.13, _LRScheduler is base class
-    _torch_scheduler_base = torch.optim.lr_scheduler._LRScheduler  # type: ignore
+_torch_scheduler_base = torch.optim.lr_scheduler.LRScheduler  # type: ignore
 
 for _name, _Optim in torch.optim.lr_scheduler.__dict__.items():
     if not isinstance(_Optim, type):
