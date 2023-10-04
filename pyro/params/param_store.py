@@ -9,18 +9,17 @@ from typing import (
     Callable,
     Dict,
     ItemsView,
-    Iterable,
     Iterator,
     KeysView,
     Optional,
     Tuple,
-    TypedDict,
     Union,
 )
 
 import torch
 from torch.distributions import constraints, transform_to
 from torch.serialization import MAP_LOCATION
+from typing_extensions import TypedDict
 
 
 class StateDict(TypedDict):
@@ -61,9 +60,15 @@ class ParamStoreDict:
         """
         initialize ParamStore data structures
         """
-        self._params = {}  # dictionary from param name to param
-        self._param_to_name = {}  # dictionary from unconstrained param to param name
-        self._constraints = {}  # dictionary from param name to constraint object
+        self._params: Dict[
+            str, torch.Tensor
+        ] = {}  # dictionary from param name to param
+        self._param_to_name: Dict[
+            torch.Tensor, str
+        ] = {}  # dictionary from unconstrained param to param name
+        self._constraints: Dict[
+            str, constraints.Constraint
+        ] = {}  # dictionary from param name to constraint object
 
     def clear(self) -> None:
         """
@@ -73,7 +78,7 @@ class ParamStoreDict:
         self._param_to_name = {}
         self._constraints = {}
 
-    def items(self) -> Iterable[Tuple[str, torch.Tensor]]:
+    def items(self) -> Iterator[Tuple[str, torch.Tensor]]:
         """
         Iterate over ``(name, constrained_param)`` pairs. Note that `constrained_param` is
         in the constrained (i.e. user-facing) space.
@@ -87,7 +92,7 @@ class ParamStoreDict:
         """
         return self._params.keys()
 
-    def values(self) -> Iterable[torch.Tensor]:
+    def values(self) -> Iterator[torch.Tensor]:
         """
         Iterate over constrained parameter values.
         """
@@ -125,8 +130,8 @@ class ParamStoreDict:
 
         # compute the constrained value
         constraint = self._constraints[name]
-        constrained_value = transform_to(constraint)(unconstrained_value)
-        constrained_value.unconstrained = weakref.ref(unconstrained_value)
+        constrained_value: torch.Tensor = transform_to(constraint)(unconstrained_value)
+        constrained_value.unconstrained = weakref.ref(unconstrained_value)  # type: ignore[attr-defined]
 
         return constrained_value
 
@@ -215,7 +220,7 @@ class ParamStoreDict:
             "ParamStore.replace_param() is deprecated; use .__setitem__() instead.",
             DeprecationWarning,
         )
-        assert self._params[param_name] is old_param.unconstrained()
+        assert self._params[param_name] is old_param.unconstrained()  # type: ignore[attr-defined]
         self[param_name] = new_param
 
     def get_param(
@@ -256,7 +261,7 @@ class ParamStoreDict:
         pattern = re.compile(name)
         return {name: self[name] for name in self if pattern.match(name)}
 
-    def param_name(self, p: torch.Tensor) -> str:
+    def param_name(self, p: torch.Tensor) -> Optional[str]:
         """
         Get parameter name from parameter
 
@@ -278,7 +283,7 @@ class ParamStoreDict:
         # Remove weakrefs in preparation for pickling.
         for param in params.values():
             param.__dict__.pop("unconstrained", None)
-        state = {"params": params, "constraints": self._constraints.copy()}
+        state: StateDict = {"params": params, "constraints": self._constraints.copy()}
         return state
 
     def set_state(self, state: StateDict) -> None:

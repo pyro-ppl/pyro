@@ -162,7 +162,7 @@ class Newton(MultiOptimizer):
     def get_step(self, loss: torch.Tensor, params: Dict):
         updated_values = {}
         for name, value in params.items():
-            trust_radius = self.trust_radii.get(name)  # type: ignore
+            trust_radius = self.trust_radii.get(name)
             updated_value, cov = newton_step(loss, value, trust_radius)
             updated_values[name] = updated_value
         return updated_values

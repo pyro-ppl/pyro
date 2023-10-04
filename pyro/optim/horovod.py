@@ -34,7 +34,7 @@ class HorovodOptimizer(PyroOptim):
         param_name = pyro.get_param_store().param_name
 
         def optim_constructor(params, **pt_kwargs) -> Optimizer:
-            import horovod.torch as hvd  # type: ignore
+            import horovod.torch as hvd
 
             pt_optim = pyro_optim.pt_optim_constructor(params, **pt_kwargs)  # type: ignore
             named_parameters = [(param_name(p), p) for p in params]
