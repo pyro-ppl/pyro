@@ -41,7 +41,7 @@ References
 """
 
 
-torch.set_default_tensor_type("torch.FloatTensor")
+torch.set_default_dtype(torch.float32)
 
 
 def dot(X, Z):

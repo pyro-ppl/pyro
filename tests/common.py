@@ -101,13 +101,12 @@ def tensors_default_to(host):
     :param str host: Either "cuda" or "cpu".
     """
     assert host in ("cpu", "cuda"), host
-    old_module, name = torch.Tensor().type().rsplit(".", 1)
-    new_module = "torch.cuda" if host == "cuda" else "torch"
-    torch.set_default_tensor_type("{}.{}".format(new_module, name))
+    old_host = torch.Tensor().device
+    torch.set_default_device(host)
     try:
         yield
     finally:
-        torch.set_default_tensor_type("{}.{}".format(old_module, name))
+        torch.set_default_device(old_host)
 
 
 @contextlib.contextmanager

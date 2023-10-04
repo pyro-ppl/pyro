@@ -418,6 +418,6 @@ if __name__ == "__main__":
     torch.multiprocessing.set_sharing_strategy("file_system")
 
     if args.cuda:
-        torch.set_default_tensor_type(torch.cuda.FloatTensor)
+        torch.set_default_device("cuda")
 
     main(args)

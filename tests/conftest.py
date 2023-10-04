@@ -9,7 +9,9 @@ import torch
 
 import pyro
 
-torch.set_default_tensor_type(os.environ.get("PYRO_TENSOR_TYPE", "torch.DoubleTensor"))
+DTYPE = getattr(torch, os.environ.get("PYRO_DTYPE", "float64"))
+torch.set_default_dtype(DTYPE)
+torch.set_default_device(os.environ.get("PYRO_DEVICE", "cpu"))
 
 
 def pytest_configure(config):
