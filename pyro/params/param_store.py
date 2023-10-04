@@ -273,9 +273,7 @@ class ParamStoreDict:
     # -------------------------------------------------------------------------------
     # Persistence interface
 
-    def get_state(
-        self,
-    ) -> StateDict:
+    def get_state(self) -> StateDict:
         """
         Get the ParamStore state.
         """
