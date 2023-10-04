@@ -158,7 +158,7 @@ class ParamStoreDict:
     def setdefault(
         self,
         name: str,
-        init_constrained_value: Union[torch.Tensor, Callable[..., torch.Tensor]],
+        init_constrained_value: Union[torch.Tensor, Callable[[], torch.Tensor]],
         constraint: constraints.Constraint = constraints.real,
     ) -> torch.Tensor:
         """
