@@ -6,7 +6,6 @@ import warnings
 import weakref
 from contextlib import contextmanager
 from typing import (
-    TYPE_CHECKING,
     Callable,
     Dict,
     ItemsView,
@@ -15,19 +14,18 @@ from typing import (
     KeysView,
     Optional,
     Tuple,
-    TypeAlias,
+    TypedDict,
     Union,
 )
 
 import torch
 from torch.distributions import constraints, transform_to
+from torch.serialization import MAP_LOCATION
 
-if TYPE_CHECKING:
-    from torch.serialization import MAP_LOCATION
 
-    StateType: TypeAlias = Dict[
-        str, Union[Dict[str, torch.Tensor], Dict[str, constraints.Constraint]]
-    ]
+class StateDict(TypedDict):
+    params: Dict[str, torch.Tensor]
+    constraints: Dict[str, constraints.Constraint]
 
 
 class ParamStoreDict:
@@ -272,7 +270,7 @@ class ParamStoreDict:
 
     def get_state(
         self,
-    ) -> StateType:
+    ) -> StateDict:
         """
         Get the ParamStore state.
         """
@@ -283,7 +281,7 @@ class ParamStoreDict:
         state = {"params": params, "constraints": self._constraints.copy()}
         return state
 
-    def set_state(self, state: StateType) -> None:
+    def set_state(self, state: StateDict) -> None:
         """
         Set the ParamStore state using state from a previous :meth:`get_state` call
         """
@@ -334,7 +332,7 @@ class ParamStoreDict:
         self.set_state(state)
 
     @contextmanager
-    def scope(self, state: Optional[StateType] = None) -> Iterator[StateType]:
+    def scope(self, state: Optional[StateDict] = None) -> Iterator[StateDict]:
         """
         Context manager for using multiple parameter stores within the same process.
 
