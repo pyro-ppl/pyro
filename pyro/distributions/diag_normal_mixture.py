@@ -46,6 +46,7 @@ class MixtureOfDiagNormals(TorchDistribution):
         "coord_scale": constraints.positive,
         "component_logits": constraints.real,
     }
+    support = constraints.real_vector
 
     def __init__(self, locs, coord_scale, component_logits):
         self.batch_mode = locs.dim() > 2
