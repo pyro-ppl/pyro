@@ -134,7 +134,7 @@ class _MixDiagNormalSample(Function):
     @staticmethod
     def forward(ctx, locs, scales, component_logits, pis, which, noise_shape):
         dim = scales.size(-1)
-        white = locs.new(noise_shape).normal_()
+        white = locs.new_empty(noise_shape).normal_()
         n_unsqueezes = locs.dim() - which.dim()
         for _ in range(n_unsqueezes):
             which = which.unsqueeze(-1)
