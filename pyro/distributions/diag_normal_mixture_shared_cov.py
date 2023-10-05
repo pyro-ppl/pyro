@@ -135,7 +135,7 @@ class _MixDiagNormalSharedCovarianceSample(Function):
     @staticmethod
     def forward(ctx, locs, coord_scale, component_logits, pis, which, noise_shape):
         dim = coord_scale.size(-1)
-        white = torch.randn(noise_shape, dtype=locs.dtype, device=locs.device)
+        white = locs.new_empty(noise_shape).normal_()
         n_unsqueezes = locs.dim() - which.dim()
         for _ in range(n_unsqueezes):
             which = which.unsqueeze(-1)
