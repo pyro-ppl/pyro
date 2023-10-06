@@ -137,12 +137,10 @@ setup(
         "horovod": ["horovod[pytorch]>=0.19"],
         "lightning": ["lightning"],
         "funsor": [
-            # This must be a released version when Pyro is released.
-            # "funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@7bb52d0eae3046d08a20d1b288544e1a21b4f461",
             "funsor[torch]==0.4.4",
         ],
     },
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     keywords="machine learning statistics probabilistic programming bayesian modeling pytorch",
     license="Apache 2.0",
     classifiers=[
@@ -152,9 +150,10 @@ setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: POSIX :: Linux",
         "Operating System :: MacOS :: MacOS X",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
     ],
     # yapf
 )
