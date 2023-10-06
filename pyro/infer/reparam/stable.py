@@ -34,7 +34,7 @@ class LatentStableReparam(Reparam):
 
     [1] J.P. Nolan (2017).
         Stable Distributions: Models for Heavy Tailed Data.
-        http://fs2.american.edu/jpnolan/www/stable/chap1.pdf
+        https://edspace.american.edu/jpnolan/wp-content/uploads/sites/1720/2020/09/Chap1.pdf
     """
 
     def apply(self, msg):

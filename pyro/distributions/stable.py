@@ -133,7 +133,7 @@ class Stable(TorchDistribution):
         Simulating Skewed Stable Random Variables.
     [4] J.P. Nolan (2017).
         Stable Distributions: Models for Heavy Tailed Data.
-        http://fs2.american.edu/jpnolan/www/stable/chap1.pdf
+        https://edspace.american.edu/jpnolan/wp-content/uploads/sites/1720/2020/09/Chap1.pdf
 
     :param Tensor stability: Levy stability parameter :math:`\alpha\in(0,2]` .
     :param Tensor skew: Skewness :math:`\beta\in[-1,1]` .
