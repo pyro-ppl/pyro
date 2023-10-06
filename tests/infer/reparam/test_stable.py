@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import logging
+
 import pytest
 import torch
 from scipy.stats import ks_2samp
@@ -9,17 +11,21 @@ from torch.autograd import grad
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
+from pyro.distributions import constraints
 from pyro.distributions.torch_distribution import MaskedDistribution
-from pyro.infer import Trace_ELBO
+from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoNormal
 from pyro.infer.reparam import (
     LatentStableReparam,
     StableReparam,
     SymmetricStableReparam,
 )
-from tests.common import assert_close, xfail_param
+from pyro.optim import ClippedAdam
+from tests.common import assert_close
 
 from .util import check_init_reparam
+
+logger = logging.getLogger(__name__)
 
 
 # Test helper to extract a few absolute moments from univariate samples.
@@ -30,15 +36,7 @@ def get_moments(x):
     return torch.cat([x.mean(0, keepdim=True), (x - points).abs().mean(1)])
 
 
-@pytest.mark.parametrize(
-    "shape",
-    [
-        (),
-        xfail_param(4, reason="flaky, https://github.com/pyro-ppl/pyro/issues/3214"),
-        (2, 3),
-    ],
-    ids=str,
-)
+@pytest.mark.parametrize("shape", [(), (4,), (2, 3)], ids=str)
 @pytest.mark.parametrize("Reparam", [LatentStableReparam, StableReparam])
 def test_stable(Reparam, shape):
     stability = torch.empty(shape).uniform_(1.5, 2.0).requires_grad_()
@@ -165,3 +163,100 @@ def test_init(stability, skew, Reparam):
         return pyro.sample("x", dist.Stable(stability, skew))
 
     check_init_reparam(model, Reparam())
+
+
+@pytest.mark.stage("integration", "integration_batch_1")
+@pytest.mark.parametrize(
+    "stability, skew, scale, loc",
+    [
+        (1.9, 0.0, 2.0, 1.0),
+        (0.8, 0.0, 3.0, 2.0),
+    ],
+)
+def test_symmetric_stable_mle(stability, skew, scale, loc):
+    # Regression test for https://github.com/pyro-ppl/pyro/issues/3280
+    assert skew == 0.0
+    data = dist.Stable(stability, skew, scale, loc).sample([10000])
+
+    @poutine.reparam(config={"x": SymmetricStableReparam()})
+    def mle_model():
+        a = pyro.param("a", torch.tensor(1.9), constraint=constraints.interval(0, 2))
+        b = 0.0
+        c = pyro.param("c", torch.tensor(1.0), constraint=constraints.positive)
+        d = pyro.param("d", torch.tensor(0.0), constraint=constraints.real)
+        with pyro.plate("data", len(data)):
+            pyro.sample("x", dist.Stable(a, b, c, d), obs=data)
+
+    num_steps = 1001
+    guide = AutoNormal(mle_model)
+    optim = ClippedAdam({"clip_norm": 100, "lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
+    svi = SVI(mle_model, guide, optim, Trace_ELBO())
+    for step in range(num_steps):
+        loss = svi.step() / len(data)
+        if step % 100 == 0:
+            logger.info("step %d loss = %g", step, loss)
+
+    # Check loss against a true model.
+    @poutine.reparam(config={"x": SymmetricStableReparam()})
+    def true_model():
+        with pyro.plate("data", len(data)):
+            pyro.sample("x", dist.Stable(stability, skew, scale, loc), obs=data)
+
+    actual_loss = Trace_ELBO().loss(mle_model, guide) / len(data)
+    expected_loss = Trace_ELBO().loss(true_model, guide) / len(data)
+    assert_close(actual_loss, expected_loss, atol=0.33)
+
+    # Check parameter estimates.
+    actual = {name: float(pyro.param(name).data) for name in "acd"}
+    assert_close(actual["a"], stability, atol=0.1)
+    assert_close(actual["c"], scale, atol=0.1, rtol=0.1)
+    assert_close(actual["d"], loc, atol=0.1)
+
+
+@pytest.mark.stage("integration", "integration_batch_1")
+@pytest.mark.parametrize(
+    "stability, skew, scale, loc",
+    [
+        (1.9, 0.0, 2.0, 1.0),
+        (0.8, 0.0, 3.0, 2.0),
+        (1.8, 0.8, 4.0, 3.0),
+    ],
+)
+def test_stable_mle(stability, skew, scale, loc):
+    # Regression test for https://github.com/pyro-ppl/pyro/issues/3280
+    data = dist.Stable(stability, skew, scale, loc).sample([10000])
+
+    @poutine.reparam(config={"x": StableReparam()})
+    def mle_model():
+        a = pyro.param("a", torch.tensor(1.9), constraint=constraints.interval(0, 2))
+        b = pyro.param("b", torch.tensor(0.0), constraint=constraints.interval(-1, 1))
+        c = pyro.param("c", torch.tensor(1.0), constraint=constraints.positive)
+        d = pyro.param("d", torch.tensor(0.0), constraint=constraints.real)
+        with pyro.plate("data", len(data)):
+            pyro.sample("x", dist.Stable(a, b, c, d), obs=data)
+
+    num_steps = 1001
+    guide = AutoNormal(mle_model)
+    optim = ClippedAdam({"clip_norm": 100, "lr": 0.05, "lrd": 0.1 ** (1 / num_steps)})
+    svi = SVI(mle_model, guide, optim, Trace_ELBO())
+    for step in range(num_steps):
+        loss = svi.step() / len(data)
+        if step % 100 == 0:
+            logger.info("step %d loss = %g", step, loss)
+
+    # Check loss against a true model.
+    @poutine.reparam(config={"x": StableReparam()})
+    def true_model():
+        with pyro.plate("data", len(data)):
+            pyro.sample("x", dist.Stable(stability, skew, scale, loc), obs=data)
+
+    actual_loss = Trace_ELBO().loss(mle_model, guide) / len(data)
+    expected_loss = Trace_ELBO().loss(true_model, guide) / len(data)
+    assert_close(actual_loss, expected_loss, atol=0.1)
+
+    # Check parameter estimates.
+    actual = {name: float(pyro.param(name).data) for name in "abcd"}
+    assert_close(actual["a"], stability, atol=0.1)
+    assert_close(actual["b"], skew, atol=0.1)
+    assert_close(actual["c"], scale, atol=0.1, rtol=0.1)
+    assert_close(actual["d"], loc, atol=0.1)

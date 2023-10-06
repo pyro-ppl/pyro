@@ -218,7 +218,7 @@ class StableReparam(Reparam):
         t_scale = skew_abs.pow(a_inv)
         s_scale = (1 - skew_abs).pow(a_inv)
         shift = _safe_shift(a, fn.skew, t_scale, skew_abs)
-        loc = fn.loc + fn.scale * (fn.skew.sign() * t_scale * t + shift)
+        loc = fn.loc + fn.scale * (fn.skew.detach().sign() * t_scale * t + shift)
         scale = fn.scale * s_scale * z.sqrt() * (math.pi / 4 * a).cos().pow(a_inv)
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
 
@@ -229,7 +229,7 @@ class StableReparam(Reparam):
 
 def _unsafe_shift(a, skew, t_scale):
     # At a=1 the lhs has a root and the rhs has an asymptote.
-    return (skew.sign() * t_scale - skew) * (math.pi / 2 * a).tan()
+    return (skew.detach().sign() * t_scale - skew) * (math.pi / 2 * a).tan()
 
 
 def _safe_shift(a, skew, t_scale, skew_abs):
