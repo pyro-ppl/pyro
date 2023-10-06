@@ -142,7 +142,7 @@ setup(
             "funsor[torch]==0.4.4",
         ],
     },
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     keywords="machine learning statistics probabilistic programming bayesian modeling pytorch",
     license="Apache 2.0",
     classifiers=[
@@ -152,7 +152,6 @@ setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: POSIX :: Linux",
         "Operating System :: MacOS :: MacOS X",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
     ],
