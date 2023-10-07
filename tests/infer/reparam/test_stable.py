@@ -15,6 +15,7 @@ from pyro.distributions import constraints
 from pyro.distributions.torch_distribution import MaskedDistribution
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoNormal
+from pyro.infer.mcmc import MCMC, NUTS
 from pyro.infer.reparam import (
     LatentStableReparam,
     StableReparam,
@@ -256,6 +257,40 @@ def test_stable_mle(stability, skew, scale, loc):
 
     # Check parameter estimates.
     actual = {name: float(pyro.param(name).data) for name in "abcd"}
+    assert_close(actual["a"], stability, atol=0.1)
+    assert_close(actual["b"], skew, atol=0.1)
+    assert_close(actual["c"], scale, atol=0.1, rtol=0.1)
+    assert_close(actual["d"], loc, atol=0.1)
+
+
+@pytest.mark.stage("integration", "integration_batch_1")
+@pytest.mark.parametrize(
+    "stability, skew, scale, loc",
+    [
+        (1.9, 0.0, 2.0, 1.0),
+        (0.8, 0.0, 3.0, 2.0),
+        (1.8, 0.8, 4.0, 3.0),
+    ],
+)
+def test_stable_mcmc(stability, skew, scale, loc):
+    # Regression test for https://github.com/pyro-ppl/pyro/issues/3280
+    data = dist.Stable(stability, skew, scale, loc).sample([1000])
+
+    @poutine.reparam(config={"x": StableReparam()})
+    def model():
+        with poutine.mask(mask=False):  # flat prior
+            a = pyro.sample("a", dist.Uniform(0, 2))
+            b = pyro.sample("b", dist.Uniform(-1, 1))
+            c = pyro.sample("c", dist.Exponential(1))
+            d = pyro.sample("d", dist.Normal(0, 1))
+        with pyro.plate("data", len(data)):
+            pyro.sample("x", dist.Stable(a, b, c, d), obs=data)
+
+    kernel = NUTS(model)
+    mcmc = MCMC(kernel, num_samples=400, warmup_steps=200)
+    mcmc.run()
+    samples = mcmc.get_samples()
+    actual = {k: v.mean().item() for k, v in samples.items()}
     assert_close(actual["a"], stability, atol=0.1)
     assert_close(actual["b"], skew, atol=0.1)
     assert_close(actual["c"], scale, atol=0.1, rtol=0.1)
