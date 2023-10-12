@@ -1,6 +1,8 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+import os
+
 import pyroapi
 
 from pyro.contrib.funsor.handlers import condition, do, markov, vectorized_markov
@@ -36,6 +38,8 @@ pyroapi.register_backend(
         "pyro": "pyro.contrib.funsor",
     },
 )
+
+os.environ["PYRO_FUNSOR_ACTIVE"] = "1"  # TODO better toggle
 
 __all__ = [
     "clear_param_store",

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
+import os
+from collections import OrderedDict
 from typing import Dict
 
 from pyro.params.param_store import (  # noqa: F401
@@ -14,6 +16,10 @@ _PYRO_STACK = []
 
 # the global ParamStore
 _PYRO_PARAM_STORE = ParamStoreDict()
+
+
+def _is_funsor_active() -> bool:
+    return "PYRO_FUNSOR_ACTIVE" in os.environ
 
 
 class _DimAllocator:
@@ -62,6 +68,16 @@ class _DimAllocator:
                 )
             )
         self._stack[-1 - dim] = name
+
+        if _is_funsor_active():
+            from pyro.contrib.funsor.handlers.runtime import (
+                _DIM_STACK,
+                DimRequest,
+                DimType,
+            )
+
+            _DIM_STACK.allocate({name: DimRequest(dim, DimType.VISIBLE)})
+
         return dim
 
     def free(self, name, dim):
@@ -73,6 +89,11 @@ class _DimAllocator:
         self._stack[free_idx] = None
         while self._stack and self._stack[-1] is None:
             self._stack.pop()
+
+        if _is_funsor_active():
+            from pyro.contrib.funsor.handlers.runtime import _DIM_STACK
+
+            del _DIM_STACK.global_frame[name]
 
 
 # Handles placement of plate dimensions
@@ -99,6 +120,12 @@ class _EnumAllocator:
         self.next_available_dim = first_available_dim
         self.next_available_id = 0
         self.dim_to_id = {}  # only the global ids
+
+        if _is_funsor_active():
+            from pyro.contrib.funsor.handlers.runtime import _DIM_STACK, StackFrame
+
+            _DIM_STACK.set_first_available_dim(first_available_dim)
+            self.global_frame = StackFrame(OrderedDict(), OrderedDict())
 
     def allocate(self, scope_dims=None):
         """
@@ -132,7 +159,37 @@ class _EnumAllocator:
             while dim in scope_dims:
                 dim -= 1
 
+        if _is_funsor_active():
+            from pyro.contrib.funsor.handlers.runtime import (
+                _DIM_STACK,
+                DimRequest,
+                DimType,
+            )
+
+            dim_ = dim
+            name = f"_enum_dim_{id_}"
+            if scope_dims is None:
+                dim = _DIM_STACK.allocate({name: DimRequest(None, DimType.GLOBAL)})[
+                    name
+                ]
+                self.dim_to_id[dim] = self.dim_to_id.pop(dim_)
+            else:
+                dim = _DIM_STACK.allocate({name: DimRequest(None, DimType.LOCAL)})[name]
+                assert dim not in scope_dims
+
         return dim, id_
+
+    def restore_globals(self):
+        if _is_funsor_active():
+            from pyro.contrib.funsor.handlers.runtime import _DIM_STACK
+
+            _DIM_STACK.push_global(self.global_frame)
+
+    def remove_globals(self):
+        if _is_funsor_active():
+            from pyro.contrib.funsor.handlers.runtime import _DIM_STACK
+
+            self.global_frame = _DIM_STACK.pop_global()
 
 
 # Handles placement of enumeration dimensions

@@ -9,7 +9,7 @@ from pyro.ops.indexing import Vindex
 from pyro.util import ignore_jit_warnings
 
 from .messenger import Messenger
-from .runtime import _ENUM_ALLOCATOR
+from .runtime import _ENUM_ALLOCATOR, _is_funsor_active
 
 
 def _tmc_mixture_sample(msg):
@@ -136,6 +136,10 @@ class EnumMessenger(Messenger):
             first_available_dim is None or first_available_dim < 0
         ), first_available_dim
         self.first_available_dim = first_available_dim
+        if _is_funsor_active():
+            from pyro.contrib.funsor.handlers.named_messenger import NamedMessenger
+
+            self._funsor_named = NamedMessenger()
         super().__init__()
 
     def __enter__(self):
@@ -144,7 +148,15 @@ class EnumMessenger(Messenger):
         self._markov_depths = {}  # site name -> depth (nonnegative integer)
         self._param_dims = {}  # site name -> (enum dim -> unique id)
         self._value_dims = {}  # site name -> (enum dim -> unique id)
-        return super().__enter__()
+        result = super().__enter__()
+        if hasattr(self, "_funsor_named"):
+            self._funsor_named.__enter__()
+        return result
+
+    def __exit__(self, *args):
+        if hasattr(self, "_funsor_named"):
+            self._funsor_named.__exit__(*args)
+        return super().__exit__(*args)
 
     @ignore_jit_warnings()
     def _pyro_sample(self, msg):

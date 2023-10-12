@@ -99,14 +99,12 @@ class DimStack:
         self._global_stack.append(frame)
 
     def pop_global(self):
-        assert self._global_stack, "cannot pop the global frame"
         return self._global_stack.pop()
 
     def push_iter(self, frame):
         self._iter_stack.append(frame)
 
     def pop_iter(self):
-        assert self._iter_stack, "cannot pop the global frame"
         return self._iter_stack.pop()
 
     def push_local(self, frame):
