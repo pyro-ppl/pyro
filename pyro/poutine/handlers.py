@@ -80,7 +80,7 @@ from .uncondition_messenger import UnconditionMessenger
 
 
 def _make_handler(msngr_cls):
-    def decorator(func):
+    def handler_decorator(func):
         def handler(fn=None, *args, **kwargs):
             if fn is not None and not (
                 callable(fn) or isinstance(fn, collections.abc.Iterable)
@@ -104,12 +104,12 @@ def _make_handler(msngr_cls):
         handler.__name__ = func.__name__
         return handler
 
-    return decorator
+    return handler_decorator
 
 
 @_make_handler(BlockMessenger)
 def block(
-    fn,
+    fn=None,
     hide_fn=None,
     expose_fn=None,
     hide_all=True,
@@ -123,12 +123,12 @@ def block(
 
 
 @_make_handler(BroadcastMessenger)
-def broadcast(fn):
+def broadcast(fn=None):
     ...
 
 
 @_make_handler(CollapseMessenger)
-def collapse(fn, *args, **kwargs):
+def collapse(fn=None, *args, **kwargs):
     ...
 
 
@@ -143,7 +143,7 @@ def do(fn, data):
 
 
 @_make_handler(EnumMessenger)
-def enum(fn, first_available_dim=None):
+def enum(fn=None, first_available_dim=None):
     ...
 
 
@@ -173,7 +173,7 @@ def reparam(fn, config):
 
 
 @_make_handler(ReplayMessenger)
-def replay(fn, trace=None, params=None):
+def replay(fn=None, trace=None, params=None):
     ...
 
 
@@ -188,12 +188,12 @@ def seed(fn, rng_seed):
 
 
 @_make_handler(TraceMessenger)
-def trace(fn, graph_type=None, param_only=None):
+def trace(fn=None, graph_type=None, param_only=None):
     ...
 
 
 @_make_handler(UnconditionMessenger)
-def uncondition(fn):
+def uncondition(fn=None):
     ...
 
 

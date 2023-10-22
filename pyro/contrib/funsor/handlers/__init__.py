@@ -17,21 +17,54 @@ from pyro.poutine.handlers import _make_handler
 
 from .enum_messenger import EnumMessenger, queue  # noqa: F401
 from .named_messenger import MarkovMessenger, NamedMessenger
-from .plate_messenger import PlateMessenger, VectorizedMarkovMessenger
+from .plate_messenger import VectorizedMarkovMessenger
 from .replay_messenger import ReplayMessenger
 from .trace_messenger import TraceMessenger
 
-_msngrs = [
-    EnumMessenger,
-    MarkovMessenger,
-    NamedMessenger,
-    PlateMessenger,
-    ReplayMessenger,
-    TraceMessenger,
-    VectorizedMarkovMessenger,
-]
 
-for _msngr_cls in _msngrs:
-    _handler_name, _handler = _make_handler(_msngr_cls)
-    _handler.__module__ = __name__
-    locals()[_handler_name] = _handler
+@_make_handler(EnumMessenger)
+def enum(fn=None, first_available_dim=None):
+    ...
+
+
+enum.__module__ = __name__
+
+
+@_make_handler(MarkovMessenger)
+def markov(fn=None, history=1, keep=False):
+    ...
+
+
+markov.__module__ = __name__
+
+
+@_make_handler(NamedMessenger)
+def named(fn=None, first_available_dim=None):
+    ...
+
+
+named.__module__ = __name__
+
+
+@_make_handler(ReplayMessenger)
+def replay(fn=None, trace=None, params=None):
+    ...
+
+
+replay.__module__ = __name__
+
+
+@_make_handler(TraceMessenger)
+def trace(fn=None, graph_type=None, param_only=None, pack_online=True):
+    ...
+
+
+trace.__module__ = __name__
+
+
+@_make_handler(VectorizedMarkovMessenger)
+def vectorized_markov(fn=None, name=None, size=None, dim=None, history=1):
+    ...
+
+
+vectorized_markov.__module__ = __name__
