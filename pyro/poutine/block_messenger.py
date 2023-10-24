@@ -110,7 +110,7 @@ class BlockMessenger(Messenger):
     :param list hide: list of site names to hide
     :param list expose: list of site names to be exposed while all others hidden
     :param list hide_types: list of site types to be hidden
-    :param lits expose_types: list of site types to be exposed while all others hidden
+    :param list expose_types: list of site types to be exposed while all others hidden
     :returns: stochastic function decorated with a :class:`~pyro.poutine.block_messenger.BlockMessenger`
     """
 

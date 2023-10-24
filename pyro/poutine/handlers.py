@@ -81,6 +81,7 @@ from .uncondition_messenger import UnconditionMessenger
 
 def _make_handler(msngr_cls, module=None):
     def handler_decorator(func):
+        @functools.wraps(func)
         def handler(fn=None, *args, **kwargs):
             if fn is not None and not (
                 callable(fn) or isinstance(fn, collections.abc.Iterable)
@@ -101,7 +102,6 @@ def _make_handler(msngr_cls, module=None):
             )
             + (msngr_cls.__doc__ if msngr_cls.__doc__ else "")
         )
-        handler.__name__ = func.__name__
         if module is not None:
             handler.__module__ = module
         return handler
