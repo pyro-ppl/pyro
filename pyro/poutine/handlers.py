@@ -51,7 +51,6 @@ in just a few lines of code::
 
 import collections
 import functools
-import re
 
 from pyro.poutine import util
 
@@ -79,68 +78,130 @@ from .uncondition_messenger import UnconditionMessenger
 # Begin primitive operations
 ############################################
 
-_msngrs = [
-    BlockMessenger,
-    BroadcastMessenger,
-    CollapseMessenger,
-    ConditionMessenger,
-    DoMessenger,
-    EnumMessenger,
-    EscapeMessenger,
-    InferConfigMessenger,
-    LiftMessenger,
-    MaskMessenger,
-    ReparamMessenger,
-    ReplayMessenger,
-    ScaleMessenger,
-    SeedMessenger,
-    TraceMessenger,
-    UnconditionMessenger,
-    SubstituteMessenger,
-]
 
-
-def _make_handler(msngr_cls):
-    _re1 = re.compile("(.)([A-Z][a-z]+)")
-    _re2 = re.compile("([a-z0-9])([A-Z])")
-
-    def handler(fn=None, *args, **kwargs):
-        if fn is not None and not (
-            callable(fn) or isinstance(fn, collections.abc.Iterable)
-        ):
-            raise ValueError(
-                "{} is not callable, did you mean to pass it as a keyword arg?".format(
-                    fn
+def _make_handler(msngr_cls, module=None):
+    def handler_decorator(func):
+        def handler(fn=None, *args, **kwargs):
+            if fn is not None and not (
+                callable(fn) or isinstance(fn, collections.abc.Iterable)
+            ):
+                raise ValueError(
+                    f"{fn} is not callable, did you mean to pass it as a keyword arg?"
                 )
+            msngr = msngr_cls(*args, **kwargs)
+            return (
+                functools.update_wrapper(msngr(fn), fn, updated=())
+                if fn is not None
+                else msngr
             )
-        msngr = msngr_cls(*args, **kwargs)
-        return (
-            functools.update_wrapper(msngr(fn), fn, updated=())
-            if fn is not None
-            else msngr
+
+        handler.__doc__ = (
+            """Convenient wrapper of :class:`~pyro.poutine.{}.{}` \n\n""".format(
+                func.__name__ + "_messenger", msngr_cls.__name__
+            )
+            + (msngr_cls.__doc__ if msngr_cls.__doc__ else "")
         )
+        handler.__name__ = func.__name__
+        if module is not None:
+            handler.__module__ = module
+        return handler
 
-    # handler names from messenger names: strip Messenger suffix, convert CamelCase to snake_case
-    handler_name = _re2.sub(
-        r"\1_\2", _re1.sub(r"\1_\2", msngr_cls.__name__.split("Messenger")[0])
-    ).lower()
-    handler.__doc__ = (
-        """Convenient wrapper of :class:`~pyro.poutine.{}.{}` \n\n""".format(
-            handler_name + "_messenger", msngr_cls.__name__
-        )
-        + (msngr_cls.__doc__ if msngr_cls.__doc__ else "")
-    )
-    handler.__name__ = handler_name
-    return handler_name, handler
+    return handler_decorator
 
 
-trace = None  # flake8
-escape = None  # flake8
+@_make_handler(BlockMessenger)
+def block(
+    fn=None,
+    hide_fn=None,
+    expose_fn=None,
+    hide_all=True,
+    expose_all=False,
+    hide=None,
+    expose=None,
+    hide_types=None,
+    expose_types=None,
+):
+    ...
 
-for _msngr_cls in _msngrs:
-    _handler_name, _handler = _make_handler(_msngr_cls)
-    _handler.__module__ = __name__
-    locals()[_handler_name] = _handler
+
+@_make_handler(BroadcastMessenger)
+def broadcast(fn=None):
+    ...
+
+
+@_make_handler(CollapseMessenger)
+def collapse(fn=None, *args, **kwargs):
+    ...
+
+
+@_make_handler(ConditionMessenger)
+def condition(fn, data):
+    ...
+
+
+@_make_handler(DoMessenger)
+def do(fn, data):
+    ...
+
+
+@_make_handler(EnumMessenger)
+def enum(fn=None, first_available_dim=None):
+    ...
+
+
+@_make_handler(EscapeMessenger)
+def escape(fn, escape_fn):
+    ...
+
+
+@_make_handler(InferConfigMessenger)
+def infer_config(fn, config_fn):
+    ...
+
+
+@_make_handler(LiftMessenger)
+def lift(fn, prior):
+    ...
+
+
+@_make_handler(MaskMessenger)
+def mask(fn, mask):
+    ...
+
+
+@_make_handler(ReparamMessenger)
+def reparam(fn, config):
+    ...
+
+
+@_make_handler(ReplayMessenger)
+def replay(fn=None, trace=None, params=None):
+    ...
+
+
+@_make_handler(ScaleMessenger)
+def scale(fn, scale):
+    ...
+
+
+@_make_handler(SeedMessenger)
+def seed(fn, rng_seed):
+    ...
+
+
+@_make_handler(TraceMessenger)
+def trace(fn=None, graph_type=None, param_only=None):
+    ...
+
+
+@_make_handler(UnconditionMessenger)
+def uncondition(fn=None):
+    ...
+
+
+@_make_handler(SubstituteMessenger)
+def substitute(fn, data):
+    ...
 
 
 #########################################
