@@ -233,8 +233,6 @@ def apply_stack(initial_msg: Message) -> None:
     if cont is not None:
         cont(msg)
 
-    return
-
 
 def am_i_wrapped():
     """
