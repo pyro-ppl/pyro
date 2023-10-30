@@ -3,7 +3,7 @@
 
 import torch
 
-from pyro.distributions import Categorical
+from pyro.distributions import Categorical  # type: ignore[attr-defined]
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.ops.indexing import Vindex
 from pyro.util import ignore_jit_warnings

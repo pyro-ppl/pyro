@@ -112,7 +112,7 @@ class GuideMessenger(TraceMessenger, ABC):
         """
         raise NotImplementedError
 
-    def upstream_value(self, name: str) -> torch.Tensor:
+    def upstream_value(self, name: str):
         """
         For use in :meth:`get_posterior` .
 
