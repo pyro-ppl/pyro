@@ -19,12 +19,8 @@ from typing import (
 import torch
 from torch.distributions import constraints, transform_to
 from torch.serialization import MAP_LOCATION
-from typing_extensions import TypedDict
 
-
-class StateDict(TypedDict):
-    params: Dict[str, torch.Tensor]
-    constraints: Dict[str, constraints.Constraint]
+from pyro.types import StateDict
 
 
 class ParamStoreDict:

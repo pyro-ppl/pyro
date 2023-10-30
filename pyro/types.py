@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Callable, Dict, Optional, Tuple, Union
 
 import torch
+from torch.distributions import constraints
 from typing_extensions import TypedDict
 
 from pyro.poutine.indep_messenger import CondIndepStackFrame
@@ -27,3 +28,8 @@ class Message(TypedDict, total=False):
     continuation: Optional[Callable[[Message], None]]
     infer: Optional[Dict[str, Union[str, bool]]]
     obs: Optional[torch.Tensor]
+
+
+class StateDict(TypedDict):
+    params: Dict[str, torch.Tensor]
+    constraints: Dict[str, constraints.Constraint]
