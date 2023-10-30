@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import functools
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import torch
 
@@ -12,10 +12,11 @@ from pyro.params.param_store import (  # noqa: F401
     _MODULE_NAMESPACE_DIVIDER,
     ParamStoreDict,
 )
-from pyro.poutine.block_messenger import BlockMessenger
-from pyro.poutine.indep_messenger import CondIndepStackFrame
-from pyro.poutine.messenger import Messenger
-from pyro.types import Message
+
+if TYPE_CHECKING:
+    from pyro.poutine.indep_messenger import CondIndepStackFrame
+    from pyro.poutine.messenger import Messenger
+    from pyro.types import Message
 
 # the global pyro stack
 _PYRO_STACK: List[Messenger] = []
@@ -153,7 +154,7 @@ class NonlocalExit(Exception):
     Used by poutine.EscapeMessenger to return site information.
     """
 
-    def __init__(self, site: Dict[str, Any], *args, **kwargs) -> None:
+    def __init__(self, site: Message, *args, **kwargs) -> None:
         """
         :param site: message at a pyro site constructor.
             Just stores the input site.
@@ -166,6 +167,8 @@ class NonlocalExit(Exception):
         Reset the state of the frames remaining in the stack.
         Necessary for multiple re-executions in poutine.queue.
         """
+        from pyro.poutine.block_messenger import BlockMessenger
+
         for frame in reversed(_PYRO_STACK):
             frame._reset()
             if isinstance(frame, BlockMessenger) and frame.hide_fn(self.site):
