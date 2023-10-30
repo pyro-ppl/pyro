@@ -7,6 +7,7 @@ import functools
 from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import torch
+from typing_extensions import TypedDict
 
 from pyro.params.param_store import (  # noqa: F401
     _MODULE_NAMESPACE_DIVIDER,
@@ -14,8 +15,6 @@ from pyro.params.param_store import (  # noqa: F401
 )
 
 if TYPE_CHECKING:
-    from typing_extensions import TypedDict
-
     from pyro.poutine.indep_messenger import CondIndepStackFrame
     from pyro.poutine.messenger import Messenger
 
