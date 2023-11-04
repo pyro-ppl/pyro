@@ -36,7 +36,8 @@ class GuideMessenger(TraceMessenger, ABC):
         state.pop("trace")
         return state
 
-    def __call__(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
+    # @override(TraceMessenger)
+    def __call__(self, *args, **kwargs) -> Dict[str, torch.Tensor]:  # type: ignore[override]
         """
         Draws posterior samples from the guide and replays the model against
         those samples.
