@@ -6,9 +6,11 @@ from __future__ import annotations
 from contextlib import contextmanager
 from functools import partial
 from types import TracebackType
-from typing import Any, Callable, Iterator, List, Optional, Type
+from typing import Any, Callable, Iterator, List, Optional, Type, TypeVar, cast
 
 from .runtime import _PYRO_STACK, Message
+
+_F = TypeVar("_F", bound=Callable)
 
 
 def _context_wrap(
@@ -74,13 +76,13 @@ class Messenger:
     Most inference operations are implemented in subclasses of this.
     """
 
-    def __call__(self, fn: Callable) -> Callable:
+    def __call__(self, fn: _F) -> _F:
         if not callable(fn):
             raise ValueError(
                 f"{fn!r} is not callable, did you mean to pass it as a keyword arg?"
             )
         wraps = _bound_partial(partial(_context_wrap, self, fn))
-        return wraps
+        return cast(_F, wraps)
 
     def __enter__(self) -> Messenger:
         """
