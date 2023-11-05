@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from contextlib import ContextDecorator, contextmanager
+from contextlib import contextmanager
 from functools import partial
 from types import TracebackType
 from typing import Any, Callable, Iterator, List, Optional, Type
@@ -49,11 +49,7 @@ def unwrap(fn: Callable) -> Callable:
     """
     Recursively unwraps poutines.
     """
-    # import pdb; pdb.set_trace()
     while True:
-        if hasattr(fn, "__wrapped__"):
-            fn = fn.__wrapped__
-            continue
         if isinstance(fn, _bound_partial):
             fn = fn.func
             continue
@@ -63,7 +59,7 @@ def unwrap(fn: Callable) -> Callable:
         return fn
 
 
-class Messenger(ContextDecorator):
+class Messenger:
     """
     Context manager class that modifies behavior
     and adds side effects to stochastic functions
@@ -78,13 +74,13 @@ class Messenger(ContextDecorator):
     Most inference operations are implemented in subclasses of this.
     """
 
-    #  def __call__(self, fn: Callable) -> Callable:
-    #      if not callable(fn):
-    #          raise ValueError(
-    #              f"{fn!r} is not callable, did you mean to pass it as a keyword arg?"
-    #          )
-    #      wraps = _bound_partial(partial(_context_wrap, self, fn))
-    #      return wraps
+    def __call__(self, fn: Callable) -> Callable:
+        if not callable(fn):
+            raise ValueError(
+                f"{fn!r} is not callable, did you mean to pass it as a keyword arg?"
+            )
+        wraps = _bound_partial(partial(_context_wrap, self, fn))
+        return wraps
 
     def __enter__(self) -> Messenger:
         """
@@ -169,7 +165,7 @@ class Messenger(ContextDecorator):
     def _reset(self) -> None:
         pass
 
-    def _process_message(self, msg: Message) -> Any:
+    def _process_message(self, msg: Message) -> None:
         """
         :param msg: current message at a trace site
         :returns: None
@@ -179,12 +175,12 @@ class Messenger(ContextDecorator):
         """
         method = getattr(self, f"_pyro_{msg['type']}", None)
         if method is not None:
-            return method(msg)
+            method(msg)
 
-    def _postprocess_message(self, msg: Message) -> Any:
+    def _postprocess_message(self, msg: Message) -> None:
         method = getattr(self, f"_pyro_post_{msg['type']}", None)
         if method is not None:
-            return method(msg)
+            method(msg)
 
     @classmethod
     def register(
