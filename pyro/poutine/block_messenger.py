@@ -2,10 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from functools import partial
-from typing import Callable, List, Optional
+from typing import TYPE_CHECKING, Callable, List, Optional
 
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.runtime import Message
+
+if TYPE_CHECKING:
+    from pyro.poutine.runtime import Message
 
 
 def _block_fn(

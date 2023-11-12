@@ -27,7 +27,7 @@ class TorchDistributionMixin(Distribution):
     from :class:`TorchDistributionMixin`.
     """
 
-    def __call__(self, sample_shape=torch.Size()) -> torch.Tensor:
+    def __call__(self, sample_shape: torch.Size = torch.Size()) -> torch.Tensor:
         """
         Samples a random value.
 

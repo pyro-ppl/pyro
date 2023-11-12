@@ -6,7 +6,7 @@ import warnings
 from collections import OrderedDict
 from contextlib import ExitStack, contextmanager
 from inspect import isclass
-from typing import Callable, Dict, Iterator, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Callable, Dict, Iterator, Optional, Sequence, Union
 
 import torch
 from torch.distributions import constraints
@@ -14,9 +14,7 @@ from torch.distributions import constraints
 import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.poutine as poutine
-from pyro.distributions import TorchDistribution
 from pyro.params import param_with_module_name
-from pyro.params.param_store import ParamStoreDict
 from pyro.poutine.plate_messenger import PlateMessenger
 from pyro.poutine.runtime import (
     _MODULE_NAMESPACE_DIVIDER,
@@ -28,6 +26,10 @@ from pyro.poutine.runtime import (
 )
 from pyro.poutine.subsample_messenger import SubsampleMessenger
 from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
+
+if TYPE_CHECKING:
+    from pyro.distributions import TorchDistribution
+    from pyro.params.param_store import ParamStoreDict
 
 
 def get_param_store() -> ParamStoreDict:
@@ -83,9 +85,8 @@ def param(
     :rtype: torch.Tensor
     """
     # Note effectful(-) requires the double passing of name below.
-    value = _param(
-        name, init_tensor, constraint=constraint, event_dim=event_dim, name=name
-    )
+    args = (name,) if init_tensor is None else (name, init_tensor)
+    value = _param(*args, constraint=constraint, event_dim=event_dim, name=name)
     assert value is not None  # type narrowing guaranteed by _param
     return value
 

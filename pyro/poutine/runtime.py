@@ -319,22 +319,22 @@ def effectful(
         if not am_i_wrapped():
             return fn(*args, **kwargs)
         else:
-            msg: Message = {
-                "type": type,
-                "name": name,
-                "fn": fn,
-                "is_observed": is_observed,
-                "args": args,
-                "kwargs": kwargs,
-                "value": obs,
-                "scale": 1.0,
-                "mask": None,
-                "cond_indep_stack": (),
-                "done": False,
-                "stop": False,
-                "continuation": None,
-                "infer": infer if infer is not None else {},
-            }
+            msg = Message(
+                type=type,
+                name=name,
+                fn=fn,
+                is_observed=is_observed,
+                args=args,
+                kwargs=kwargs,
+                value=obs,
+                scale=1.0,
+                mask=None,
+                cond_indep_stack=(),
+                done=False,
+                stop=False,
+                continuation=None,
+                infer=infer if infer is not None else {},
+            )
             # apply the stack and return its return value
             apply_stack(msg)
             return msg["value"]
@@ -353,22 +353,22 @@ def _inspect() -> Message:
     :returns: A message with all effects applied.
     :rtype: dict
     """
-    msg: Message = {
-        "type": "inspect",
-        "name": "_pyro_inspect",
-        "fn": lambda: True,
-        "is_observed": False,
-        "args": (),
-        "kwargs": {},
-        "value": None,
-        "infer": {"_do_not_trace": True},
-        "scale": 1.0,
-        "mask": None,
-        "cond_indep_stack": (),
-        "done": False,
-        "stop": False,
-        "continuation": None,
-    }
+    msg = Message(
+        type="inspect",
+        name="_pyro_inspect",
+        fn=lambda: True,
+        is_observed=False,
+        args=(),
+        kwargs={},
+        value=None,
+        infer={"_do_not_trace": True},
+        scale=1.0,
+        mask=None,
+        cond_indep_stack=(),
+        done=False,
+        stop=False,
+        continuation=None,
+    )
     apply_stack(msg)
     return msg
 
