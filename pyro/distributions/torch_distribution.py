@@ -27,7 +27,7 @@ class TorchDistributionMixin(Distribution):
     from :class:`TorchDistributionMixin`.
     """
 
-    def __call__(self, sample_shape=torch.Size()):
+    def __call__(self, sample_shape=torch.Size()) -> torch.Tensor:
         """
         Samples a random value.
 
@@ -51,7 +51,7 @@ class TorchDistributionMixin(Distribution):
         )
 
     @property
-    def event_dim(self):
+    def event_dim(self) -> int:
         """
         :return: Number of dimensions of individual events.
         :rtype: int

@@ -6,7 +6,7 @@ import warnings
 from collections import OrderedDict
 from contextlib import ExitStack, contextmanager
 from inspect import isclass
-from typing import Callable, Iterator, Optional, Sequence, Union
+from typing import Callable, Dict, Iterator, Optional, Sequence, Union
 
 import torch
 from torch.distributions import constraints
@@ -14,6 +14,7 @@ from torch.distributions import constraints
 import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.poutine as poutine
+from pyro.distributions import TorchDistribution
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine.plate_messenger import PlateMessenger
@@ -85,13 +86,13 @@ def param(
     value = _param(
         name, init_tensor, constraint=constraint, event_dim=event_dim, name=name
     )
-    assert isinstance(value, torch.Tensor)
+    assert value is not None  # type narrowing guaranteed by _param
     return value
 
 
 def _masked_observe(
     name: str,
-    fn: dist.Distribution,
+    fn: TorchDistribution,
     obs: Optional[torch.Tensor],
     obs_mask: torch.Tensor,
     *args,
@@ -122,11 +123,11 @@ def _masked_observe(
 
 def sample(
     name: str,
-    fn: dist.Distribution,
+    fn: TorchDistribution,
     *args,
     obs: Optional[torch.Tensor] = None,
     obs_mask: Optional[torch.Tensor] = None,
-    infer: Optional[dict] = None,
+    infer: Optional[Dict[str, Union[str, bool]]] = None,
     **kwargs,
 ) -> torch.Tensor:
     """
@@ -155,7 +156,8 @@ def sample(
     # Check if stack is empty.
     # if stack empty, default behavior (defined here)
     infer = {} if infer is None else infer.copy()
-    is_observed: bool = infer.pop("is_observed", obs is not None)
+    is_observed = infer.pop("is_observed", obs is not None)
+    assert isinstance(is_observed, bool)
     if not am_i_wrapped():
         if obs is not None and not infer.get("_deterministic"):
             warnings.warn(
@@ -167,25 +169,25 @@ def sample(
     # if stack not empty, apply everything in the stack?
     else:
         # initialize data structure to pass up/down the stack
-        msg: Message = {
-            "type": "sample",
-            "name": name,
-            "fn": fn,
-            "is_observed": is_observed,
-            "args": args,
-            "kwargs": kwargs,
-            "value": obs,
-            "infer": infer,
-            "scale": 1.0,
-            "mask": None,
-            "cond_indep_stack": (),
-            "done": False,
-            "stop": False,
-            "continuation": None,
-        }
+        msg = Message(
+            type="sample",
+            name=name,
+            fn=fn,
+            is_observed=is_observed,
+            args=args,
+            kwargs=kwargs,
+            value=obs,
+            infer=infer,
+            scale=1.0,
+            mask=None,
+            cond_indep_stack=(),
+            done=False,
+            stop=False,
+            continuation=None,
+        )
         # apply the stack and return its return value
         apply_stack(msg)
-        assert isinstance(msg["value"], torch.Tensor)
+        assert msg["value"] is not None  # type narrowing guaranteed by apply_stack
         return msg["value"]
 
 

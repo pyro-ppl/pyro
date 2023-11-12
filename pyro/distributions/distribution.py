@@ -64,11 +64,6 @@ class Distribution(metaclass=DistributionMeta):
         """
         return self.sample(*args, **kwargs)
 
-    @property
-    @abstractmethod
-    def event_dim(self) -> int:
-        raise NotImplementedError
-
     @abstractmethod
     def sample(self, *args, **kwargs) -> torch.Tensor:
         """
