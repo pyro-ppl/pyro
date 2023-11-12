@@ -14,9 +14,9 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
+    overload,
 )
 
-# overload,
 import torch
 from typing_extensions import ParamSpec, TypedDict
 
@@ -274,18 +274,18 @@ def am_i_wrapped() -> bool:
     return len(_PYRO_STACK) > 0
 
 
-#  @overload
-#  def effectful(
-#      fn: None = ..., type: Optional[str] = ...
-#  ) -> Callable[[Optional[Callable[P, T]]], Callable[P, Union[T, torch.Tensor, None]]]:
-#      ...
-#
-#
-#  @overload
-#  def effectful(
-#      fn: Callable[P, T] = ..., type: Optional[str] = ...
-#  ) -> Callable[P, Union[T, torch.Tensor, None]]:
-#      ...
+@overload
+def effectful(
+    fn: None = ..., type: Optional[str] = ...
+) -> Callable[[Callable[P, T]], Callable[..., Union[T, torch.Tensor, None]]]:
+    ...
+
+
+@overload
+def effectful(
+    fn: Callable[P, T] = ..., type: Optional[str] = ...
+) -> Callable[..., Union[T, torch.Tensor, None]]:
+    ...
 
 
 def effectful(

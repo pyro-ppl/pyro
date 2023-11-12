@@ -9,11 +9,11 @@ from inspect import isclass
 from typing import Callable, Iterator, Optional, Sequence, Union
 
 import torch
+from torch.distributions import constraints
 
 import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.poutine as poutine
-from pyro.distributions import constraints
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine.plate_messenger import PlateMessenger
@@ -48,9 +48,7 @@ def clear_param_store() -> None:
     _PYRO_PARAM_STORE.clear()
 
 
-_param: Callable[..., torch.Tensor] = effectful(
-    _PYRO_PARAM_STORE.get_param, type="param"
-)
+_param = effectful(_PYRO_PARAM_STORE.get_param, type="param")
 
 
 def param(
@@ -84,9 +82,11 @@ def param(
     :rtype: torch.Tensor
     """
     # Note effectful(-) requires the double passing of name below.
-    return _param(
+    value = _param(
         name, init_tensor, constraint=constraint, event_dim=event_dim, name=name
     )
+    assert isinstance(value, torch.Tensor)
+    return value
 
 
 def _masked_observe(

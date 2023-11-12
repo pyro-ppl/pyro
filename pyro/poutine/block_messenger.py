@@ -82,6 +82,7 @@ def _make_default_hide_fn(
 
 
 def _negate_fn(fn: Callable[[Message], Optional[bool]]) -> Callable[[Message], bool]:
+    # typed version of lambda msg: not fn(msg)
     def negated_fn(msg: Message) -> bool:
         return not fn(msg)
 
