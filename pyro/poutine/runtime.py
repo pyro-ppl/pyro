@@ -4,15 +4,29 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+    overload,
+)
 
 import torch
-from typing_extensions import TypedDict
+from typing_extensions import ParamSpec, TypedDict
 
 from pyro.params.param_store import (  # noqa: F401
     _MODULE_NAMESPACE_DIVIDER,
     ParamStoreDict,
 )
+
+P = ParamSpec("P")
+T = TypeVar("T")
 
 if TYPE_CHECKING:
     from pyro.poutine.indep_messenger import CondIndepStackFrame
@@ -26,8 +40,8 @@ _PYRO_PARAM_STORE = ParamStoreDict()
 
 
 class Message(TypedDict, total=False):
-    type: Optional[str]
-    name: str
+    type: str
+    name: Optional[str]
     fn: Callable
     is_observed: bool
     args: Tuple
@@ -252,7 +266,7 @@ def apply_stack(initial_msg: Message) -> None:
         cont(msg)
 
 
-def am_i_wrapped():
+def am_i_wrapped() -> bool:
     """
     Checks whether the current computation is wrapped in a poutine.
     :returns: bool
@@ -260,7 +274,23 @@ def am_i_wrapped():
     return len(_PYRO_STACK) > 0
 
 
-def effectful(fn: Optional[Callable] = None, type: Optional[str] = None) -> Callable:
+@overload
+def effectful(
+    fn: None = ..., type: Optional[str] = ...
+) -> Callable[[Callable[P, T]], Callable[..., Union[T, torch.Tensor, None]]]:
+    ...
+
+
+@overload
+def effectful(
+    fn: Callable[P, T] = ..., type: Optional[str] = ...
+) -> Callable[..., Union[T, torch.Tensor, None]]:
+    ...
+
+
+def effectful(
+    fn: Optional[Callable[P, T]] = None, type: Optional[str] = None
+) -> Callable:
     """
     :param fn: function or callable that performs an effectful computation
     :param str type: the type label of the operation, e.g. `"sample"`
@@ -277,32 +307,34 @@ def effectful(fn: Optional[Callable] = None, type: Optional[str] = None) -> Call
     assert type != "message", "cannot use 'message' as keyword"
 
     @functools.wraps(fn)
-    def _fn(*args, **kwargs):
-        name = kwargs.pop("name", None)
-        infer = kwargs.pop("infer", {})
-
-        value = kwargs.pop("obs", None)
-        is_observed = value is not None
+    def _fn(
+        *args: P.args,
+        name: Optional[str] = None,
+        infer: Optional[Dict] = None,
+        obs: Optional[torch.Tensor] = None,
+        **kwargs: P.kwargs,
+    ) -> Union[T, torch.Tensor, None]:
+        is_observed = obs is not None
 
         if not am_i_wrapped():
             return fn(*args, **kwargs)
         else:
-            msg = {
-                "type": type,
-                "name": name,
-                "fn": fn,
-                "is_observed": is_observed,
-                "args": args,
-                "kwargs": kwargs,
-                "value": value,
-                "scale": 1.0,
-                "mask": None,
-                "cond_indep_stack": (),
-                "done": False,
-                "stop": False,
-                "continuation": None,
-                "infer": infer,
-            }
+            msg = Message(
+                type=type,
+                name=name,
+                fn=fn,
+                is_observed=is_observed,
+                args=args,
+                kwargs=kwargs,
+                value=obs,
+                scale=1.0,
+                mask=None,
+                cond_indep_stack=(),
+                done=False,
+                stop=False,
+                continuation=None,
+                infer=infer if infer is not None else {},
+            )
             # apply the stack and return its return value
             apply_stack(msg)
             return msg["value"]
@@ -321,22 +353,22 @@ def _inspect() -> Message:
     :returns: A message with all effects applied.
     :rtype: dict
     """
-    msg: Message = {
-        "type": "inspect",
-        "name": "_pyro_inspect",
-        "fn": lambda: True,
-        "is_observed": False,
-        "args": (),
-        "kwargs": {},
-        "value": None,
-        "infer": {"_do_not_trace": True},
-        "scale": 1.0,
-        "mask": None,
-        "cond_indep_stack": (),
-        "done": False,
-        "stop": False,
-        "continuation": None,
-    }
+    msg = Message(
+        type="inspect",
+        name="_pyro_inspect",
+        fn=lambda: True,
+        is_observed=False,
+        args=(),
+        kwargs={},
+        value=None,
+        infer={"_do_not_trace": True},
+        scale=1.0,
+        mask=None,
+        cond_indep_stack=(),
+        done=False,
+        stop=False,
+        continuation=None,
+    )
     apply_stack(msg)
     return msg
 
