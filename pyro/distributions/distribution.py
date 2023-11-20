@@ -5,6 +5,8 @@ import functools
 import inspect
 from abc import ABCMeta, abstractmethod
 
+import torch
+
 from pyro.distributions.score_parts import ScoreParts
 
 COERCIONS = []
@@ -122,7 +124,7 @@ class Distribution(metaclass=DistributionMeta):
                 log_prob=log_prob, score_function=log_prob, entropy_term=0
             )
 
-    def enumerate_support(self, expand=True):
+    def enumerate_support(self, expand: bool = True) -> torch.Tensor:
         """
         Returns a representation of the parametrized distribution's support,
         along the first dimension. This is implemented only by discrete

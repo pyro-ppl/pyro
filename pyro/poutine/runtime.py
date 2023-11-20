@@ -18,7 +18,7 @@ from typing import (
 )
 
 import torch
-from typing_extensions import ParamSpec, TypedDict
+from typing_extensions import Literal, ParamSpec, TypedDict
 
 from pyro.params.param_store import (  # noqa: F401
     _MODULE_NAMESPACE_DIVIDER,
@@ -29,7 +29,7 @@ P = ParamSpec("P")
 T = TypeVar("T")
 
 if TYPE_CHECKING:
-    from pyro.distributions import TorchDistribution
+    from pyro.distributions.torch_distribution import TorchDistributionMixin
     from pyro.poutine.indep_messenger import CondIndepStackFrame
     from pyro.poutine.messenger import Messenger
 
@@ -49,6 +49,7 @@ class InferDict(TypedDict, total=False):
     is_auxiliary: bool
     is_observed: bool
     num_samples: int
+    tmc: Literal["diagonal", "mixture"]
     _deterministic: bool
     _do_not_trace: bool
     _markov_scope: Optional[Dict[str, int]]
@@ -60,7 +61,7 @@ class InferDict(TypedDict, total=False):
 class Message(TypedDict, total=False):
     type: str
     name: Optional[str]
-    fn: Union[Callable, TorchDistribution]
+    fn: Union[Callable, TorchDistributionMixin]
     is_observed: bool
     args: Tuple
     kwargs: Dict
