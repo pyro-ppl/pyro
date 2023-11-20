@@ -1,18 +1,22 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import torch
+from typing import Dict, Optional
 
-from pyro.distributions import Categorical  # type: ignore[attr-defined]
+import torch
+from typing_extensions import Self
+
+from pyro.distributions import Categorical, TorchDistribution  # type: ignore[attr-defined]
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.ops.indexing import Vindex
+from pyro.poutine.messenger import Messenger
+from pyro.poutine.runtime import _ENUM_ALLOCATOR, Message
 from pyro.util import ignore_jit_warnings
 
-from .messenger import Messenger
-from .runtime import _ENUM_ALLOCATOR
 
-
-def _tmc_mixture_sample(msg):
+def _tmc_mixture_sample(msg: Message) -> torch.Tensor:
+    assert isinstance(msg["fn"], TorchDistribution)
+    assert msg["infer"] is not None
     dist, num_samples = msg["fn"], msg["infer"].get("num_samples")
 
     # find batch dims that aren't plate dims
@@ -57,7 +61,9 @@ def _tmc_mixture_sample(msg):
     return thin_sample
 
 
-def _tmc_diagonal_sample(msg):
+def _tmc_diagonal_sample(msg: Message) -> torch.Tensor:
+    assert isinstance(msg["fn"], TorchDistribution)
+    assert msg["infer"] is not None
     dist, num_samples = msg["fn"], msg["infer"].get("num_samples")
 
     # find batch dims that aren't plate dims
@@ -99,9 +105,10 @@ def _tmc_diagonal_sample(msg):
     return thin_sample
 
 
-def enumerate_site(msg):
-    dist = msg["fn"]
-    num_samples = msg["infer"].get("num_samples", None)
+def enumerate_site(msg: Message) -> torch.Tensor:
+    assert isinstance(msg["fn"], TorchDistribution)
+    assert msg["infer"] is not None
+    dist, num_samples = msg["fn"], msg["infer"].get("num_samples")
     if num_samples is None:
         # Enumerate over the support of the distribution.
         value = dist.enumerate_support(expand=msg["infer"].get("expand", False))
@@ -131,27 +138,30 @@ class EnumMessenger(Messenger):
         This should be a negative integer or None.
     """
 
-    def __init__(self, first_available_dim=None):
+    def __init__(self, first_available_dim: Optional[int] = None) -> None:
         assert (
             first_available_dim is None or first_available_dim < 0
         ), first_available_dim
         self.first_available_dim = first_available_dim
         super().__init__()
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         if self.first_available_dim is not None:
             _ENUM_ALLOCATOR.set_first_available_dim(self.first_available_dim)
-        self._markov_depths = {}  # site name -> depth (nonnegative integer)
-        self._param_dims = {}  # site name -> (enum dim -> unique id)
-        self._value_dims = {}  # site name -> (enum dim -> unique id)
+        self._markov_depths: Dict[
+            str, int
+        ] = {}  # site name -> depth (nonnegative integer)
+        self._param_dims: Dict[str, int] = {}  # site name -> (enum dim -> unique id)
+        self._value_dims: Dict[str, int] = {}  # site name -> (enum dim -> unique id)
         return super().__enter__()
 
     @ignore_jit_warnings()
-    def _pyro_sample(self, msg):
+    def _pyro_sample(self, msg: Message) -> None:
         """
         :param msg: current message at a trace site.
         :returns: a sample from the stochastic function at the site.
         """
+        assert isinstance(msg["fn"], TorchDistribution)
         if msg["done"] or not isinstance(msg["fn"], TorchDistributionMixin):
             return
 
@@ -209,7 +219,7 @@ class EnumMessenger(Messenger):
         msg["value"] = value
         msg["done"] = True
 
-    def _pyro_post_sample(self, msg):
+    def _pyro_post_sample(self, msg: Message) -> None:
         # Save all dims exposed in this sample value.
         # Whereas all of site["_dim_to_id"] are needed to interpret a
         # site's log_prob tensor, only a filtered subset self._value_dims[msg["name"]]

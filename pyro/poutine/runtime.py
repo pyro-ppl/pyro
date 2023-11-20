@@ -55,6 +55,7 @@ class Message(TypedDict, total=False):
     continuation: Optional[Callable[[Message], None]]
     infer: Optional[Dict[str, Union[str, bool]]]
     obs: Optional[torch.Tensor]
+    _intervener_id: Optional[str]
 
 
 class _DimAllocator:

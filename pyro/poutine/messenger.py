@@ -1,12 +1,12 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import annotations
-
 from contextlib import contextmanager
 from functools import partial
 from types import TracebackType
 from typing import Any, Callable, Iterator, List, Optional, Type, TypeVar, cast
+
+from typing_extensions import Self
 
 from .runtime import _PYRO_STACK, Message
 
@@ -14,7 +14,7 @@ _F = TypeVar("_F", bound=Callable)
 
 
 def _context_wrap(
-    context: Messenger,
+    context: "Messenger",
     fn: Callable,
     *args: Any,
     **kwargs: Any,
@@ -84,7 +84,7 @@ class Messenger:
         wraps = _bound_partial(partial(_context_wrap, self, fn))
         return cast(_F, wraps)
 
-    def __enter__(self) -> Messenger:
+    def __enter__(self) -> Self:
         """
         :returns: self
         :rtype: pyro.poutine.Messenger

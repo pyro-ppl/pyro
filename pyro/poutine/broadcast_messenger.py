@@ -1,9 +1,10 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from pyro.distributions import TorchDistribution
+from pyro.poutine.messenger import Messenger
+from pyro.poutine.runtime import Message
 from pyro.util import ignore_jit_warnings
-
-from .messenger import Messenger
 
 
 class BroadcastMessenger(Messenger):
@@ -38,7 +39,7 @@ class BroadcastMessenger(Messenger):
 
     @staticmethod
     @ignore_jit_warnings(["Converting a tensor to a Python boolean"])
-    def _pyro_sample(msg):
+    def _pyro_sample(msg: Message) -> None:
         """
         :param msg: current message at a trace site.
         """
@@ -46,6 +47,7 @@ class BroadcastMessenger(Messenger):
             return
 
         dist = msg["fn"]
+        assert isinstance(dist, TorchDistribution)
         actual_batch_shape = getattr(dist, "batch_shape", None)
         if actual_batch_shape is not None:
             target_batch_shape = [
