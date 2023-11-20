@@ -6,7 +6,7 @@ import warnings
 from collections import OrderedDict
 from contextlib import ExitStack, contextmanager
 from inspect import isclass
-from typing import Callable, Dict, Iterator, Optional, Sequence, Union
+from typing import Callable, Iterator, Optional, Sequence, Union
 
 import torch
 from torch.distributions import constraints
@@ -21,6 +21,7 @@ from pyro.poutine.plate_messenger import PlateMessenger
 from pyro.poutine.runtime import (
     _MODULE_NAMESPACE_DIVIDER,
     _PYRO_PARAM_STORE,
+    InferDict,
     Message,
     am_i_wrapped,
     apply_stack,
@@ -126,7 +127,7 @@ def sample(
     *args,
     obs: Optional[torch.Tensor] = None,
     obs_mask: Optional[torch.Tensor] = None,
-    infer: Optional[Dict[str, Union[str, bool]]] = None,
+    infer: Optional[InferDict] = None,
     **kwargs,
 ) -> torch.Tensor:
     """

@@ -1,12 +1,13 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import torch
 from typing_extensions import Self
 
-from pyro.distributions import Categorical, TorchDistribution  # type: ignore[attr-defined]
+from pyro.distributions import TorchDistribution
+from pyro.distributions.torch import Categorical
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.ops.indexing import Vindex
 from pyro.poutine.messenger import Messenger
@@ -17,14 +18,14 @@ from pyro.util import ignore_jit_warnings
 def _tmc_mixture_sample(msg: Message) -> torch.Tensor:
     assert isinstance(msg["fn"], TorchDistribution)
     assert msg["infer"] is not None
-    dist, num_samples = msg["fn"], msg["infer"].get("num_samples")
+    dist, num_samples = msg["fn"], msg["infer"]["num_samples"]
 
     # find batch dims that aren't plate dims
     batch_shape = [1] * len(dist.batch_shape)
     for f in msg["cond_indep_stack"]:
         if f.vectorized:
             batch_shape[f.dim] = f.size if f.size > 0 else dist.batch_shape[f.dim]
-    batch_shape = tuple(batch_shape)
+    batch_shape_tuple = tuple(batch_shape)
 
     # sample a batch
     sample_shape = (num_samples,)
@@ -32,7 +33,7 @@ def _tmc_mixture_sample(msg: Message) -> torch.Tensor:
     assert fat_sample.shape == sample_shape + dist.batch_shape + dist.event_shape
     assert any(d > 1 for d in fat_sample.shape)
 
-    target_shape = (num_samples,) + batch_shape + dist.event_shape
+    target_shape = (num_samples,) + batch_shape_tuple + dist.event_shape
 
     # if this site has any possible ancestors, sample ancestor indices uniformly
     thin_sample = fat_sample
@@ -64,14 +65,14 @@ def _tmc_mixture_sample(msg: Message) -> torch.Tensor:
 def _tmc_diagonal_sample(msg: Message) -> torch.Tensor:
     assert isinstance(msg["fn"], TorchDistribution)
     assert msg["infer"] is not None
-    dist, num_samples = msg["fn"], msg["infer"].get("num_samples")
+    dist, num_samples = msg["fn"], msg["infer"]["num_samples"]
 
     # find batch dims that aren't plate dims
     batch_shape = [1] * len(dist.batch_shape)
     for f in msg["cond_indep_stack"]:
         if f.vectorized:
             batch_shape[f.dim] = f.size if f.size > 0 else dist.batch_shape[f.dim]
-    batch_shape = tuple(batch_shape)
+    batch_shape_tuple = tuple(batch_shape)
 
     # sample a batch
     sample_shape = (num_samples,)
@@ -79,12 +80,12 @@ def _tmc_diagonal_sample(msg: Message) -> torch.Tensor:
     assert fat_sample.shape == sample_shape + dist.batch_shape + dist.event_shape
     assert any(d > 1 for d in fat_sample.shape)
 
-    target_shape = (num_samples,) + batch_shape + dist.event_shape
+    target_shape = (num_samples,) + batch_shape_tuple + dist.event_shape
 
     # if this site has any ancestors, choose ancestors from diagonal approximation
     thin_sample = fat_sample
     if thin_sample.shape != target_shape:
-        index = [Ellipsis] + [slice(None)] * (len(thin_sample.shape) - 1)
+        index: List[Any] = [Ellipsis] + [slice(None)] * (len(thin_sample.shape) - 1)
         squashed_dims = []
         for squashed_dim, squashed_size in zip(
             range(1, len(thin_sample.shape)), thin_sample.shape[1:]
@@ -151,8 +152,12 @@ class EnumMessenger(Messenger):
         self._markov_depths: Dict[
             str, int
         ] = {}  # site name -> depth (nonnegative integer)
-        self._param_dims: Dict[str, int] = {}  # site name -> (enum dim -> unique id)
-        self._value_dims: Dict[str, int] = {}  # site name -> (enum dim -> unique id)
+        self._param_dims: Dict[
+            str, Dict[int, int]
+        ] = {}  # site name -> (enum dim -> unique id)
+        self._value_dims: Dict[
+            str, Dict[int, int]
+        ] = {}  # site name -> (enum dim -> unique id)
         return super().__enter__()
 
     @ignore_jit_warnings()
@@ -165,6 +170,8 @@ class EnumMessenger(Messenger):
         if msg["done"] or not isinstance(msg["fn"], TorchDistributionMixin):
             return
 
+        assert isinstance(msg["name"], str)
+        assert msg["infer"] is not None
         # Compute upstream dims in scope; these are unsafe to use for this site's target_dim.
         scope = msg["infer"].get("_markov_scope")  # site name -> markov depth
         param_dims = _ENUM_ALLOCATOR.dim_to_id.copy()  # enum dim -> unique id
@@ -185,7 +192,7 @@ class EnumMessenger(Messenger):
 
         # Move actual_dim to a safe target_dim.
         target_dim, id_ = _ENUM_ALLOCATOR.allocate(
-            None if scope is None else param_dims
+            None if scope is None else set(param_dims)
         )
         event_dim = msg["fn"].event_dim
         categorical_support = getattr(value, "_pyro_categorical_support", None)
@@ -194,7 +201,7 @@ class EnumMessenger(Messenger):
             # See pyro/distributions/torch.py for details.
             assert target_dim < 0
             value = value.reshape(value.shape[:1] + (1,) * (-1 - target_dim))
-            value._pyro_categorical_support = categorical_support
+            value._pyro_categorical_support = categorical_support  # type: ignore[attr-defined]
         elif actual_dim < target_dim:
             assert (
                 value.size(target_dim - event_dim) == 1
@@ -229,6 +236,9 @@ class EnumMessenger(Messenger):
         value = msg["value"]
         if value is None:
             return
+
+        assert isinstance(msg["name"], str)
+        assert msg["infer"] is not None
         shape = value.data.shape[: value.dim() - msg["fn"].event_dim]
         dim_to_id = msg["infer"].setdefault("_dim_to_id", {})
         dim_to_id.update(self._param_dims.get(msg["name"], {}))

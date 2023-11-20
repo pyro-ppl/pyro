@@ -46,8 +46,8 @@ class BroadcastMessenger(Messenger):
         if msg["done"] or msg["type"] != "sample":
             return
 
+        assert isinstance(msg["fn"], TorchDistribution)
         dist = msg["fn"]
-        assert isinstance(dist, TorchDistribution)
         actual_batch_shape = getattr(dist, "batch_shape", None)
         if actual_batch_shape is not None:
             target_batch_shape = [
