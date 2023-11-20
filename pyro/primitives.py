@@ -14,7 +14,7 @@ from torch.distributions import constraints
 import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.poutine as poutine
-from pyro.distributions import TorchDistribution
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine.plate_messenger import PlateMessenger
@@ -92,7 +92,7 @@ def param(
 
 def _masked_observe(
     name: str,
-    fn: TorchDistribution,
+    fn: TorchDistributionMixin,
     obs: Optional[torch.Tensor],
     obs_mask: torch.Tensor,
     *args,
@@ -123,7 +123,7 @@ def _masked_observe(
 
 def sample(
     name: str,
-    fn: TorchDistribution,
+    fn: TorchDistributionMixin,
     *args,
     obs: Optional[torch.Tensor] = None,
     obs_mask: Optional[torch.Tensor] = None,

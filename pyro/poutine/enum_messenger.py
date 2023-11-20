@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional
 import torch
 from typing_extensions import Self
 
-from pyro.distributions import TorchDistribution
 from pyro.distributions.torch import Categorical
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.ops.indexing import Vindex
@@ -16,7 +15,7 @@ from pyro.util import ignore_jit_warnings
 
 
 def _tmc_mixture_sample(msg: Message) -> torch.Tensor:
-    assert isinstance(msg["fn"], TorchDistribution)
+    assert isinstance(msg["fn"], TorchDistributionMixin)
     assert msg["infer"] is not None
     dist, num_samples = msg["fn"], msg["infer"]["num_samples"]
 
@@ -63,7 +62,7 @@ def _tmc_mixture_sample(msg: Message) -> torch.Tensor:
 
 
 def _tmc_diagonal_sample(msg: Message) -> torch.Tensor:
-    assert isinstance(msg["fn"], TorchDistribution)
+    assert isinstance(msg["fn"], TorchDistributionMixin)
     assert msg["infer"] is not None
     dist, num_samples = msg["fn"], msg["infer"]["num_samples"]
 
@@ -107,7 +106,7 @@ def _tmc_diagonal_sample(msg: Message) -> torch.Tensor:
 
 
 def enumerate_site(msg: Message) -> torch.Tensor:
-    assert isinstance(msg["fn"], TorchDistribution)
+    assert isinstance(msg["fn"], TorchDistributionMixin)
     assert msg["infer"] is not None
     dist, num_samples = msg["fn"], msg["infer"].get("num_samples")
     if num_samples is None:
@@ -166,7 +165,6 @@ class EnumMessenger(Messenger):
         :param msg: current message at a trace site.
         :returns: a sample from the stochastic function at the site.
         """
-        assert isinstance(msg["fn"], TorchDistribution)
         if msg["done"] or not isinstance(msg["fn"], TorchDistributionMixin):
             return
 

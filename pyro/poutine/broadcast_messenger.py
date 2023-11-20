@@ -1,7 +1,9 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from pyro.distributions import TorchDistribution
+from typing import List, Optional
+
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.runtime import Message
 from pyro.util import ignore_jit_warnings
@@ -46,9 +48,10 @@ class BroadcastMessenger(Messenger):
         if msg["done"] or msg["type"] != "sample":
             return
 
-        assert isinstance(msg["fn"], TorchDistribution)
+        if not isinstance(msg["fn"], TorchDistributionMixin):
+            return
         dist = msg["fn"]
-        actual_batch_shape = getattr(dist, "batch_shape", None)
+        actual_batch_shape = dist.batch_shape
         if actual_batch_shape is not None:
             target_batch_shape = [
                 None if size == 1 else size for size in actual_batch_shape
@@ -57,9 +60,10 @@ class BroadcastMessenger(Messenger):
                 if f.dim is None or f.size == -1:
                     continue
                 assert f.dim < 0
-                target_batch_shape = [None] * (
+                prefix_batch_shape: List[Optional[int]] = [None] * (
                     -f.dim - len(target_batch_shape)
-                ) + target_batch_shape
+                )
+                target_batch_shape = prefix_batch_shape + target_batch_shape
                 if (
                     target_batch_shape[f.dim] is not None
                     and target_batch_shape[f.dim] != f.size
