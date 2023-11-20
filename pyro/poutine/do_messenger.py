@@ -82,7 +82,7 @@ class DoMessenger(Messenger):
                 msg["value"] = torch.tensor(intervention)
                 msg["is_observed"] = True
                 msg["stop"] = True
-            if isinstance(intervention, torch.Tensor):
+            elif isinstance(intervention, torch.Tensor):
                 msg["value"] = intervention
                 msg["is_observed"] = True
                 msg["stop"] = True
