@@ -3,7 +3,6 @@
 
 import warnings
 from collections import OrderedDict
-from typing import Tuple
 
 import torch
 from torch.distributions.kl import kl_divergence, register_kl
@@ -28,7 +27,7 @@ class TorchDistributionMixin(Distribution):
     from :class:`TorchDistributionMixin`.
     """
 
-    def __call__(self, sample_shape: Tuple[int] = torch.Size()) -> torch.Tensor:
+    def __call__(self, sample_shape: torch.Size = torch.Size()) -> torch.Tensor:
         """
         Samples a random value.
 

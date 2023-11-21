@@ -28,7 +28,9 @@ def _tmc_mixture_sample(msg: Message) -> torch.Tensor:
 
     # sample a batch
     sample_shape = (num_samples,)
-    fat_sample = dist(sample_shape=sample_shape)  # TODO thin before sampling
+    fat_sample = dist(
+        sample_shape=torch.Size(sample_shape)
+    )  # TODO thin before sampling
     assert fat_sample.shape == sample_shape + dist.batch_shape + dist.event_shape
     assert any(d > 1 for d in fat_sample.shape)
 
@@ -75,7 +77,9 @@ def _tmc_diagonal_sample(msg: Message) -> torch.Tensor:
 
     # sample a batch
     sample_shape = (num_samples,)
-    fat_sample = dist(sample_shape=sample_shape)  # TODO thin before sampling
+    fat_sample = dist(
+        sample_shape=torch.Size(sample_shape)
+    )  # TODO thin before sampling
     assert fat_sample.shape == sample_shape + dist.batch_shape + dist.event_shape
     assert any(d > 1 for d in fat_sample.shape)
 
@@ -122,7 +126,7 @@ def enumerate_site(msg: Message) -> torch.Tensor:
             raise ValueError("{} not a valid TMC strategy".format(tmc_strategy))
     elif num_samples > 1 and msg["infer"]["expand"]:
         # Monte Carlo sample the distribution.
-        value = dist(sample_shape=(num_samples,))
+        value = dist(sample_shape=torch.Size([num_samples]))
     assert value.dim() == 1 + len(dist.batch_shape) + len(dist.event_shape)
     return value
 
