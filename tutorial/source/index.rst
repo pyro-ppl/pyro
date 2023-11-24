@@ -106,7 +106,7 @@ List of Tutorials
    vae
    ss-vae
    cvae
-   normalizing_flows_i
+   normalizing_flows_intro
    dmm
    air
    cevae
