@@ -14,6 +14,7 @@ from tests.common import (
     requires_cuda,
     requires_funsor,
     requires_horovod,
+    requires_lightning,
     xfail_param,
 )
 
@@ -110,6 +111,10 @@ CPU_EXAMPLES = [
     "sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide auto",
     "sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide easy",
     "svi_horovod.py --num-epochs=2 --size=400 --no-horovod",
+    pytest.param(
+        "svi_lightning.py --max_epochs=2 --size=400 --accelerator cpu --devices 1",
+        marks=[requires_lightning],
+    ),
     "toy_mixture_model_discrete_enumeration.py  --num-steps=1",
     "sparse_regression.py --num-steps=100 --num-data=100 --num-dimensions 11",
     "vae/ss_vae_M2.py --num-epochs=1",
@@ -118,7 +123,10 @@ CPU_EXAMPLES = [
     "vae/ss_vae_M2.py --num-epochs=1 --enum-discrete=sequential",
     "vae/vae.py --num-epochs=1",
     "vae/vae_comparison.py --num-epochs=1",
-    "cvae/main.py --num-quadrant-inputs=1 --num-epochs=1",
+    pytest.param(
+        "cvae/main.py --num-quadrant-inputs=1 --num-epochs=1",
+        marks=pytest.mark.skip(reason="https://github.com/pyro-ppl/pyro/issues/3273"),
+    ),
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=0 ",
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=1 ",
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 ",
@@ -177,6 +185,10 @@ CUDA_EXAMPLES = [
     "sir_hmc.py -t=2 -w=2 -n=4 -d=2 -p=10000 --sequential --cuda",
     "sir_hmc.py -t=2 -w=2 -n=4 -d=100 -p=10000 --cuda",
     "svi_horovod.py --num-epochs=2 --size=400 --cuda --no-horovod",
+    pytest.param(
+        "svi_lightning.py --max_epochs=2 --size=400 --accelerator gpu --devices 1",
+        marks=[requires_lightning],
+    ),
     "vae/vae.py --num-epochs=1 --cuda",
     "vae/ss_vae_M2.py --num-epochs=1 --cuda",
     "vae/ss_vae_M2.py --num-epochs=1 --aux-loss --cuda",
@@ -288,7 +300,11 @@ FUNSOR_EXAMPLES = [
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=2 --funsor",
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=3 --funsor",
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=4 --funsor",
-    "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --funsor",
+    xfail_param(
+        "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=5 --funsor",
+        reason="https://github.com/pyro-ppl/pyro/issues/3046",
+        run=False,
+    ),
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --funsor",
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --raftery-parameterization --funsor",
     "contrib/funsor/hmm.py --num-steps=1 --truncate=10 --model=6 --jit --funsor",

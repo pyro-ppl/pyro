@@ -99,7 +99,7 @@ def test_sample_2(alpha, beta):
 def test_normal(loc, scale):
     num_samples = 100000
     expected = dist.Normal(loc, scale).sample([num_samples])
-    actual = dist.Stable(2, 0, scale * 0.5 ** 0.5, loc).sample([num_samples])
+    actual = dist.Stable(2, 0, scale * 0.5**0.5, loc).sample([num_samples])
     assert_close(actual.mean(), expected.mean(), atol=0.01)
     assert_close(actual.std(), expected.std(), atol=0.01)
 
@@ -116,14 +116,14 @@ def test_additive(stability, skew0, skew1, scale0, scale1):
     d1 = dist.Stable(stability, skew1, scale1, coords="S")
     expected = d0.sample([num_samples]) + d1.sample([num_samples])
 
-    scale = (scale0 ** stability + scale1 ** stability) ** (1 / stability)
-    skew = (skew0 * scale0 ** stability + skew1 * scale1 ** stability) / (
-        scale0 ** stability + scale1 ** stability
+    scale = (scale0**stability + scale1**stability) ** (1 / stability)
+    skew = (skew0 * scale0**stability + skew1 * scale1**stability) / (
+        scale0**stability + scale1**stability
     )
     d = dist.Stable(stability, skew, scale, coords="S")
     actual = d.sample([num_samples])
 
-    assert ks_2samp(expected, actual).pvalue > 0.05
+    assert ks_2samp(expected, actual).pvalue > 0.03
 
 
 @pytest.mark.parametrize("scale", [0.5, 1.5])

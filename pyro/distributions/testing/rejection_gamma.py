@@ -75,7 +75,7 @@ class RejectionStandardGamma(Rejector):
         v = value / self._d
         result = -self._d.log()
         y = v.pow(1 / 3)
-        result -= torch.log(3 * y ** 2)
+        result -= torch.log(3 * y**2)
         x = (y - 1) / self._c
         result -= self._c.log()
         result += Normal(

@@ -135,7 +135,7 @@ def test_log_prob_normalization(dim, df=6.1, grid_size=2000, domain_width=5.0):
     volume_factor = domain_width
     prec = 0.01
     if dim == 2:
-        volume_factor = volume_factor ** 2
+        volume_factor = volume_factor**2
         prec = 0.05
 
     sample_shape = (grid_size * grid_size, dim)

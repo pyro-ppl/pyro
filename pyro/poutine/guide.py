@@ -30,7 +30,13 @@ class GuideMessenger(TraceMessenger, ABC):
     def model(self):
         return self._model[0]
 
-    def __call__(self, *args, **kwargs) -> Dict[str, torch.Tensor]:
+    def __getstate__(self):
+        # Avoid pickling the trace.
+        state = super().__getstate__()
+        state.pop("trace")
+        return state
+
+    def __call__(self, *args, **kwargs) -> Dict[str, torch.Tensor]:  # type: ignore[override]
         """
         Draws posterior samples from the guide and replays the model against
         those samples.
@@ -106,7 +112,7 @@ class GuideMessenger(TraceMessenger, ABC):
         """
         raise NotImplementedError
 
-    def upstream_value(self, name: str) -> torch.Tensor:
+    def upstream_value(self, name: str):
         """
         For use in :meth:`get_posterior` .
 

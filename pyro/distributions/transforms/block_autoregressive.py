@@ -264,7 +264,7 @@ class MaskedBlockLinear(torch.nn.Module):
         w = torch.exp(self._weight) * self.mask_d + self._weight * self.mask_o
 
         # Sum is taken over columns, i.e. one norm per row
-        w_squared_norm = (w ** 2).sum(-1, keepdim=True)
+        w_squared_norm = (w**2).sum(-1, keepdim=True)
 
         # Effect of multiplication and division is that each row is normalized and rescaled
         w = self._diag_weight.exp() * w / (w_squared_norm.sqrt() + eps)

@@ -75,4 +75,4 @@ class Periodic(Kernel):
 
         d = X.unsqueeze(1) - Z.unsqueeze(0)
         scaled_sin = torch.sin(math.pi * d / self.period) / self.lengthscale
-        return self.variance * torch.exp(-2 * (scaled_sin ** 2).sum(-1))
+        return self.variance * torch.exp(-2 * (scaled_sin**2).sum(-1))

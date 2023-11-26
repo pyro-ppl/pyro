@@ -70,10 +70,10 @@ class InvalidTest(ValueError):
 
 
 def print_histogram(probs, counts):
-    max_count = max(counts)
+    max_count = int(max(counts))
     print("{: >8} {: >8}".format("Prob", "Count"))
     for prob, count in sorted(zip(probs, counts), reverse=True):
-        width = int(round(HISTOGRAM_WIDTH * count / max_count))
+        width = int(round(HISTOGRAM_WIDTH * int(count) / max_count))
         print("{: >8.3f} {: >8d} {}".format(prob, count, "-" * width))
 
 
@@ -203,7 +203,7 @@ def density_goodness_of_fit(samples, probs, plot=False):
 
 
 def volume_of_sphere(dim, radius):
-    return radius ** dim * math.pi ** (0.5 * dim) / math.gamma(0.5 * dim + 1)
+    return radius**dim * math.pi ** (0.5 * dim) / math.gamma(0.5 * dim + 1)
 
 
 def get_nearest_neighbor_distances(samples):

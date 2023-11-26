@@ -181,7 +181,6 @@ class DimStack:
         )
 
     def allocate(self, key_to_value_request):
-
         # step 1: split into fresh and non-fresh
         key_to_value = OrderedDict()
         for key, value_request in tuple(key_to_value_request.items()):

@@ -8,7 +8,6 @@ from torch.autograd import grad
 from tests.common import (
     assert_equal,
     requires_cuda,
-    tensors_default_to,
     xfail_if_not_implemented,
 )
 
@@ -16,9 +15,8 @@ from tests.common import (
 @requires_cuda
 def test_sample(dist):
     for idx in range(len(dist.dist_params)):
-
         # Compute CPU value.
-        with tensors_default_to("cpu"):
+        with torch.device("cpu"):
             params = dist.get_dist_params(idx)
         try:
             with xfail_if_not_implemented():
@@ -28,7 +26,7 @@ def test_sample(dist):
         assert not cpu_value.is_cuda
 
         # Compute GPU value.
-        with tensors_default_to("cuda"):
+        with torch.device("cuda"):
             params = dist.get_dist_params(idx)
         cuda_value = dist.pyro_dist(**params).sample()
         assert cuda_value.is_cuda
@@ -41,9 +39,8 @@ def test_rsample(dist):
     if not dist.pyro_dist.has_rsample:
         return
     for idx in range(len(dist.dist_params)):
-
         # Compute CPU value.
-        with tensors_default_to("cpu"):
+        with torch.device("cpu"):
             params = dist.get_dist_params(idx)
             grad_params = [
                 key
@@ -63,7 +60,7 @@ def test_rsample(dist):
         assert not cpu_value.is_cuda
 
         # Compute GPU value.
-        with tensors_default_to("cuda"):
+        with torch.device("cuda"):
             params = dist.get_dist_params(idx)
             for key in grad_params:
                 val = params[key].clone()
@@ -81,9 +78,8 @@ def test_rsample(dist):
 @requires_cuda
 def test_log_prob(dist):
     for idx in range(len(dist.dist_params)):
-
         # Compute CPU value.
-        with tensors_default_to("cpu"):
+        with torch.device("cpu"):
             data = dist.get_test_data(idx)
             params = dist.get_dist_params(idx)
         with xfail_if_not_implemented():
@@ -91,7 +87,7 @@ def test_log_prob(dist):
         assert not cpu_value.is_cuda
 
         # Compute GPU value.
-        with tensors_default_to("cuda"):
+        with torch.device("cuda"):
             data = dist.get_test_data(idx)
             params = dist.get_dist_params(idx)
         cuda_value = dist.pyro_dist(**params).log_prob(data)

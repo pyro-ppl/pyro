@@ -164,6 +164,7 @@ def get_summary_table(
         if site_summary["mean"].shape:
             site_df = pd.DataFrame(site_summary, index=player_names)
         else:
+            site_summary = {k: float(v) for k, v in site_summary.items()}
             site_df = pd.DataFrame(site_summary, index=[0])
         if not diagnostics:
             site_df = site_df.drop(["n_eff", "r_hat"], axis=1)
@@ -252,7 +253,7 @@ def evaluate_pointwise_pred_density(model, posterior_samples, baseball_dataset):
 
 
 def main(args):
-    baseball_dataset = pd.read_csv(DATA_URL, "\t")
+    baseball_dataset = pd.read_csv(DATA_URL, sep="\t")
     train, _, player_names = train_test_split(baseball_dataset)
     at_bats, hits = train[:, 0], train[:, 1]
     logging.info("Original Dataset:")
@@ -391,7 +392,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.8.6")
     parser = argparse.ArgumentParser(description="Baseball batting average using HMC")
     parser.add_argument("-n", "--num-samples", nargs="?", default=200, type=int)
     parser.add_argument("--num-chains", nargs="?", default=4, type=int)
@@ -417,6 +418,6 @@ if __name__ == "__main__":
     torch.multiprocessing.set_sharing_strategy("file_system")
 
     if args.cuda:
-        torch.set_default_tensor_type(torch.cuda.FloatTensor)
+        torch.set_default_device("cuda")
 
     main(args)

@@ -217,7 +217,7 @@ def beta_binomial_dist(
         # final concentration c = 1 / (1 / c_1 + 1 / c_2)
         od2 = (overdispersion + 1e-8) ** 2
         c_1 = concentration1 + concentration0
-        c_2 = c_1 ** 2 / (concentration1 * concentration0 * od2 + 1e-8) - 1
+        c_2 = c_1**2 / (concentration1 * concentration0 * od2 + 1e-8) - 1
         factor = 1 + c_1 / c_2
         concentration1 = concentration1 / factor
         concentration0 = concentration0 / factor

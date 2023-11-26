@@ -182,7 +182,7 @@ class AutoGuide(PyroModule):
 
 class AutoGuideList(AutoGuide, nn.ModuleList):
     """
-    Container class to combine multiple automatic guides.
+    Container class to combine multiple automatic or custom guides.
 
     Example usage::
 
@@ -203,7 +203,7 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
 
     def append(self, part):
         """
-        Add an automatic guide for part of the model. The guide should
+        Add an automatic or custom guide for part of the model. The guide should
         have been created by blocking the model to restrict to a subset of
         sample sites. No two parts should operate on any one sample site.
 
@@ -286,15 +286,15 @@ class AutoCallable(AutoGuide):
             ...
 
         guide = AutoGuideList(model)
-        guide.add(AutoDelta(poutine.block(model, expose=['my_global_param']))
-        guide.add(my_local_guide)  # automatically wrapped in an AutoCallable
+        guide.append(AutoDelta(poutine.block(model, expose=['my_global_param']))
+        guide.append(my_local_guide)  # automatically wrapped in an AutoCallable
 
     To specify a median callable, you can instead::
 
         def my_local_median(*args, **kwargs)
             ...
 
-        guide.add(AutoCallable(model, my_local_guide, my_local_median))
+        guide.append(AutoCallable(model, my_local_guide, my_local_median))
 
     For more complex guides that need e.g. access to plates, users should
     instead subclass ``AutoGuide``.
@@ -899,7 +899,10 @@ class AutoMultivariateNormal(AutoContinuous):
         return dist.MultivariateNormal(self.loc, scale_tril=scale_tril)
 
     def _loc_scale(self, *args, **kwargs):
-        return self.loc, self.scale * self.scale_tril.diag()
+        scale_tril = self.scale[..., None] * self.scale_tril
+        scale = scale_tril.pow(2).sum(-1).sqrt()
+        assert scale.shape == self.loc.shape
+        return self.loc, scale
 
 
 class AutoDiagonalNormal(AutoContinuous):
@@ -1000,14 +1003,14 @@ class AutoLowRankMultivariateNormal(AutoContinuous):
         # Initialize guide params
         self.loc = nn.Parameter(self._init_loc())
         if self.rank is None:
-            self.rank = int(round(self.latent_dim ** 0.5))
+            self.rank = int(round(self.latent_dim**0.5))
         self.scale = PyroParam(
-            self.loc.new_full((self.latent_dim,), 0.5 ** 0.5 * self._init_scale),
+            self.loc.new_full((self.latent_dim,), 0.5**0.5 * self._init_scale),
             constraint=self.scale_constraint,
         )
         self.cov_factor = nn.Parameter(
             self.loc.new_empty(self.latent_dim, self.rank).normal_(
-                0, 1 / self.rank ** 0.5
+                0, 1 / self.rank**0.5
             )
         )
 

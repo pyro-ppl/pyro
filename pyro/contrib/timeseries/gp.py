@@ -385,7 +385,6 @@ class DependentMaternGP(TimeSeriesModel):
         length_scale_init=None,
         obs_noise_scale_init=None,
     ):
-
         if nu != 1.5:
             raise NotImplementedError("The only supported value of nu is 1.5")
 

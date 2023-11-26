@@ -57,7 +57,6 @@ class AIR(nn.Module):
         likelihood_sd=0.3,
         use_cuda=False,
     ):
-
         super().__init__()
 
         self.num_steps = num_steps
@@ -88,14 +87,14 @@ class AIR(nn.Module):
         )
 
         # Create nn modules.
-        rnn_input_size = x_size ** 2 if embed_net is None else embed_net[-1]
+        rnn_input_size = x_size**2 if embed_net is None else embed_net[-1]
         rnn_input_size += self.z_where_size + z_what_size + self.z_pres_size
         nl = getattr(nn, non_linearity)
 
         self.rnn = nn.LSTMCell(rnn_input_size, rnn_hidden_size)
-        self.encode = Encoder(window_size ** 2, encoder_net, z_what_size, nl)
+        self.encode = Encoder(window_size**2, encoder_net, z_what_size, nl)
         self.decode = Decoder(
-            window_size ** 2,
+            window_size**2,
             decoder_net,
             z_what_size,
             decoder_output_bias,
@@ -106,13 +105,13 @@ class AIR(nn.Module):
             rnn_hidden_size, predict_net, self.z_pres_size, self.z_where_size, nl
         )
         self.embed = (
-            Identity() if embed_net is None else MLP(x_size ** 2, embed_net, nl, True)
+            Identity() if embed_net is None else MLP(x_size**2, embed_net, nl, True)
         )
 
         self.bl_rnn = nn.LSTMCell(rnn_input_size, rnn_hidden_size)
         self.bl_predict = MLP(rnn_hidden_size, bl_predict_net + [1], nl)
         self.bl_embed = (
-            Identity() if embed_net is None else MLP(x_size ** 2, embed_net, nl, True)
+            Identity() if embed_net is None else MLP(x_size**2, embed_net, nl, True)
         )
 
         # Create parameters.
@@ -127,7 +126,6 @@ class AIR(nn.Module):
             self.cuda()
 
     def prior(self, n, **kwargs):
-
         state = ModelState(
             x=torch.zeros(n, self.x_size, self.x_size, **self.options),
             z_pres=torch.ones(n, self.z_pres_size, **self.options),
@@ -145,7 +143,6 @@ class AIR(nn.Module):
         return (z_where, z_pres), state.x
 
     def prior_step(self, t, n, prev, z_pres_prior_p=default_z_pres_prior_p):
-
         # Sample presence indicators.
         z_pres = pyro.sample(
             "z_pres_{}".format(t),
@@ -205,7 +202,7 @@ class AIR(nn.Module):
                     x.view(n, -1),
                     (
                         self.likelihood_sd
-                        * torch.ones(n, self.x_size ** 2, **self.options)
+                        * torch.ones(n, self.x_size**2, **self.options)
                     ),
                 ).to_event(1),
                 obs=batch.view(n, -1),
@@ -243,13 +240,13 @@ class AIR(nn.Module):
 
             # Initial state.
             state = GuideState(
-                h=batch_expand(self.h_init, n),
-                c=batch_expand(self.c_init, n),
-                bl_h=batch_expand(self.bl_h_init, n),
-                bl_c=batch_expand(self.bl_c_init, n),
+                h=self.h_init.expand(n, -1),
+                c=self.c_init.expand(n, -1),
+                bl_h=self.bl_h_init.expand(n, -1),
+                bl_c=self.bl_c_init.expand(n, -1),
                 z_pres=torch.ones(n, self.z_pres_size, **self.options),
-                z_where=batch_expand(self.z_where_init, n),
-                z_what=batch_expand(self.z_what_init, n),
+                z_where=self.z_where_init.expand(n, -1),
+                z_what=self.z_what_init.expand(n, -1),
             )
 
             z_pres = []
@@ -263,7 +260,6 @@ class AIR(nn.Module):
             return z_where, z_pres
 
     def guide_step(self, t, n, prev, inputs):
-
         rnn_input = torch.cat(
             (inputs["embed"], prev.z_where, prev.z_what, prev.z_pres), 1
         )
@@ -385,7 +381,7 @@ def z_where_inv(z_where):
 
 def window_to_image(z_where, window_size, image_size, windows):
     n = windows.size(0)
-    assert windows.size(1) == window_size ** 2, "Size mismatch."
+    assert windows.size(1) == window_size**2, "Size mismatch."
     theta = expand_z_where(z_where)
     grid = F.affine_grid(theta, torch.Size((n, 1, image_size, image_size)))
     out = F.grid_sample(windows.view(n, 1, window_size, window_size), grid)
@@ -399,13 +395,6 @@ def image_to_window(z_where, window_size, image_size, images):
     grid = F.affine_grid(theta_inv, torch.Size((n, 1, window_size, window_size)))
     out = F.grid_sample(images.view(n, 1, image_size, image_size), grid)
     return out.view(n, -1)
-
-
-# Helper to expand parameters to the size of the mini-batch. I would
-# like to remove this and just write `t.expand(n, -1)` inline, but the
-# `-1` argument of `expand` doesn't seem to work with PyTorch 0.2.0.
-def batch_expand(t, n):
-    return t.expand(n, t.size(1))
 
 
 # Combine z_pres and z_where (as returned by the model and guide) into

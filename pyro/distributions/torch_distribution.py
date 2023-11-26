@@ -27,7 +27,7 @@ class TorchDistributionMixin(Distribution):
     from :class:`TorchDistributionMixin`.
     """
 
-    def __call__(self, sample_shape=torch.Size()):
+    def __call__(self, sample_shape: torch.Size = torch.Size()) -> torch.Tensor:
         """
         Samples a random value.
 
@@ -51,7 +51,7 @@ class TorchDistributionMixin(Distribution):
         )
 
     @property
-    def event_dim(self):
+    def event_dim(self) -> int:
         """
         :return: Number of dimensions of individual events.
         :rtype: int
@@ -479,7 +479,7 @@ class ExpandedDistribution(TorchDistribution):
             log_prob = log_prob.expand(shape)
             if isinstance(score_function, torch.Tensor):
                 score_function = score_function.expand(shape)
-            if isinstance(score_function, torch.Tensor):
+            if isinstance(entropy_term, torch.Tensor):
                 entropy_term = entropy_term.expand(shape)
         return ScoreParts(log_prob, score_function, entropy_term)
 

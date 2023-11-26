@@ -13,7 +13,6 @@ from pyro.poutine.util import site_is_subsample
 
 
 def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
-
     if temperature == 0:
         sum_op, prod_op = funsor.ops.max, funsor.ops.add
         approx = funsor.approximations.argmax_approximate

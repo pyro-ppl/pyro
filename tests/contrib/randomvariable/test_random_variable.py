@@ -53,7 +53,7 @@ def test_neg():
 
 def test_pow():
     X = Uniform(0, 1).rv  # (0, 1)
-    X = X ** 2  # (0, 1)
+    X = X**2  # (0, 1)
     x = X.dist.sample([N_SAMPLES])
     assert ((0 <= x) & (x <= 1)).all().item()
 

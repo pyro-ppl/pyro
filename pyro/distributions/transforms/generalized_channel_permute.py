@@ -86,10 +86,10 @@ class ConditionedGeneralizedChannelPermute(Transform):
         LUx = (y_flat.unsqueeze(-3) * self.permutation.T.unsqueeze(-1)).sum(-2)
 
         # Solve L(Ux) = P^1y
-        Ux, _ = torch.triangular_solve(LUx, self.L, upper=False)
+        Ux = torch.linalg.solve_triangular(self.L, LUx, upper=False)
 
         # Solve Ux = (PL)^-1y
-        x, _ = torch.triangular_solve(Ux, self.U)
+        x = torch.linalg.solve_triangular(self.U, Ux, upper=True)
 
         # Unflatten x (works when context variable has batch dim)
         return x.reshape(x.shape[:-1] + y.shape[-2:])
@@ -174,7 +174,7 @@ class GeneralizedChannelPermute(ConditionedGeneralizedChannelPermute, TransformM
         W, _ = torch.linalg.qr(torch.randn(channels, channels))
 
         # Construct the partially pivoted LU-form and the pivots
-        LU, pivots = W.lu()
+        LU, pivots = torch.linalg.lu_factor(W)
 
         # Convert the pivots into the permutation matrix
         if permutation is None:

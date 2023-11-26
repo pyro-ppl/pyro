@@ -82,7 +82,7 @@ class Coregionalize(Kernel):
         Xc = X.matmul(self.components)
 
         if diag:
-            return (Xc ** 2).sum(-1) + (X ** 2).mv(self.diagonal)
+            return (Xc**2).sum(-1) + (X**2).mv(self.diagonal)
 
         if Z is None:
             Z = X

@@ -70,7 +70,7 @@ class AsymmetricLaplace(TorchDistribution):
     @property
     def mean(self):
         total_scale = self.left_scale + self.right_scale
-        return self.loc + (self.right_scale ** 2 - self.left_scale ** 2) / total_scale
+        return self.loc + (self.right_scale**2 - self.left_scale**2) / total_scale
 
     @property
     def variance(self):
@@ -79,7 +79,7 @@ class AsymmetricLaplace(TorchDistribution):
         total = left + right
         p = left / total
         q = right / total
-        return p * left ** 2 + q * right ** 2 + p * q * total ** 2
+        return p * left**2 + q * right**2 + p * q * total**2
 
 
 class SoftAsymmetricLaplace(TorchDistribution):
@@ -172,8 +172,8 @@ class SoftAsymmetricLaplace(TorchDistribution):
         return (
             math.log(0.5)
             + torch.logaddexp(
-                (SS / 2 + Lx) / L ** 2 + _logerfc((SS + Lx) / (L * S2)),
-                (SS / 2 - Rx) / R ** 2 + _logerfc((SS - Rx) / (R * S2)),
+                (SS / 2 + Lx) / L**2 + _logerfc((SS + Lx) / (L * S2)),
+                (SS / 2 - Rx) / R**2 + _logerfc((SS - Rx) / (R * S2)),
             )
             - (L + R).log()
             - self.scale.log()
@@ -190,7 +190,7 @@ class SoftAsymmetricLaplace(TorchDistribution):
     @property
     def mean(self):
         total_scale = self.left_scale + self.right_scale
-        return self.loc + (self.right_scale ** 2 - self.left_scale ** 2) / total_scale
+        return self.loc + (self.right_scale**2 - self.left_scale**2) / total_scale
 
     @property
     def variance(self):
@@ -200,7 +200,7 @@ class SoftAsymmetricLaplace(TorchDistribution):
         p = left / total
         q = right / total
         return (
-            p * left ** 2 + q * right ** 2 + p * q * total ** 2 + self.soft_scale ** 2
+            p * left**2 + q * right**2 + p * q * total**2 + self.soft_scale**2
         )
 
 

@@ -34,13 +34,12 @@ for _name, _Optim in torch.optim.__dict__.items():
     del _PyroOptim
 
 # Load all schedulers from PyTorch
+_torch_scheduler_base = torch.optim.lr_scheduler.LRScheduler  # type: ignore
+
 for _name, _Optim in torch.optim.lr_scheduler.__dict__.items():
     if not isinstance(_Optim, type):
         continue
-    if (
-        not issubclass(_Optim, torch.optim.lr_scheduler._LRScheduler)
-        and _name != "ReduceLROnPlateau"
-    ):
+    if not issubclass(_Optim, _torch_scheduler_base) and _name != "ReduceLROnPlateau":
         continue
     if _Optim is torch.optim.Optimizer:
         continue

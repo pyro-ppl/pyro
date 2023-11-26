@@ -110,7 +110,7 @@ class SpanningTree(TorchDistribution):
             connected = torch.eye(V, dtype=torch.float)
             connected[edges_i[:, 0], edges_i[:, 1]] = 1
             connected[edges_i[:, 1], edges_i[:, 0]] = 1
-            for i in range(int(math.ceil(V ** 0.5))):
+            for i in range(int(math.ceil(V**0.5))):
                 connected = connected.mm(connected).clamp_(max=1)
             if not connected.min() > 0:
                 raise ValueError("Edges do not constitute a tree:\n{}".format(edges_i))

@@ -46,13 +46,15 @@ class MixtureOfDiagNormals(TorchDistribution):
         "coord_scale": constraints.positive,
         "component_logits": constraints.real,
     }
+    support = constraints.real_vector
 
     def __init__(self, locs, coord_scale, component_logits):
         self.batch_mode = locs.dim() > 2
         assert coord_scale.shape == locs.shape
-        assert (
-            self.batch_mode or locs.dim() == 2
-        ), "The locs parameter in MixtureOfDiagNormals should be K x D dimensional (or B x K x D if doing batches)"
+        assert self.batch_mode or locs.dim() == 2, (
+            "The locs parameter in MixtureOfDiagNormals should be K x D dimensional "
+            "(or ... x B x K x D if doing batches)"
+        )
         if not self.batch_mode:
             assert (
                 coord_scale.dim() == 2
@@ -65,10 +67,10 @@ class MixtureOfDiagNormals(TorchDistribution):
         else:
             assert (
                 coord_scale.dim() > 2
-            ), "The coord_scale parameter in MixtureOfDiagNormals should be B x K x D dimensional"
+            ), "The coord_scale parameter in MixtureOfDiagNormals should be ... x B x K x D dimensional"
             assert (
                 component_logits.dim() > 1
-            ), "The component_logits parameter in MixtureOfDiagNormals should be B x K dimensional"
+            ), "The component_logits parameter in MixtureOfDiagNormals should be ... x B x K dimensional"
             assert component_logits.size(-1) == locs.size(-2)
             batch_shape = tuple(locs.shape[:-2])
 
@@ -133,7 +135,7 @@ class _MixDiagNormalSample(Function):
     @staticmethod
     def forward(ctx, locs, scales, component_logits, pis, which, noise_shape):
         dim = scales.size(-1)
-        white = locs.new(noise_shape).normal_()
+        white = locs.new_empty(noise_shape).normal_()
         n_unsqueezes = locs.dim() - which.dim()
         for _ in range(n_unsqueezes):
             which = which.unsqueeze(-1)
@@ -147,7 +149,6 @@ class _MixDiagNormalSample(Function):
     @staticmethod
     @once_differentiable
     def backward(ctx, grad_output):
-
         z, scales, locs, logits, pis = ctx.saved_tensors
         dim = scales.size(-1)
         K = logits.size(-1)

@@ -59,7 +59,7 @@ class _OMTMVNSample(Function):
         loc_grad = sum_leftmost(grad_output, -1)
 
         identity = eye_like(g, dim)
-        R_inv = torch.triangular_solve(identity, L.t(), transpose=False, upper=True)[0]
+        R_inv = torch.linalg.solve_triangular(L.t(), identity, upper=True)
 
         z_ja = z.unsqueeze(-1)
         g_R_inv = torch.matmul(g, R_inv).unsqueeze(-2)

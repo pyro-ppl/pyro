@@ -60,7 +60,6 @@ def generate_data(small_test, include_stop, device):
 
 
 def main(args):
-
     # Load dataset.
     if args.cpu_data or not args.cuda:
         device = torch.device("cpu")
@@ -428,9 +427,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    torch.set_default_dtype(torch.float64)
     if args.cuda:
-        torch.set_default_tensor_type(torch.cuda.DoubleTensor)
-    else:
-        torch.set_default_dtype(torch.float64)
+        torch.set_default_device("cuda")
 
     main(args)

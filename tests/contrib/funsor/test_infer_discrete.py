@@ -32,7 +32,6 @@ _PYRO_BACKEND = os.environ.get("TEST_ENUM_PYRO_BACKEND", "contrib.funsor")
 @pytest.mark.parametrize("temperature", [0, 1])
 @pyroapi.pyro_backend(_PYRO_BACKEND)
 def test_hmm_smoke(length, temperature):
-
     # This should match the example in the infer_discrete docstring.
     def hmm(data, hidden_dim=10):
         transition = 0.3 / hidden_dim + 0.7 * torch.eye(hidden_dim)
@@ -325,7 +324,6 @@ def model_zzxx():
 
 
 def model2():
-
     data = [torch.tensor([-1.0, -1.0, 0.0]), torch.tensor([-1.0, 1.0])]
     p = pyro.param("p", torch.tensor([0.25, 0.75]))
     loc = pyro.sample("loc", dist.Normal(0, 1).expand([2]).to_event(1))

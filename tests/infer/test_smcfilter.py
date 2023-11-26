@@ -187,7 +187,6 @@ def score_latent(zs, ys):
 
 
 def test_likelihood_ratio():
-
     model = HarmonicModel()
     guide = HarmonicGuide()
 
@@ -269,7 +268,7 @@ def test_gaussian_filter():
         expected = hmm.filter(data[: 1 + t])
         actual = smc.get_empirical()["z"]
         assert_close(
-            actual.variance ** 0.5, expected.variance ** 0.5, atol=0.1, rtol=0.5
+            actual.variance**0.5, expected.variance**0.5, atol=0.1, rtol=0.5
         )
         sigma = actual.variance.max().item() ** 0.5
         assert_close(actual.mean, expected.mean, atol=3 * sigma)

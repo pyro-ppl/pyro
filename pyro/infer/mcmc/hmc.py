@@ -14,7 +14,7 @@ from pyro.infer.autoguide import init_to_uniform
 from pyro.infer.mcmc.adaptation import WarmupAdapter
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.infer.mcmc.util import initialize_model
-from pyro.ops.integrator import potential_grad, velocity_verlet
+from pyro.ops.integrator import _EXCEPTION_HANDLERS, potential_grad, velocity_verlet
 from pyro.util import optional, torch_isnan
 
 
@@ -66,6 +66,8 @@ class HMC(MCMCKernel):
         step size, hence the sampling will be slower and more robust. Default to 0.8.
     :param callable init_strategy: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
+    :param min_stepsize (float): Lower bound on stepsize in adaptation strategy.
+    :param max_stepsize (float): Upper bound on stepsize in adaptation strategy.
 
     .. note:: Internally, the mass matrix will be ordered according to the order
         of the names of latent variables, not the order of their appearance in
@@ -108,6 +110,9 @@ class HMC(MCMCKernel):
         ignore_jit_warnings=False,
         target_accept_prob=0.8,
         init_strategy=init_to_uniform,
+        *,
+        min_stepsize: float = 1e-10,
+        max_stepsize: float = 1e10,
     ):
         if not ((model is None) ^ (potential_fn is None)):
             raise ValueError("Only one of `model` or `potential_fn` must be specified.")
@@ -119,6 +124,8 @@ class HMC(MCMCKernel):
         self._jit_options = jit_options
         self._ignore_jit_warnings = ignore_jit_warnings
         self._init_strategy = init_strategy
+        self._min_stepsize = min_stepsize
+        self._max_stepsize = max_stepsize
 
         self.potential_fn = potential_fn
         if trajectory_length is not None:
@@ -166,7 +173,16 @@ class HMC(MCMCKernel):
         # We are going to find a step_size which make accept_prob (Metropolis correction)
         # near the target_accept_prob. If accept_prob:=exp(-delta_energy) is small,
         # then we have to decrease step_size; otherwise, increase step_size.
-        potential_energy = self.potential_fn(z)
+        try:
+            potential_energy = self.potential_fn(z)
+        # handle exceptions as defined in the exception registry
+        except Exception as e:
+            if any(h(e) for h in _EXCEPTION_HANDLERS.values()):
+                # skip finding reasonable step size
+                return step_size
+            else:
+                raise e
+
         r, r_unscaled = self._sample_r(name="r_presample_0")
         energy_current = self._kinetic_energy(r_unscaled) + potential_energy
         # This is required so as to avoid issues with autograd when model
@@ -185,12 +201,14 @@ class HMC(MCMCKernel):
         direction = 1 if self._direction_threshold < -delta_energy else -1
 
         # define scale for step_size: 2 for increasing, 1/2 for decreasing
-        step_size_scale = 2 ** direction
+        step_size_scale = 2**direction
         direction_new = direction
         # keep scale step_size until accept_prob crosses its target
-        # TODO: make thresholds for too small step_size or too large step_size
         t = 0
-        while direction_new == direction:
+        while (
+            direction_new == direction
+            and self._min_stepsize < step_size < self._max_stepsize
+        ):
             t += 1
             step_size = step_size_scale * step_size
             r, r_unscaled = self._sample_r(name="r_presample_{}".format(t))
@@ -206,6 +224,8 @@ class HMC(MCMCKernel):
             energy_new = self._kinetic_energy(r_new_unscaled) + potential_energy_new
             delta_energy = energy_new - energy_current
             direction_new = 1 if self._direction_threshold < -delta_energy else -1
+        step_size = max(step_size, self._min_stepsize)
+        step_size = min(step_size, self._max_stepsize)
         return step_size
 
     def _sample_r(self, name):

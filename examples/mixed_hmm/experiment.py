@@ -35,7 +35,6 @@ def aic_num_parameters(model, guide=None):
 
 
 def run_expt(args):
-
     data_dir = args["folder"]
     dataset = "seal"  # args["dataset"]
     seed = args["seed"]
@@ -79,7 +78,6 @@ def run_expt(args):
             schedule_step_loss = True
 
         for t in range(timesteps):
-
             optimizer.zero_grad()
             loss = loss_fn(model, guide)
             loss.backward()
@@ -166,7 +164,6 @@ def run_expt(args):
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
     parser.add_argument("-g", "--group", default="none", type=str)
     parser.add_argument("-i", "--individual", default="none", type=str)

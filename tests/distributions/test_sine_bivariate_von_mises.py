@@ -42,7 +42,7 @@ def test_bvm_unnorm_log_prob(batch_dim):
         locs = vm.sample((2, *batch_dim))
         conc = hn.sample((2, *batch_dim))
         corr = b.sample((*batch_dim,))
-        if torch.all(torch.prod(conc, dim=0) > corr ** 2):
+        if torch.all(torch.prod(conc, dim=0) > corr**2):
             break
     bmv = SineBivariateVonMises(locs[0], locs[1], conc[0], conc[1], corr)
     assert_equal(
@@ -63,7 +63,7 @@ def test_bvm_multidim():
             locs = vm.sample((2, *batch_dim))
             conc = hn.sample((2, *batch_dim))
             corr = b.sample((*batch_dim,))
-            if torch.all(torch.prod(conc, dim=0) > corr ** 2):
+            if torch.all(torch.prod(conc, dim=0) > corr**2):
                 break
 
         bmv = SineBivariateVonMises(locs[0], locs[1], conc[0], conc[1], corr)
@@ -81,7 +81,7 @@ def test_mle_bvm():
         locs = vm.sample((2,))
         conc = hn.sample((2,))
         corr = b.sample()
-        if torch.prod(conc, dim=-1) >= corr ** 2:
+        if torch.prod(conc, dim=-1) >= corr**2:
             break
 
     def mle_model(data):

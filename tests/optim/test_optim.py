@@ -56,27 +56,25 @@ class OptimTests(TestCase):
             elif param_name == free_param:
                 return {"lr": 0.01}
 
+        def get_steps(adam):
+            state = adam.get_state()["loc_q"]["state"]
+            return int(list(state.values())[0]["step"])
+
         adam = optim.Adam(optim_params)
         adam2 = optim.Adam(optim_params)
         svi = SVI(model, guide, adam, loss=TraceGraph_ELBO())
         svi2 = SVI(model, guide, adam2, loss=TraceGraph_ELBO())
 
         svi.step()
-        adam_initial_step_count = list(adam.get_state()["loc_q"]["state"].items())[0][
-            1
-        ]["step"]
+        adam_initial_step_count = get_steps(adam)
         with TemporaryDirectory() as tempdir:
             filename = os.path.join(tempdir, "optimizer_state.pt")
             adam.save(filename)
             svi.step()
-            adam_final_step_count = list(adam.get_state()["loc_q"]["state"].items())[0][
-                1
-            ]["step"]
+            adam_final_step_count = get_steps(adam)
             adam2.load(filename)
         svi2.step()
-        adam2_step_count_after_load_and_step = list(
-            adam2.get_state()["loc_q"]["state"].items()
-        )[0][1]["step"]
+        adam2_step_count_after_load_and_step = get_steps(adam2)
 
         assert adam_initial_step_count == 1
         assert adam_final_step_count == 2
@@ -96,7 +94,7 @@ class OptimTests(TestCase):
             {
                 "optimizer": torch.optim.SGD,
                 "optim_args": {"lr": 0.01},
-                "lr_lambda": lambda epoch: 2.0 ** epoch,
+                "lr_lambda": lambda epoch: 2.0**epoch,
             }
         ),
         optim.StepLR(
@@ -344,7 +342,7 @@ def test_name_preserved_by_to_pyro_module():
             {
                 "optimizer": torch.optim.SGD,
                 "optim_args": {"lr": 0.01},
-                "lr_lambda": lambda epoch: 0.9 ** epoch,
+                "lr_lambda": lambda epoch: 0.9**epoch,
             },
         ),
         (

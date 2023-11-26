@@ -51,7 +51,6 @@ def test_iteration():
 
 def test_nesting():
     def testing():
-
         with pyro.markov():
             v1 = pyro.to_data(
                 Tensor(torch.ones(2), OrderedDict([(str(1), funsor.Bint[2])]), "real")

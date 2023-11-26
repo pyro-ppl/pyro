@@ -92,6 +92,17 @@ class VariationalSparseGP(GPModel):
         whiten=False,
         jitter=1e-6,
     ):
+        assert isinstance(
+            X, torch.Tensor
+        ), "X needs to be a torch Tensor instead of a {}".format(type(X))
+        if y is not None:
+            assert isinstance(
+                y, torch.Tensor
+            ), "y needs to be a torch Tensor instead of a {}".format(type(y))
+        assert isinstance(
+            Xu, torch.Tensor
+        ), "Xu needs to be a torch Tensor instead of a {}".format(type(Xu))
+
         super().__init__(X, y, kernel, mean_function, jitter)
 
         self.likelihood = likelihood

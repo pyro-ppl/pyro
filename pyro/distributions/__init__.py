@@ -38,6 +38,7 @@ from pyro.distributions.empirical import Empirical
 from pyro.distributions.extended import ExtendedBetaBinomial, ExtendedBinomial
 from pyro.distributions.folded import FoldedDistribution
 from pyro.distributions.gaussian_scale_mixture import GaussianScaleMixture
+from pyro.distributions.grouped_normal_normal import GroupedNormalNormal
 from pyro.distributions.hmm import (
     DiscreteHMM,
     GammaGaussianHMM,
@@ -49,9 +50,11 @@ from pyro.distributions.hmm import (
 from pyro.distributions.improper_uniform import ImproperUniform
 from pyro.distributions.inverse_gamma import InverseGamma
 from pyro.distributions.lkj import LKJ, LKJCorrCholesky
+from pyro.distributions.log_normal_negative_binomial import LogNormalNegativeBinomial
 from pyro.distributions.logistic import Logistic, SkewLogistic
 from pyro.distributions.mixture import MaskedMixture
 from pyro.distributions.multivariate_studentt import MultivariateStudentT
+from pyro.distributions.nanmasked import NanMaskedMultivariateNormal, NanMaskedNormal
 from pyro.distributions.omt_mvn import OMTMultivariateNormal
 from pyro.distributions.one_one_matching import OneOneMatching
 from pyro.distributions.one_two_matching import OneTwoMatching
@@ -91,9 +94,9 @@ from pyro.distributions.zero_inflated import (
 from . import constraints, kl, transforms
 
 __all__ = [
+    "AVFMultivariateNormal",
     "AffineBeta",
     "AsymmetricLaplace",
-    "AVFMultivariateNormal",
     "BetaBinomial",
     "CoalescentRateLikelihood",
     "CoalescentTimes",
@@ -117,18 +120,22 @@ __all__ = [
     "GaussianHMM",
     "GaussianMRF",
     "GaussianScaleMixture",
+    "GroupedNormalNormal",
     "ImproperUniform",
     "IndependentHMM",
     "InverseGamma",
     "LKJ",
     "LKJCorrCholesky",
     "LinearHMM",
+    "LogNormalNegativeBinomial",
     "Logistic",
     "MaskedDistribution",
     "MaskedMixture",
     "MixtureOfDiagNormals",
     "MixtureOfDiagNormalsSharedCovariance",
     "MultivariateStudentT",
+    "NanMaskedMultivariateNormal",
+    "NanMaskedNormal",
     "OMTMultivariateNormal",
     "OneOneMatching",
     "OneTwoMatching",
@@ -140,8 +147,8 @@ __all__ = [
     "SineBivariateVonMises",
     "SineSkewed",
     "SkewLogistic",
-    "SoftLaplace",
     "SoftAsymmetricLaplace",
+    "SoftLaplace",
     "SpanningTree",
     "Stable",
     "TorchDistribution",

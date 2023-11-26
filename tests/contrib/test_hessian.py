@@ -21,7 +21,7 @@ def test_hessian_mvn():
 def test_hessian_multi_variables():
     x = torch.randn(3, requires_grad=True)
     z = torch.randn(3, requires_grad=True)
-    y = (x ** 2 * z + z ** 3).sum()
+    y = (x**2 * z + z**3).sum()
 
     H = hessian(y, (x, z))
     Hxx = (2 * z).diag()

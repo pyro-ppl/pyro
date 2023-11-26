@@ -6,14 +6,14 @@ from torch.distributions.constraints import *  # noqa F403
 # isort: split
 
 import torch
-from torch.distributions.constraints import Constraint
-from torch.distributions.constraints import __all__ as torch_constraints
 from torch.distributions.constraints import (
+    Constraint,
     independent,
     lower_cholesky,
     positive,
     positive_definite,
 )
+from torch.distributions.constraints import __all__ as torch_constraints
 
 
 # TODO move this upstream to torch.distributions

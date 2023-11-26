@@ -1,7 +1,14 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
+from typing import Callable, Dict
+
 from torch.autograd import grad
+
+# Registry for exception handlers that can be used to catch certain failures
+# during computation of `potential_fn` within `potential_grad`.
+_EXCEPTION_HANDLERS: Dict[str, Callable[[Exception], bool]] = {}
 
 
 def velocity_verlet(
@@ -74,15 +81,49 @@ def potential_grad(potential_fn, z):
         node.requires_grad_(True)
     try:
         potential_energy = potential_fn(z)
-    # deal with singular matrices
-    except RuntimeError as e:
-        if "singular U" in str(e) or "input is not positive-definite" in str(e):
+    # handle exceptions as defined in the exception registry
+    except Exception as e:
+        if any(h(e) for h in _EXCEPTION_HANDLERS.values()):
             grads = {k: v.new_zeros(v.shape) for k, v in z.items()}
             return grads, z_nodes[0].new_tensor(float("nan"))
         else:
             raise e
-
     grads = grad(potential_energy, z_nodes)
     for node in z_nodes:
         node.requires_grad_(False)
     return dict(zip(z_keys, grads)), potential_energy.detach()
+
+
+def register_exception_handler(
+    name: str, handler: Callable[[Exception], bool], warn_on_overwrite: bool = True
+) -> None:
+    """
+    Register an exception handler for handling (primarily numerical) errors
+    when evaluating the potential function.
+
+    :param name: name of the handler (must be unique).
+    :param handler: A callable mapping an Exception to a boolean. Exceptions
+        that evaluate to true in any of the handlers are handled in the computation
+        of the potential energy.
+    :param warn_on_overwrite: If True, warns when overwriting a handler already
+        registered under the provided name.
+    """
+    if name in _EXCEPTION_HANDLERS and warn_on_overwrite:
+        warnings.warn(
+            f"Overwriting Exception handler already registered under key {name}.",
+            RuntimeWarning,
+        )
+    _EXCEPTION_HANDLERS[name] = handler
+
+
+def _handle_torch_singular(exception: Exception) -> bool:
+    """Exception handler for errors thrown on (numerically) singular matrices."""
+    # the actual type of the exception thrown is torch._C._LinAlgError
+    if isinstance(exception, RuntimeError):
+        msg = str(exception)
+        return "singular" in msg or "input is not positive-definite" in msg
+    return False
+
+
+# Register default exception handler
+register_exception_handler("torch_singular", _handle_torch_singular)

@@ -41,7 +41,7 @@ def _kl_independent_mvn(p, q):
 
     if isinstance(p.base_dist, Normal) and p.reinterpreted_batch_ndims == 1:
         dim = q.event_shape[0]
-        p_cov = p.base_dist.scale ** 2
+        p_cov = p.base_dist.scale**2
         q_precision = q.precision_matrix.diagonal(dim1=-2, dim2=-1)
         return (
             0.5 * (p_cov * q_precision).sum(-1)

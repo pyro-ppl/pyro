@@ -328,7 +328,6 @@ def test_distribution_masked(infer, temperature):
     ids=["map", "sample", "sample-elbo"],
 )
 def test_hmm_smoke(infer, temperature, length):
-
     # This should match the example in the infer_discrete docstring.
     def hmm(data, hidden_dim=10):
         transition = 0.3 / hidden_dim + 0.7 * torch.eye(hidden_dim)

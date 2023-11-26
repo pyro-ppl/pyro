@@ -68,15 +68,15 @@ EXTRAS_REQUIRE = [
     "jupyter>=1.0.0",
     "graphviz>=0.8",
     "matplotlib>=1.3",
-    "torchvision>=0.10.0",
-    "visdom>=0.1.4",
+    "torchvision>=0.15.0",
+    "visdom>=0.1.4,<0.2.2",  # FIXME visdom.utils is unavailable >=0.2.2
     "pandas",
-    "pillow==8.2.0",  # https://github.com/pytorch/pytorch/issues/61125
+    "pillow>=8.3.1",  # https://github.com/pytorch/pytorch/issues/61125
     "scikit-learn",
-    "seaborn",
+    "seaborn>=0.11.0",
     "wget",
-    "lap",
-    # 'biopython>=1.54',  # Requires Python 3.6
+    "scipy>=1.1",
+    # 'biopython>=1.54',
     # 'scanpy>=1.4',  # Requires HDF5
     # 'scvi>=0.6',  # Requires loopy and other fragile packages
 ]
@@ -91,6 +91,10 @@ setup(
     package_data={"pyro.distributions": ["*.cpp"]},
     author="Uber AI Labs",
     url="http://pyro.ai",
+    project_urls={
+        "Documentation": "https://docs.pyro.ai",
+        "Source": "https://github.com/pyro-ppl/pyro",
+    },
     install_requires=[
         # if you add any additional libraries, please also
         # add them to `docs/requirements.txt`
@@ -98,7 +102,7 @@ setup(
         "numpy>=1.7",
         "opt_einsum>=2.3.2",
         "pyro-api>=0.1.1",
-        "torch>=1.9.0",
+        "torch>=2.0",
         "tqdm>=4.36",
     ],
     extras_require={
@@ -106,18 +110,16 @@ setup(
         "test": EXTRAS_REQUIRE
         + [
             "black>=21.4b0",
-            "flake8",
             "nbval",
-            "pytest>=5.0",
             "pytest-cov",
-            "scipy>=1.1",
+            "pytest-xdist",
+            "pytest>=5.0",
+            "ruff",
         ],
         "profile": ["prettytable", "pytest-benchmark", "snakeviz"],
         "dev": EXTRAS_REQUIRE
         + [
             "black>=21.4b0",
-            "flake8",
-            "isort>=5.0",
             "mypy>=0.812",
             "nbformat",
             "nbsphinx>=0.3.2",
@@ -125,21 +127,20 @@ setup(
             "nbval",
             "ninja",
             "pypandoc",
-            "pytest>=5.0",
             "pytest-xdist",
-            "scipy>=1.1",
+            "pytest>=5.0",
+            "ruff",
             "sphinx",
             "sphinx_rtd_theme",
             "yapf",
         ],
         "horovod": ["horovod[pytorch]>=0.19"],
+        "lightning": ["lightning"],
         "funsor": [
-            # This must be a released version when Pyro is released.
-            # "funsor[torch] @ git+git://github.com/pyro-ppl/funsor.git@7bb52d0eae3046d08a20d1b288544e1a21b4f461",
-            "funsor[torch]==0.4.2",
+            "funsor[torch]==0.4.4",
         ],
     },
-    python_requires=">=3.6",
+    python_requires=">=3.8",
     keywords="machine learning statistics probabilistic programming bayesian modeling pytorch",
     license="Apache 2.0",
     classifiers=[
@@ -149,8 +150,10 @@ setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: POSIX :: Linux",
         "Operating System :: MacOS :: MacOS X",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
     ],
     # yapf
 )

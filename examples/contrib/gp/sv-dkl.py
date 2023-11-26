@@ -9,7 +9,7 @@ Follow the idea from reference [1], we will combine a convolutional neural netwo
 
     >>> deep_kernel = gp.kernels.Warping(rbf, iwarping_fn=cnn)
 
-SparseVariationalGP model allows us train the data in mini-batch (time complexity
+VariationalSparseGP model allows us train the data in mini-batch (time complexity
 scales linearly to the number of data points).
 
 Note that the implementation here is different from [1]. There the authors
@@ -193,7 +193,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.8.6")
     parser = argparse.ArgumentParser(description="Pyro GP MNIST Example")
     parser.add_argument(
         "--data-dir",

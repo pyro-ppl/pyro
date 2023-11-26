@@ -3,9 +3,8 @@
 
 import pyroapi
 
-from pyro.contrib.funsor.handlers import condition, do, markov
+from pyro.contrib.funsor.handlers import condition, do, markov, vectorized_markov
 from pyro.contrib.funsor.handlers import plate as _plate
-from pyro.contrib.funsor.handlers import vectorized_markov
 from pyro.contrib.funsor.handlers.primitives import to_data, to_funsor
 from pyro.primitives import (
     clear_param_store,

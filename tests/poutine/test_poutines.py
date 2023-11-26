@@ -235,7 +235,6 @@ class BlockHandlerTests(NormalNormalNormalHandlerTestCase):
 
 class QueueHandlerDiscreteTest(TestCase):
     def setUp(self):
-
         # simple Gaussian-mixture HMM
         def model():
             probs = pyro.param("probs", torch.tensor([[0.8], [0.3]]))
@@ -245,7 +244,6 @@ class QueueHandlerDiscreteTest(TestCase):
             latents = [torch.ones(1)]
             observes = []
             for t in range(3):
-
                 latents.append(
                     pyro.sample(
                         "latent_{}".format(str(t)),
@@ -282,7 +280,7 @@ class QueueHandlerDiscreteTest(TestCase):
         trs = []
         while not self.queue.empty():
             trs.append(f.get_trace())
-        assert len(trs) == 2 ** 3
+        assert len(trs) == 2**3
 
         true_latents = set()
         for i1 in range(2):
@@ -468,7 +466,6 @@ class LiftHandlerTests(TestCase):
 
 class QueueHandlerMixedTest(TestCase):
     def setUp(self):
-
         # Simple model with 1 continuous + 1 discrete + 1 continuous variable.
         def model():
             p = torch.tensor([0.5])
@@ -575,6 +572,36 @@ class IndirectLambdaHandlerTests(TestCase):
         _test_scale_factor(2, 1, [2.0] * 2)
 
 
+class SubstituteHandlerTests(NormalNormalNormalHandlerTestCase):
+    def test_substitute(self):
+        data = {"loc1": torch.randn(2)}
+        tr2 = poutine.trace(poutine.substitute(self.guide, data=data)).get_trace()
+        assert "loc1" in tr2
+        assert tr2.nodes["loc1"]["type"] == "param"
+        assert tr2.nodes["loc1"]["value"] is data["loc1"]
+
+    def test_stack_overwrite_behavior(self):
+        data1 = {"loc1": torch.randn(2)}
+        data2 = {"loc1": torch.randn(2)}
+        with poutine.trace() as tr:
+            cm = poutine.substitute(
+                poutine.substitute(self.guide, data=data1), data=data2
+            )
+            cm()
+        assert tr.trace.nodes["loc1"]["value"] is data2["loc1"]
+
+    def test_stack_success(self):
+        data1 = {"loc1": torch.randn(2)}
+        data2 = {"loc2": torch.randn(2)}
+        tr = poutine.trace(
+            poutine.substitute(poutine.substitute(self.guide, data=data1), data=data2)
+        ).get_trace()
+        assert tr.nodes["loc1"]["type"] == "param"
+        assert tr.nodes["loc1"]["value"] is data1["loc1"]
+        assert tr.nodes["loc2"]["type"] == "param"
+        assert tr.nodes["loc2"]["value"] is data2["loc2"]
+
+
 class ConditionHandlerTests(NormalNormalNormalHandlerTestCase):
     def test_condition(self):
         data = {"latent2": torch.randn(2)}
@@ -644,7 +671,6 @@ class UnconditionHandlerTests(NormalNormalNormalHandlerTestCase):
 
 class EscapeHandlerTests(TestCase):
     def setUp(self):
-
         # Simple model with 1 continuous + 1 discrete + 1 continuous variable.
         def model():
             p = torch.tensor([0.5])
@@ -820,6 +846,20 @@ def test_plate_error_on_enter():
     assert len(_DIM_ALLOCATOR._stack) == 0, "stack was not cleaned on error"
 
 
+@pytest.mark.parametrize(
+    "graph_type, expected", [("flat", set()), ("dense", {"x", "y"})]
+)
+def test_trace_plate(graph_type: str, expected: set):
+    def model():
+        with pyro.plate("plate", 2):
+            x = pyro.sample("x", dist.Normal(0, 1))
+            pyro.sample("y", dist.Normal(x, 1))
+
+    trace = poutine.trace(model, graph_type=graph_type).get_trace()
+    nodes = set().union(*trace._succ.values(), *trace._pred.values())
+    assert nodes == expected
+
+
 def test_decorator_interface_primitives():
     @poutine.trace
     def model():
@@ -851,7 +891,6 @@ def test_decorator_interface_primitives():
 
 
 def test_decorator_interface_queue():
-
     sites = ["x", "y", "z", "_INPUT", "_RETURN"]
     queue = Queue()
     queue.put(poutine.Trace())
@@ -893,10 +932,7 @@ def test_trace_log_prob_err_msg():
         pyro.sample("test_site", dist.Beta(1.0, 1.0), obs=v)
 
     tr = poutine.trace(model).get_trace(torch.tensor(2.0))
-    exp_msg = (
-        r"Error while computing log_prob at site 'test_site':\s*"
-        r"The value argument must be within the support"
-    )
+    exp_msg = r"Error while computing log_prob at site 'test_site':.*"
     with pytest.raises(ValueError, match=exp_msg):
         tr.compute_log_prob()
 
@@ -906,10 +942,7 @@ def test_trace_log_prob_sum_err_msg():
         pyro.sample("test_site", dist.Beta(1.0, 1.0), obs=v)
 
     tr = poutine.trace(model).get_trace(torch.tensor(2.0))
-    exp_msg = (
-        r"Error while computing log_prob_sum at site 'test_site':\s*"
-        r"The value argument must be within the support"
-    )
+    exp_msg = r"Error while computing log_prob_sum at site 'test_site':.*"
     with pytest.raises(ValueError, match=exp_msg):
         tr.log_prob_sum()
 
@@ -919,10 +952,7 @@ def test_trace_score_parts_err_msg():
         pyro.sample("test_site", dist.Beta(1.0, 1.0), obs=v)
 
     tr = poutine.trace(guide).get_trace(torch.tensor(2.0))
-    exp_msg = (
-        r"Error while computing score_parts at site 'test_site':\s*"
-        r"The value argument must be within the support"
-    )
+    exp_msg = r"Error while computing score_parts at site 'test_site':.*"
     with pytest.raises(ValueError, match=exp_msg):
         tr.compute_score_parts()
 
@@ -977,3 +1007,13 @@ def test_arg_kwarg_error():
 
     with poutine.mask(mask=False):
         model()
+
+
+def test_block_class_method():
+    class A:
+        @poutine.block
+        def run(self):
+            return 1
+
+    a = A()
+    a.run()

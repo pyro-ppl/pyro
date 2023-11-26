@@ -31,6 +31,7 @@ def preprocess(args):
     arrivals = dataset["counts"][:, :, i].sum(-1)
     departures = dataset["counts"][:, i, :].sum(-1)
     data = torch.stack([arrivals, departures], dim=-1)
+    print(f"Loaded data of shape {tuple(data.shape)}")
 
     # This simple example uses no covariates, so we will construct a
     # zero-element tensor of the correct length as empty covariates.
@@ -165,7 +166,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.8.6")
     parser = argparse.ArgumentParser(description="Bart Ridership Forecasting Example")
     parser.add_argument("--train-window", default=2160, type=int)
     parser.add_argument("--test-window", default=336, type=int)

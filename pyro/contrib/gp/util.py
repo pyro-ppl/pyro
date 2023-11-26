@@ -107,7 +107,7 @@ def conditional(
 
     if whiten:
         v_2D = f_loc_2D
-        W = Kfs.triangular_solve(Lff, upper=False)[0].t()
+        W = torch.linalg.solve_triangular(Lff, Kfs, upper=False).t()
         if f_scale_tril is not None:
             S_2D = f_scale_tril_2D
     else:
@@ -115,7 +115,7 @@ def conditional(
         if f_scale_tril is not None:
             pack = torch.cat((pack, f_scale_tril_2D), dim=1)
 
-        Lffinv_pack = pack.triangular_solve(Lff, upper=False)[0]
+        Lffinv_pack = torch.linalg.solve_triangular(Lff, pack, upper=False)
         # unpack
         v_2D = Lffinv_pack[:, : f_loc_2D.size(1)]
         W = Lffinv_pack[:, f_loc_2D.size(1) : f_loc_2D.size(1) + M].t()

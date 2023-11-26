@@ -166,7 +166,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.8.6")
     parser = argparse.ArgumentParser(
         description="Regional compartmental epidemiology modeling using HMC"
     )
@@ -205,12 +205,9 @@ if __name__ == "__main__":
     if args.warmup_steps is None:
         args.warmup_steps = args.num_samples
     if args.double:
-        if args.cuda:
-            torch.set_default_tensor_type(torch.cuda.DoubleTensor)
-        else:
-            torch.set_default_dtype(torch.float64)
-    elif args.cuda:
-        torch.set_default_tensor_type(torch.cuda.FloatTensor)
+        torch.set_default_dtype(torch.float64)
+    if args.cuda:
+        torch.set_default_device("cuda")
 
     main(args)
 

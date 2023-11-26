@@ -203,8 +203,8 @@ class DCTAdam(Optimizer):
 
         denom = exp_avg_sq.sqrt_().add_(group["eps"])
 
-        bias_correction1 = 1 - beta1 ** state_step
-        bias_correction2 = 1 - beta2 ** state_step
+        bias_correction1 = 1 - beta1**state_step
+        bias_correction2 = 1 - beta2**state_step
         step_size = bias_correction2.sqrt_().div_(bias_correction1).mul_(group["lr"])
 
         step = exp_avg.div_(denom)

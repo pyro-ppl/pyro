@@ -5,6 +5,7 @@ import contextlib
 
 import funsor
 from funsor.adjoint import AdjointTape
+from funsor.sum_product import _partition
 
 from pyro.contrib.funsor import to_data, to_funsor
 from pyro.contrib.funsor.handlers import enum, plate, replay, trace
@@ -91,7 +92,6 @@ def terms_from_trace(tr):
 @copy_docs_from(_OrigTraceEnum_ELBO)
 class TraceMarkovEnum_ELBO(ELBO):
     def differentiable_loss(self, model, guide, *args, **kwargs):
-
         # get batched, enumerated, to_funsor-ed traces from the guide and model
         with plate(
             size=self.num_particles
@@ -169,7 +169,6 @@ class TraceMarkovEnum_ELBO(ELBO):
 @copy_docs_from(_OrigTraceEnum_ELBO)
 class TraceEnum_ELBO(ELBO):
     def differentiable_loss(self, model, guide, *args, **kwargs):
-
         # get batched, enumerated, to_funsor-ed traces from the guide and model
         with plate(
             size=self.num_particles
@@ -194,17 +193,28 @@ class TraceEnum_ELBO(ELBO):
                     contracted_factors.append(f)
                 else:
                     uncontracted_factors.append(f)
+            contracted_costs = []
             # incorporate the effects of subsampling and handlers.scale through a common scale factor
-            contracted_costs = [
-                model_terms["scale"] * f
+            for group_factors, group_vars in _partition(
+                model_terms["log_measures"] + contracted_factors,
+                model_terms["measure_vars"],
+            ):
+                group_factor_vars = frozenset().union(
+                    *[f.inputs for f in group_factors]
+                )
+                group_plates = model_terms["plate_vars"] & group_factor_vars
+                outermost_plates = frozenset.intersection(
+                    *(frozenset(f.inputs) & group_plates for f in group_factors)
+                )
+                elim_plates = group_plates - outermost_plates
                 for f in funsor.sum_product.partial_sum_product(
                     funsor.ops.logaddexp,
                     funsor.ops.add,
-                    model_terms["log_measures"] + contracted_factors,
-                    plates=model_terms["plate_vars"],
-                    eliminate=model_terms["measure_vars"],
-                )
-            ]
+                    group_factors,
+                    plates=group_plates,
+                    eliminate=group_vars | elim_plates,
+                ):
+                    contracted_costs.append(model_terms["scale"] * f)
 
             # accumulate costs from model (logp) and guide (-logq)
             costs = contracted_costs + uncontracted_factors  # model costs: logp

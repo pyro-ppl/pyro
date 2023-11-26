@@ -190,6 +190,13 @@ GaussianScaleMixture
     :undoc-members:
     :show-inheritance:
 
+GroupedNormalNormal
+-------------------
+.. autoclass:: pyro.distributions.GroupedNormalNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ImproperUniform
 ---------------
 .. autoclass:: pyro.distributions.improper_uniform.ImproperUniform
@@ -232,6 +239,13 @@ LKJCorrCholesky
     :undoc-members:
     :show-inheritance:
 
+LogNormalNegativeBinomial
+-------------------------
+.. autoclass:: pyro.distributions.LogNormalNegativeBinomial
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Logistic
 --------
 .. autoclass:: pyro.distributions.Logistic
@@ -270,6 +284,20 @@ MixtureOfDiagNormalsSharedCovariance
 MultivariateStudentT
 --------------------
 .. autoclass:: pyro.distributions.MultivariateStudentT
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+NanMaskedNormal
+---------------
+.. autoclass:: pyro.distributions.NanMaskedNormal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+NanMaskedMultivariateNormal
+---------------------------
+.. autoclass:: pyro.distributions.NanMaskedMultivariateNormal
     :members:
     :undoc-members:
     :show-inheritance:
@@ -434,13 +462,6 @@ ConditionalTransform
 CholeskyTransform
 -----------------
 .. autoclass:: pyro.distributions.transforms.CholeskyTransform
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-CorrLCholeskyTransform
-----------------------
-.. autoclass:: pyro.distributions.transforms.CorrLCholeskyTransform
     :members:
     :undoc-members:
     :show-inheritance:

@@ -69,6 +69,14 @@ requires_horovod = pytest.mark.skipif(
 )
 
 try:
+    import lightning
+except ImportError:
+    lightning = None
+requires_lightning = pytest.mark.skipif(
+    lightning is None, reason="pytorch lightning is not available"
+)
+
+try:
     import funsor
 except ImportError:
     funsor = None
@@ -86,20 +94,18 @@ def get_gpu_type(t):
 
 
 @contextlib.contextmanager
-def tensors_default_to(host):
+def default_dtype(dtype):
     """
-    Context manager to temporarily use Cpu or Cuda tensors in PyTorch.
+    Context manager to temporarily set PyTorch default dtype.
 
     :param str host: Either "cuda" or "cpu".
     """
-    assert host in ("cpu", "cuda"), host
-    old_module, name = torch.Tensor().type().rsplit(".", 1)
-    new_module = "torch.cuda" if host == "cuda" else "torch"
-    torch.set_default_tensor_type("{}.{}".format(new_module, name))
+    old = torch.get_default_dtype()
     try:
+        torch.set_default_dtype(dtype)
         yield
     finally:
-        torch.set_default_tensor_type("{}.{}".format(old_module, name))
+        torch.set_default_dtype(old)
 
 
 @contextlib.contextmanager
@@ -141,12 +147,14 @@ def assert_tensors_equal(a, b, prec=0.0, msg=""):
     assert a.size() == b.size(), msg
     if isinstance(prec, numbers.Number) and prec == 0:
         assert (a == b).all(), msg
+        return
     if a.numel() == 0 and b.numel() == 0:
         return
     b = b.type_as(a)
     b = b.cuda(device=a.get_device()) if a.is_cuda else b.cpu()
     if not a.dtype.is_floating_point:
-        return (a == b).all()
+        assert (a == b).all(), msg
+        return
     # check that NaNs are in the same locations
     nan_mask = a != a
     assert torch.equal(nan_mask, b != b), msg

@@ -51,7 +51,6 @@ class SSVAE(nn.Module):
         use_cuda=False,
         aux_loss_multiplier=None,
     ):
-
         super().__init__()
 
         # initialize the class with all arguments provided to the constructor
@@ -64,11 +63,10 @@ class SSVAE(nn.Module):
         self.aux_loss_multiplier = aux_loss_multiplier
 
         # define and instantiate the neural networks representing
-        # the paramters of various distributions in the model
+        # the parameters of various distributions in the model
         self.setup_networks()
 
     def setup_networks(self):
-
         z_dim = self.z_dim
         hidden_sizes = self.hidden_layers
 
@@ -127,7 +125,6 @@ class SSVAE(nn.Module):
         batch_size = xs.size(0)
         options = dict(dtype=xs.dtype, device=xs.device)
         with pyro.plate("data"):
-
             # sample the handwriting style from the constant prior distribution
             prior_loc = torch.zeros(batch_size, self.z_dim, **options)
             prior_scale = torch.ones(batch_size, self.z_dim, **options)
@@ -145,7 +142,7 @@ class SSVAE(nn.Module):
             # parametrized distribution p(x|y,z) = bernoulli(decoder(y,z))
             # where `decoder` is a neural network. We disable validation
             # since the decoder output is a relaxed Bernoulli value.
-            loc = self.decoder.forward([zs, ys])
+            loc = self.decoder([zs, ys])
             pyro.sample(
                 "x", dist.Bernoulli(loc, validate_args=False).to_event(1), obs=xs
             )
@@ -167,17 +164,16 @@ class SSVAE(nn.Module):
         """
         # inform Pyro that the variables in the batch of xs, ys are conditionally independent
         with pyro.plate("data"):
-
             # if the class label (the digit) is not supervised, sample
             # (and score) the digit with the variational distribution
             # q(y|x) = categorical(alpha(x))
             if ys is None:
-                alpha = self.encoder_y.forward(xs)
+                alpha = self.encoder_y(xs)
                 ys = pyro.sample("y", dist.OneHotCategorical(alpha))
 
             # sample (and score) the latent handwriting-style with the variational
             # distribution q(z|x,y) = normal(loc(x,y),scale(x,y))
-            loc, scale = self.encoder_z.forward([xs, ys])
+            loc, scale = self.encoder_z([xs, ys])
             pyro.sample("z", dist.Normal(loc, scale).to_event(1))
 
     def classifier(self, xs):
@@ -189,7 +185,7 @@ class SSVAE(nn.Module):
         """
         # use the trained model q(y|x) = categorical(alpha(x))
         # compute all class probabilities for the image(s)
-        alpha = self.encoder_y.forward(xs)
+        alpha = self.encoder_y(xs)
 
         # get the index (digit) that corresponds to
         # the maximum predicted class probability
@@ -211,7 +207,7 @@ class SSVAE(nn.Module):
         with pyro.plate("data"):
             # this here is the extra term to yield an auxiliary loss that we do gradient descent on
             if ys is not None:
-                alpha = self.encoder_y.forward(xs)
+                alpha = self.encoder_y(xs)
                 with pyro.poutine.scale(scale=self.aux_loss_multiplier):
                     pyro.sample("y_aux", dist.OneHotCategorical(alpha), obs=ys)
 
@@ -245,7 +241,6 @@ def run_inference_for_epoch(data_loaders, losses, periodic_interval_batches):
     # count the number of supervised batches seen in this epoch
     ctr_sup = 0
     for i in range(batches_per_epoch):
-
         # whether this batch is supervised or not
         is_supervised = (i % periodic_interval_batches == 1) and ctr_sup < sup_batches
 
@@ -277,7 +272,7 @@ def get_accuracy(data_loader, classifier_fn, batch_size):
     predictions, actuals = [], []
 
     # use the appropriate data loader
-    for (xs, ys) in data_loader:
+    for xs, ys in data_loader:
         # use classification function to compute all predictions for each batch
         predictions.append(classifier_fn(xs))
         actuals.append(ys)
@@ -337,7 +332,7 @@ def main(args):
     # build a list of all losses considered
     losses = [loss_basic]
 
-    # aux_loss: whether to use the auxiliary loss from NIPS 14 paper (Kingma et al)
+    # aux_loss: whether to use the auxiliary loss from NIPS 14 paper (Kingma et al.)
     if args.aux_loss:
         elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
         loss_aux = SVI(
@@ -370,7 +365,6 @@ def main(args):
 
         # run inference for a certain number of epochs
         for i in range(0, args.num_epochs):
-
             # get the losses for an epoch
             epoch_losses_sup, epoch_losses_unsup = run_inference_for_epoch(
                 data_loaders, losses, periodic_interval_batches
@@ -433,7 +427,7 @@ EXAMPLE_RUN = (
 )
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.8.6")
 
     parser = argparse.ArgumentParser(description="SS-VAE\n{}".format(EXAMPLE_RUN))
 
@@ -450,7 +444,7 @@ if __name__ == "__main__":
         "--aux-loss",
         action="store_true",
         help="whether to use the auxiliary loss from NIPS 14 paper "
-        "(Kingma et al). It is not used by default ",
+        "(Kingma et al.). It is not used by default ",
     )
     parser.add_argument(
         "-alm",

@@ -137,13 +137,13 @@ def test_transforming():
         return x.sum(dim=1)
 
     def iwarping_fn(x):
-        return x ** 2
+        return x**2
 
     owarping_coef = [2, 0, 1, 3, 0]
 
     K = k(X, Z)
     K_iwarp = k(iwarping_fn(X), iwarping_fn(Z))
-    K_owarp = 2 + K ** 2 + 3 * K ** 3
+    K_owarp = 2 + K**2 + 3 * K**3
     K_vscale = vscaling_fn(X).unsqueeze(1) * K * vscaling_fn(Z).unsqueeze(0)
 
     assert_equal(K_iwarp.data, Warping(k, iwarping_fn=iwarping_fn)(X, Z).data)

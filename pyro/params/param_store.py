@@ -5,9 +5,26 @@ import re
 import warnings
 import weakref
 from contextlib import contextmanager
+from typing import (
+    Callable,
+    Dict,
+    ItemsView,
+    Iterator,
+    KeysView,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import torch
 from torch.distributions import constraints, transform_to
+from torch.serialization import MAP_LOCATION
+from typing_extensions import TypedDict
+
+
+class StateDict(TypedDict):
+    params: Dict[str, torch.Tensor]
+    constraints: Dict[str, constraints.Constraint]
 
 
 class ParamStoreDict:
@@ -39,15 +56,21 @@ class ParamStoreDict:
     # -------------------------------------------------------------------------------
     # New dict-like interface
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
         initialize ParamStore data structures
         """
-        self._params = {}  # dictionary from param name to param
-        self._param_to_name = {}  # dictionary from unconstrained param to param name
-        self._constraints = {}  # dictionary from param name to constraint object
+        self._params: Dict[
+            str, torch.Tensor
+        ] = {}  # dictionary from param name to param
+        self._param_to_name: Dict[
+            torch.Tensor, str
+        ] = {}  # dictionary from unconstrained param to param name
+        self._constraints: Dict[
+            str, constraints.Constraint
+        ] = {}  # dictionary from param name to constraint object
 
-    def clear(self):
+    def clear(self) -> None:
         """
         Clear the ParamStore
         """
@@ -55,7 +78,7 @@ class ParamStoreDict:
         self._param_to_name = {}
         self._constraints = {}
 
-    def items(self):
+    def items(self) -> Iterator[Tuple[str, torch.Tensor]]:
         """
         Iterate over ``(name, constrained_param)`` pairs. Note that `constrained_param` is
         in the constrained (i.e. user-facing) space.
@@ -63,35 +86,35 @@ class ParamStoreDict:
         for name in self._params:
             yield name, self[name]
 
-    def keys(self):
+    def keys(self) -> KeysView[str]:
         """
         Iterate over param names.
         """
         return self._params.keys()
 
-    def values(self):
+    def values(self) -> Iterator[torch.Tensor]:
         """
         Iterate over constrained parameter values.
         """
         for name, constrained_param in self.items():
             yield constrained_param
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return bool(self._params)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._params)
 
-    def __contains__(self, name):
+    def __contains__(self, name: str) -> bool:
         return name in self._params
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[str]:
         """
         Iterate over param names.
         """
         return iter(self.keys())
 
-    def __delitem__(self, name):
+    def __delitem__(self, name) -> None:
         """
         Remove a parameter from the param store.
         """
@@ -99,7 +122,7 @@ class ParamStoreDict:
         self._param_to_name.pop(unconstrained_value)
         self._constraints.pop(name)
 
-    def __getitem__(self, name):
+    def __getitem__(self, name: str) -> torch.Tensor:
         """
         Get the *constrained* value of a named parameter.
         """
@@ -107,12 +130,12 @@ class ParamStoreDict:
 
         # compute the constrained value
         constraint = self._constraints[name]
-        constrained_value = transform_to(constraint)(unconstrained_value)
-        constrained_value.unconstrained = weakref.ref(unconstrained_value)
+        constrained_value: torch.Tensor = transform_to(constraint)(unconstrained_value)
+        constrained_value.unconstrained = weakref.ref(unconstrained_value)  # type: ignore[attr-defined]
 
         return constrained_value
 
-    def __setitem__(self, name, new_constrained_value):
+    def __setitem__(self, name: str, new_constrained_value: torch.Tensor) -> None:
         """
         Set the constrained value of an existing parameter, or the value of a
         new *unconstrained* parameter. To declare a new parameter with
@@ -132,7 +155,12 @@ class ParamStoreDict:
         self._params[name] = unconstrained_value
         self._param_to_name[unconstrained_value] = name
 
-    def setdefault(self, name, init_constrained_value, constraint=constraints.real):
+    def setdefault(
+        self,
+        name: str,
+        init_constrained_value: Union[torch.Tensor, Callable[[], torch.Tensor]],
+        constraint: constraints.Constraint = constraints.real,
+    ) -> torch.Tensor:
         """
         Retrieve a *constrained* parameter value from the if it exists, otherwise
         set the initial value. Note that this is a little fancier than
@@ -170,7 +198,7 @@ class ParamStoreDict:
     # -------------------------------------------------------------------------------
     # Old non-dict interface
 
-    def named_parameters(self):
+    def named_parameters(self) -> ItemsView[str, torch.Tensor]:
         """
         Returns an iterator over ``(name, unconstrained_value)`` tuples for
         each parameter in the ParamStore. Note that, in the event the parameter is constrained,
@@ -178,24 +206,30 @@ class ParamStoreDict:
         """
         return self._params.items()
 
-    def get_all_param_names(self):
+    def get_all_param_names(self) -> KeysView[str]:
         warnings.warn(
             "ParamStore.get_all_param_names() is deprecated; use .keys() instead.",
             DeprecationWarning,
         )
         return self.keys()
 
-    def replace_param(self, param_name, new_param, old_param):
+    def replace_param(
+        self, param_name: str, new_param: torch.Tensor, old_param: torch.Tensor
+    ) -> None:
         warnings.warn(
             "ParamStore.replace_param() is deprecated; use .__setitem__() instead.",
             DeprecationWarning,
         )
-        assert self._params[param_name] is old_param.unconstrained()
+        assert self._params[param_name] is old_param.unconstrained()  # type: ignore[attr-defined]
         self[param_name] = new_param
 
     def get_param(
-        self, name, init_tensor=None, constraint=constraints.real, event_dim=None
-    ):
+        self,
+        name: str,
+        init_tensor: Optional[torch.Tensor] = None,
+        constraint: constraints.Constraint = constraints.real,
+        event_dim: Optional[int] = None,
+    ) -> torch.Tensor:
         """
         Get parameter from its name. If it does not yet exist in the
         ParamStore, it will be created and stored.
@@ -216,7 +250,7 @@ class ParamStoreDict:
         else:
             return self.setdefault(name, init_tensor, constraint)
 
-    def match(self, name):
+    def match(self, name: str) -> Dict[str, torch.Tensor]:
         """
         Get all parameters that match regex. The parameter must exist.
 
@@ -227,7 +261,7 @@ class ParamStoreDict:
         pattern = re.compile(name)
         return {name: self[name] for name in self if pattern.match(name)}
 
-    def param_name(self, p):
+    def param_name(self, p: torch.Tensor) -> Optional[str]:
         """
         Get parameter name from parameter
 
@@ -239,17 +273,18 @@ class ParamStoreDict:
     # -------------------------------------------------------------------------------
     # Persistence interface
 
-    def get_state(self) -> dict:
+    def get_state(self) -> StateDict:
         """
         Get the ParamStore state.
         """
-        state = {
-            "params": self._params.copy(),
-            "constraints": self._constraints.copy(),
-        }
+        params = self._params.copy()
+        # Remove weakrefs in preparation for pickling.
+        for param in params.values():
+            param.__dict__.pop("unconstrained", None)
+        state: StateDict = {"params": params, "constraints": self._constraints.copy()}
         return state
 
-    def set_state(self, state: dict):
+    def set_state(self, state: StateDict) -> None:
         """
         Set the ParamStore state using state from a previous :meth:`get_state` call
         """
@@ -268,7 +303,7 @@ class ParamStoreDict:
                 constraint = constraints.real
             self._constraints[param_name] = constraint
 
-    def save(self, filename):
+    def save(self, filename: str) -> None:
         """
         Save parameters to file
 
@@ -278,7 +313,7 @@ class ParamStoreDict:
         with open(filename, "wb") as output_file:
             torch.save(self.get_state(), output_file)
 
-    def load(self, filename, map_location=None):
+    def load(self, filename: str, map_location: MAP_LOCATION = None) -> None:
         """
         Loads parameters from file
 
@@ -300,7 +335,7 @@ class ParamStoreDict:
         self.set_state(state)
 
     @contextmanager
-    def scope(self, state=None) -> dict:
+    def scope(self, state: Optional[StateDict] = None) -> Iterator[StateDict]:
         """
         Context manager for using multiple parameter stores within the same process.
 
@@ -342,19 +377,19 @@ class ParamStoreDict:
 _MODULE_NAMESPACE_DIVIDER = "$$$"
 
 
-def param_with_module_name(pyro_name, param_name):
+def param_with_module_name(pyro_name: str, param_name: str) -> str:
     return _MODULE_NAMESPACE_DIVIDER.join([pyro_name, param_name])
 
 
-def module_from_param_with_module_name(param_name):
+def module_from_param_with_module_name(param_name: str) -> str:
     return param_name.split(_MODULE_NAMESPACE_DIVIDER)[0]
 
 
-def user_param_name(param_name):
+def user_param_name(param_name: str) -> str:
     if _MODULE_NAMESPACE_DIVIDER in param_name:
         return param_name.split(_MODULE_NAMESPACE_DIVIDER)[1]
     return param_name
 
 
-def normalize_param_name(name):
+def normalize_param_name(name: str) -> str:
     return name.replace(_MODULE_NAMESPACE_DIVIDER, ".")

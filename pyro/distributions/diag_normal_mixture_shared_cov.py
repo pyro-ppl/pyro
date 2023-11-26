@@ -45,28 +45,31 @@ class MixtureOfDiagNormalsSharedCovariance(TorchDistribution):
         "coord_scale": constraints.positive,
         "component_logits": constraints.real,
     }
+    support = constraints.real_vector
 
     def __init__(self, locs, coord_scale, component_logits):
         self.batch_mode = locs.dim() > 2
-        assert (
-            self.batch_mode or locs.dim() == 2
-        ), "The locs parameter in MixtureOfDiagNormals should be K x D dimensional (or ... x B x K x D in batch mode)"
+        assert self.batch_mode or locs.dim() == 2, (
+            "The locs parameter in MixtureOfDiagNormalsSharedCovariance should be K x D dimensional "
+            "(or ... x B x K x D in batch mode)"
+        )
         if not self.batch_mode:
             assert (
                 coord_scale.dim() == 1
-            ), "The coord_scale parameter in MixtureOfDiagNormals should be D dimensional"
+            ), "The coord_scale parameter in MixtureOfDiagNormalsSharedCovariance should be D dimensional"
             assert (
                 component_logits.dim() == 1
-            ), "The component_logits parameter in MixtureOfDiagNormals should be K dimensional"
+            ), "The component_logits parameter in MixtureOfDiagNormalsSharedCovariance should be K dimensional"
             assert component_logits.size(0) == locs.size(0)
             batch_shape = ()
         else:
             assert (
                 coord_scale.dim() > 1
-            ), "The coord_scale parameter in MixtureOfDiagNormals should be ... x B x D dimensional"
-            assert (
-                component_logits.dim() > 1
-            ), "The component_logits parameter in MixtureOfDiagNormals should be ... x B x K dimensional"
+            ), "The coord_scale parameter in MixtureOfDiagNormalsSharedCovariance should be ... x B x D dimensional"
+            assert component_logits.dim() > 1, (
+                "The component_logits parameter in MixtureOfDiagNormalsSharedCovariance should be "
+                "... x B x K dimensional"
+            )
             assert component_logits.size(-1) == locs.size(-2)
             batch_shape = tuple(locs.shape[:-2])
         self.locs = locs
@@ -134,7 +137,7 @@ class _MixDiagNormalSharedCovarianceSample(Function):
     @staticmethod
     def forward(ctx, locs, coord_scale, component_logits, pis, which, noise_shape):
         dim = coord_scale.size(-1)
-        white = torch.randn(noise_shape, dtype=locs.dtype, device=locs.device)
+        white = locs.new_empty(noise_shape).normal_()
         n_unsqueezes = locs.dim() - which.dim()
         for _ in range(n_unsqueezes):
             which = which.unsqueeze(-1)
@@ -147,7 +150,6 @@ class _MixDiagNormalSharedCovarianceSample(Function):
     @staticmethod
     @once_differentiable
     def backward(ctx, grad_output):
-
         z, coord_scale, locs, component_logits, pis = ctx.saved_tensors
         K = component_logits.size(-1)
         batch_dims = coord_scale.dim() - 1

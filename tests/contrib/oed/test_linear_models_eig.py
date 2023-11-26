@@ -42,7 +42,6 @@ def one_point_design():
 
 
 def posterior_guide(y_dict, design, observation_labels, target_labels):
-
     y = torch.cat(list(y_dict.values()), dim=-1)
     A = pyro.param("A", torch.zeros(2, 3))
     scale_tril = pyro.param(
@@ -55,18 +54,16 @@ def posterior_guide(y_dict, design, observation_labels, target_labels):
 
 
 def marginal_guide(design, observation_labels, target_labels):
-
     mu = pyro.param("mu", torch.zeros(3))
     scale_tril = pyro.param(
         "scale_tril",
         torch.eye(3),
         constraint=torch.distributions.constraints.lower_cholesky,
     )
-    pyro.sample("y", dist.MultivariateNormal(mu, scale_tril))
+    pyro.sample("y", dist.MultivariateNormal(mu, scale_tril=scale_tril))
 
 
 def likelihood_guide(theta_dict, design, observation_labels, target_labels):
-
     theta = torch.cat(list(theta_dict.values()), dim=-1)
     centre = rmv(design, theta)
 

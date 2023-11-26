@@ -172,7 +172,7 @@ def merge_points(points, radius):
     radius = (
         0.99 * radius
     )  # avoid merging points exactly radius apart, e.g. grid points
-    threshold = radius ** 2
+    threshold = radius**2
 
     # setup data structures to cheaply search for nearest pairs
     lsh = LSH(radius)

@@ -155,4 +155,4 @@ def test_merge_points_large(dim, radius):
     assert sum(len(g) for g in groups) == len(points)
     assert set(sum(groups, ())) == set(range(len(points)))
     d2 = (merged_points.unsqueeze(-2) - merged_points.unsqueeze(-3)).pow(2).sum(-1)
-    assert d2.min() < radius ** 2
+    assert d2.min() < radius**2

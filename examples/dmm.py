@@ -208,7 +208,6 @@ class DMM(nn.Module):
         mini_batch_seq_lengths,
         annealing_factor=1.0,
     ):
-
         # this is the number of time steps we need to process in the mini-batch
         T_max = mini_batch.size(1)
 
@@ -269,7 +268,6 @@ class DMM(nn.Module):
         mini_batch_seq_lengths,
         annealing_factor=1.0,
     ):
-
         # this is the number of time steps we need to process in the mini-batch
         T_max = mini_batch.size(1)
         # register all PyTorch (sub)modules with pyro
@@ -571,7 +569,7 @@ def main(args):
 
 # parse command-line arguments and execute the main method
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.8.6")
 
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument("-n", "--num-epochs", type=int, default=5000)

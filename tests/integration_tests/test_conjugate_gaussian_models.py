@@ -561,7 +561,7 @@ class GaussianPyramidTests(TestCase):
             )
             % (
                 self.N,
-                (2 ** self.N) - 1,
+                (2**self.N) - 1,
                 reparameterized,
                 n_repa_nodes,
                 len(self.q_topo_sort),

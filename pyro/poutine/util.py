@@ -1,7 +1,10 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from .. import settings
+
 _VALIDATION_ENABLED = __debug__
+settings.register("validate_poutine", __name__, "_VALIDATION_ENABLED")
 
 
 def enable_validation(is_validate):

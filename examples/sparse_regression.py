@@ -41,7 +41,7 @@ References
 """
 
 
-torch.set_default_tensor_type("torch.FloatTensor")
+torch.set_default_dtype(torch.float32)
 
 
 def dot(X, Z):
@@ -54,7 +54,7 @@ def kernel(X, Z, eta1, eta2, c):
     k1 = 0.5 * eta2sq * (1.0 + dot(X, Z)).pow(2.0)
     k2 = -0.5 * eta2sq * dot(X.pow(2.0), Z.pow(2.0))
     k3 = (eta1sq - eta2sq) * dot(X, Z)
-    k4 = c ** 2 - 0.5 * eta2sq
+    k4 = c**2 - 0.5 * eta2sq
     return k1 + k2 + k3 + k4
 
 
@@ -78,7 +78,7 @@ def model(X, Y, hypers, jitter=1.0e-4):
     kX = kappa * X
 
     # compute the kernel for the given hyperparameters
-    k = kernel(kX, kX, eta1, eta2, hypers["c"]) + (sigma ** 2 + jitter) * torch.eye(
+    k = kernel(kX, kX, eta1, eta2, hypers["c"]) + (sigma**2 + jitter) * torch.eye(
         N, device=X.device
     )
 
@@ -115,7 +115,7 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, sigma, jitter=1.0e-4)
     kprobe = kprobe.reshape(-1, P)
 
     # compute various kernels
-    k_xx = kernel(kX, kX, eta1, eta2, c) + (jitter + sigma ** 2) * torch.eye(
+    k_xx = kernel(kX, kX, eta1, eta2, c) + (jitter + sigma**2) * torch.eye(
         N, dtype=X.dtype, device=X.device
     )
     k_xx_inv = torch.inverse(k_xx)
@@ -364,7 +364,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.8.6")
     parser = argparse.ArgumentParser(description="Krylov KIT")
     parser.add_argument("--num-data", type=int, default=750)
     parser.add_argument("--num-steps", type=int, default=1000)

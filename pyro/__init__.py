@@ -25,8 +25,10 @@ from pyro.primitives import (
 )
 from pyro.util import set_rng_seed
 
+from . import settings
+
 # After changing this, run scripts/update_version.py
-version_prefix = "1.8.0"
+version_prefix = "1.8.6"
 
 # Get the __version__ string from the auto-generated _version.py file, if exists.
 try:
@@ -58,6 +60,7 @@ __all__ = [
     "render_model",
     "sample",
     "set_rng_seed",
+    "settings",
     "subsample",
     "validation_enabled",
 ]

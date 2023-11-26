@@ -34,9 +34,6 @@ For additional blog posts, check out work on [experimental design](https://eng.u
 ### Installing a stable Pyro release
 
 **Install using pip:**
-
-Pyro supports Python 3.6+.
-
 ```sh
 pip install pyro-ppl
 ```

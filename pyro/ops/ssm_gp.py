@@ -100,7 +100,7 @@ class MaternKernel(PyroModule):
             dt_rho_sq = dt_rho.pow(2.0)
             dt_rho_cu = dt_rho.pow(3.0)
             dt_rho_qu = dt_rho.pow(4.0)
-            dt_sq = dt ** 2.0
+            dt_sq = dt**2.0
             trans = (
                 (1.0 + dt_rho + 0.5 * dt_rho_sq) * self.mask00
                 + (-0.5 * dt_rho_cu / dt) * self.mask01

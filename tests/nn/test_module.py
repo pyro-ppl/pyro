@@ -66,7 +66,97 @@ def test_svi_smoke():
         svi.step(data)
 
 
-def test_names():
+@pytest.mark.parametrize("local_params", [True, False])
+@pytest.mark.parametrize("num_particles", [1, 2])
+@pytest.mark.parametrize("vectorize_particles", [True, False])
+@pytest.mark.parametrize("Autoguide", [pyro.infer.autoguide.AutoNormal])
+def test_svi_elbomodule_interface(
+    local_params, num_particles, vectorize_particles, Autoguide
+):
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.loc = nn.Parameter(torch.zeros(2))
+            self.scale = PyroParam(torch.ones(2), constraint=constraints.positive)
+            self.z = PyroSample(
+                lambda self: dist.Normal(self.loc, self.scale).to_event(1)
+            )
+
+        def forward(self, data):
+            loc, log_scale = self.z.unbind(-1)
+            with pyro.plate("data"):
+                pyro.sample("obs", dist.Cauchy(loc, log_scale.exp()), obs=data)
+
+    with pyro.settings.context(module_local_params=local_params):
+        data = torch.randn(5)
+        model = Model()
+        model(data)  # initialize
+
+        guide = Autoguide(model)
+        guide(data)  # initialize
+
+        elbo = Trace_ELBO(
+            vectorize_particles=vectorize_particles, num_particles=num_particles
+        )
+        elbo = elbo(model, guide)
+        assert isinstance(elbo, torch.nn.Module)
+        assert set(
+            k[: -len("_unconstrained")] if k.endswith("_unconstrained") else k
+            for k, v in elbo.named_parameters()
+        ) == set("model." + k for k, v in model.named_pyro_params()) | set(
+            "guide." + k for k, v in guide.named_pyro_params()
+        )
+
+        adam = torch.optim.Adam(elbo.parameters(), lr=0.0001)
+        for _ in range(3):
+            adam.zero_grad()
+            loss = elbo(data)
+            loss.backward()
+            adam.step()
+
+        guide2 = Autoguide(model)
+        guide2(data)  # initialize
+        if local_params:
+            assert set(pyro.get_param_store().keys()) == set()
+            for (name, p), (name2, p2) in zip(
+                guide.named_parameters(), guide2.named_parameters()
+            ):
+                assert name == name2
+                assert not torch.allclose(p, p2)
+        else:
+            assert set(pyro.get_param_store().keys()) != set()
+            for (name, p), (name2, p2) in zip(
+                guide.named_parameters(), guide2.named_parameters()
+            ):
+                assert name == name2
+                assert torch.allclose(p, p2)
+
+
+@pytest.mark.parametrize("local_params", [True, False])
+def test_local_param_global_behavior_fails(local_params):
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.global_nn_param = nn.Parameter(torch.zeros(2))
+
+        def forward(self):
+            global_param = pyro.param("_global_param", lambda: torch.randn(2))
+            global_nn_param = pyro.param("global_nn_param", self.global_nn_param)
+            return global_param, global_nn_param
+
+    with pyro.settings.context(module_local_params=local_params):
+        model = Model()
+        if local_params:
+            assert pyro.settings.get("module_local_params")
+            with pytest.raises(NotImplementedError):
+                model()
+        else:
+            assert not pyro.settings.get("module_local_params")
+            model()
+
+
+@pytest.mark.parametrize("local_params", [True, False])
+def test_names(local_params):
     class Model(PyroModule):
         def __init__(self):
             super().__init__()
@@ -86,34 +176,39 @@ def test_names():
             self.p.v
             self.p.w
 
-    model = Model()
+    with pyro.settings.context(module_local_params=local_params):
+        model = Model()
 
-    # Check named_parameters.
-    expected = {
-        "x",
-        "y_unconstrained",
-        "m.u",
-        "p.v",
-        "p.w_unconstrained",
-    }
-    actual = set(name for name, _ in model.named_parameters())
-    assert actual == expected
+        # Check named_parameters.
+        expected = {
+            "x",
+            "y_unconstrained",
+            "m.u",
+            "p.v",
+            "p.w_unconstrained",
+        }
+        actual = set(name for name, _ in model.named_parameters())
+        assert actual == expected
 
-    # Check pyro.param names.
-    expected = {"x", "y", "m$$$u", "p.v", "p.w"}
-    with poutine.trace(param_only=True) as param_capture:
-        model()
-    actual = {
-        name
-        for name, site in param_capture.trace.nodes.items()
-        if site["type"] == "param"
-    }
-    assert actual == expected
+        # Check pyro.param names.
+        expected = {"x", "y", "m$$$u", "p.v", "p.w"}
+        with poutine.trace(param_only=True) as param_capture:
+            model()
+        actual = {
+            name
+            for name, site in param_capture.trace.nodes.items()
+            if site["type"] == "param"
+        }
+        assert actual == expected
+        if local_params:
+            assert set(pyro.get_param_store().keys()) == set()
+        else:
+            assert set(pyro.get_param_store().keys()) == expected
 
-    # Check pyro_parameters method
-    expected = {"x", "y", "m.u", "p.v", "p.w"}
-    actual = set(k for k, v in model.named_pyro_params())
-    assert actual == expected
+        # Check pyro_parameters method
+        expected = {"x", "y", "m.u", "p.v", "p.w"}
+        actual = set(k for k, v in model.named_pyro_params())
+        assert actual == expected
 
 
 def test_delete():
@@ -258,7 +353,8 @@ def test_constraints(shape, constraint_):
     assert not hasattr(module, "x_unconstrained")
 
 
-def test_clear():
+@pytest.mark.parametrize("local_params", [True, False])
+def test_clear(local_params):
     class Model(PyroModule):
         def __init__(self):
             super().__init__()
@@ -272,28 +368,45 @@ def test_clear():
         def forward(self):
             return [x.clone() for x in [self.x, self.m.weight, self.m.bias, self.p.x]]
 
-    assert set(pyro.get_param_store().keys()) == set()
-    m = Model()
-    state0 = m()
-    assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
+    with pyro.settings.context(module_local_params=local_params):
+        m = Model()
+        state0 = m()
 
-    # mutate
-    for x in pyro.get_param_store().values():
-        x.unconstrained().data += torch.randn(())
-    state1 = m()
-    for x, y in zip(state0, state1):
-        assert not (x == y).all()
-    assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
+        # mutate
+        for _, x in m.named_pyro_params():
+            if hasattr(x, "unconstrained"):
+                x = x.unconstrained()
+            x.data += torch.randn(x.shape)
+        state1 = m()
+        for x, y in zip(state0, state1):
+            assert not (x == y).all()
 
-    clear(m)
-    del m
-    assert set(pyro.get_param_store().keys()) == set()
+        if local_params:
+            assert set(pyro.get_param_store().keys()) == set()
+        else:
+            assert set(pyro.get_param_store().keys()) == {
+                "x",
+                "m$$$weight",
+                "m$$$bias",
+                "p.x",
+            }
+            clear(m)
+            del m
+            assert set(pyro.get_param_store().keys()) == set()
 
-    m = Model()
-    state2 = m()
-    assert set(pyro.get_param_store().keys()) == {"x", "m$$$weight", "m$$$bias", "p.x"}
-    for actual, expected in zip(state2, state0):
-        assert_equal(actual, expected)
+        m = Model()
+        state2 = m()
+        if local_params:
+            assert set(pyro.get_param_store().keys()) == set()
+        else:
+            assert set(pyro.get_param_store().keys()) == {
+                "x",
+                "m$$$weight",
+                "m$$$bias",
+                "p.x",
+            }
+        for actual, expected in zip(state2, state0):
+            assert_equal(actual, expected)
 
 
 def test_sample():
@@ -471,7 +584,6 @@ def test_mixin_factory():
 
 
 def test_to_pyro_module_():
-
     pyro.set_rng_seed(123)
     actual = nn.Sequential(
         nn.Linear(28 * 28, 200),
@@ -532,48 +644,65 @@ def test_to_pyro_module_():
     assert_identical(actual, expected)
 
 
-def test_torch_serialize_attributes():
-    module = PyroModule()
-    module.x = PyroParam(torch.tensor(1.234), constraints.positive)
-    module.y = nn.Parameter(torch.randn(3))
-    assert isinstance(module.x, torch.Tensor)
+@pytest.mark.parametrize("local_params", [True, False])
+def test_torch_serialize_attributes(local_params):
+    with pyro.settings.context(module_local_params=local_params):
+        module = PyroModule()
+        module.x = PyroParam(torch.tensor(1.234), constraints.positive)
+        module.y = nn.Parameter(torch.randn(3))
+        assert isinstance(module.x, torch.Tensor)
 
-    # Work around https://github.com/pytorch/pytorch/issues/27972
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=UserWarning)
-        f = io.BytesIO()
-        torch.save(module, f)
-        pyro.clear_param_store()
-        f.seek(0)
-        actual = torch.load(f)
+        # Work around https://github.com/pytorch/pytorch/issues/27972
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            f = io.BytesIO()
+            torch.save(module, f)
+            pyro.clear_param_store()
+            f.seek(0)
+            actual = torch.load(f)
 
-    assert_equal(actual.x, module.x)
-    actual_names = {name for name, _ in actual.named_parameters()}
-    expected_names = {name for name, _ in module.named_parameters()}
-    assert actual_names == expected_names
+        assert_equal(actual.x, module.x)
+        actual_names = {name for name, _ in actual.named_parameters()}
+        expected_names = {name for name, _ in module.named_parameters()}
+        assert actual_names == expected_names
 
 
-def test_torch_serialize_decorators():
-    module = DecoratorModel(3)
-    module()  # initialize
+@pytest.mark.parametrize("local_params", [True, False])
+def test_torch_serialize_decorators(local_params):
+    with pyro.settings.context(module_local_params=local_params):
+        module = DecoratorModel(3)
+        module()  # initialize
 
-    # Work around https://github.com/pytorch/pytorch/issues/27972
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=UserWarning)
-        f = io.BytesIO()
-        torch.save(module, f)
-        pyro.clear_param_store()
-        f.seek(0)
-        actual = torch.load(f)
+        module2 = DecoratorModel(3)
+        module2()  # initialize
 
-    assert_equal(actual.x, module.x)
-    assert_equal(actual.y, module.y)
-    assert_equal(actual.z, module.z)
-    assert actual.s.shape == module.s.shape
-    assert actual.t.shape == module.t.shape
-    actual_names = {name for name, _ in actual.named_parameters()}
-    expected_names = {name for name, _ in module.named_parameters()}
-    assert actual_names == expected_names
+        # Work around https://github.com/pytorch/pytorch/issues/27972
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning)
+            f = io.BytesIO()
+            torch.save(module, f)
+            pyro.clear_param_store()
+            f.seek(0)
+            actual = torch.load(f)
+
+        assert_equal(actual.x, module.x)
+        assert_equal(actual.y, module.y)
+        assert_equal(actual.z, module.z)
+        assert actual.s.shape == module.s.shape
+        assert actual.t.shape == module.t.shape
+        actual_names = {name for name, _ in actual.named_parameters()}
+        expected_names = {name for name, _ in module.named_parameters()}
+        assert actual_names == expected_names
+
+        actual()
+        if local_params:
+            assert len(set(pyro.get_param_store().keys())) == 0
+            assert torch.all(module.y != module2.y)
+            assert torch.all(actual.y != module2.y)
+        else:
+            assert len(set(pyro.get_param_store().keys())) > 0
+            assert_equal(module.y, module2.y)
+            assert_equal(actual.y, module2.y)
 
 
 def test_pyro_serialize():

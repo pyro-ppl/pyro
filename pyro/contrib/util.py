@@ -1,6 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import weakref
 from collections import OrderedDict
 
 import torch
@@ -75,3 +76,22 @@ def iter_plates_to_shape(shape):
     # Go backwards (right to left)
     for i, s in enumerate(shape[::-1]):
         yield pyro.plate("plate_" + str(i), s)
+
+
+def check_no_weakref(obj, path="", avoid_ids=None):
+    """Attempts to check that an object has no weakrefs."""
+    if avoid_ids is None:
+        avoid_ids = {id(obj)}
+
+    if isinstance(obj, weakref.ref):
+        raise ValueError(f"Weakref found at {path}")
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            if id(v) not in avoid_ids:
+                check_no_weakref(v, path + f"[{k}]")
+    elif isinstance(obj, (list, tuple)):
+        for i, v in enumerate(obj):
+            if id(v) not in avoid_ids:
+                check_no_weakref(v, path + f"[{i}]")
+    elif hasattr(obj, "__dict__"):
+        check_no_weakref(obj.__dict__, path)

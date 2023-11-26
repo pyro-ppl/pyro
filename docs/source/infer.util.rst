@@ -11,3 +11,10 @@ Model inspection
 .. automodule:: pyro.infer.inspect
     :members:
     :member-order: bysource
+
+Interactive prior tuning
+------------------------
+
+.. automodule:: pyro.infer.resampler
+    :members:
+    :member-order: bysource

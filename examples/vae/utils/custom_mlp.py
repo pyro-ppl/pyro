@@ -120,10 +120,6 @@ class MLP(nn.Module):
             cur_linear_layer.weight.data.normal_(0, 0.001)
             cur_linear_layer.bias.data.normal_(0, 0.001)
 
-            # use GPUs to share data during training (if available)
-            if use_cuda:
-                cur_linear_layer = nn.DataParallel(cur_linear_layer)
-
             # add our linear layer
             all_modules.append(cur_linear_layer)
 
@@ -168,13 +164,11 @@ class MLP(nn.Module):
                     else output_activation
                 )
         else:
-
             # we're going to have a bunch of separate layers we can spit out (a tuple of outputs)
             out_layers = []
 
             # multiple outputs? handle separately
             for out_ix, out_size in enumerate(output_size):
-
                 # for a single output object, we create a linear layer and some weights
                 split_layer = []
 

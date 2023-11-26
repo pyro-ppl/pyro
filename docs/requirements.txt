@@ -7,3 +7,4 @@ opt_einsum>=2.3.2
 pyro-api>=0.1.1
 tqdm>=4.36
 funsor[torch]
+setuptools

@@ -66,7 +66,7 @@ class DualAveraging:
         # According to formula (3.4) of [1], we have
         #     x_t = argmin{ g_avg . x + loc_t . |x - x0|^2 },
         # where loc_t := beta_t / t, beta_t := (gamma/2) * sqrt(t)
-        self._x_t = self.prox_center - (self._t ** 0.5) / self.gamma * self._g_avg
+        self._x_t = self.prox_center - (self._t**0.5) / self.gamma * self._g_avg
         # weight for the new x_t
         weight_t = self._t ** (-self.kappa)
         self._x_avg = (1 - weight_t) * self._x_avg + weight_t * self._x_t

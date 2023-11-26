@@ -3,7 +3,7 @@
 
 import torch
 
-from pyro.distributions import Categorical
+from pyro.distributions import Categorical  # type: ignore[attr-defined]
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.ops.indexing import Vindex
 from pyro.util import ignore_jit_warnings
@@ -33,7 +33,6 @@ def _tmc_mixture_sample(msg):
     # if this site has any possible ancestors, sample ancestor indices uniformly
     thin_sample = fat_sample
     if thin_sample.shape != target_shape:
-
         index = [Ellipsis] + [slice(None)] * (len(thin_sample.shape) - 1)
         squashed_dims = []
         for squashed_dim, squashed_size in zip(
@@ -79,7 +78,6 @@ def _tmc_diagonal_sample(msg):
     # if this site has any ancestors, choose ancestors from diagonal approximation
     thin_sample = fat_sample
     if thin_sample.shape != target_shape:
-
         index = [Ellipsis] + [slice(None)] * (len(thin_sample.shape) - 1)
         squashed_dims = []
         for squashed_dim, squashed_size in zip(

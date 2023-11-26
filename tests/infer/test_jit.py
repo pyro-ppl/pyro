@@ -24,12 +24,13 @@ from pyro.infer import (
     TraceEnum_ELBO,
     TraceGraph_ELBO,
     TraceMeanField_ELBO,
+    TraceTMC_ELBO,
     infer_discrete,
 )
 from pyro.optim import Adam
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.util import ignore_jit_warnings
-from tests.common import assert_equal
+from tests.common import assert_close, assert_equal
 
 
 def constant(*args, **kwargs):
@@ -173,7 +174,6 @@ def test_masked_fill():
     assert_equal(jit_f(y, mask), f(y, mask))
 
 
-@pytest.mark.xfail(reason="https://github.com/pytorch/pytorch/issues/11614")
 def test_scatter():
     def make_one_hot(x, i):
         return torch.zeros_like(x).scatter(-1, i.unsqueeze(-1), 1.0)
@@ -250,6 +250,53 @@ def test_one_hot_categorical_enumerate(shape, expand):
     log_prob = f(probs)
     batch_shape = shape[:-1]
     assert log_prob.shape == shape[-1:] + batch_shape
+
+
+@pytest.mark.parametrize(
+    "Elbo",
+    [
+        Trace_ELBO,
+        JitTrace_ELBO,
+        TraceGraph_ELBO,
+        JitTraceGraph_ELBO,
+        TraceEnum_ELBO,
+        JitTraceEnum_ELBO,
+        TraceMeanField_ELBO,
+        JitTraceMeanField_ELBO,
+        TraceTMC_ELBO,
+    ],
+)
+def test_loss(Elbo):
+    pyro.clear_param_store()
+    data = torch.tensor(1.0)
+
+    def model(data):
+        loc = pyro.sample("loc", dist.Normal(0, 1))
+        scale = pyro.sample("scale", dist.LogNormal(0, 1))
+        pyro.sample("obs", dist.Normal(loc, scale), obs=data)
+
+    def guide(data):
+        loc_loc = pyro.param("loc_loc", lambda: torch.tensor(1.0))
+        scale_loc = pyro.param("scale_loc", lambda: torch.tensor(-1.0))
+        pyro.sample("loc", dist.Normal(loc_loc, 2))
+        pyro.sample("scale", dist.LogNormal(scale_loc, 0.1))
+
+    elbo = Elbo(
+        num_particles=10_000,
+        vectorize_particles=True,
+        max_plate_nesting=0,
+        strict_enumeration_warning=False,
+    )
+    expected = 18.611
+
+    try:
+        actual = elbo.loss(model, guide, data)
+        assert_close(actual, expected, rtol=0.1)
+    except NotImplementedError:
+        pass
+
+    actual = elbo.loss_and_grads(model, guide, data)
+    assert_close(actual, expected, rtol=0.1)
 
 
 @pytest.mark.parametrize("num_particles", [1, 10])

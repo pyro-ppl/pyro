@@ -54,7 +54,7 @@ class ConditionedRadial(Transform):
         diff = x - x0
         r = diff.norm(dim=-1, keepdim=True)
         h = (alpha + r).reciprocal()
-        h_prime = -(h ** 2)
+        h_prime = -(h**2)
         beta_h = beta * h
 
         self._cached_logDetJ = (

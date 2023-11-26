@@ -693,7 +693,6 @@ def predictive(model, posterior_samples, *args, **kwargs):
     reshaped_samples = {}
 
     for name, sample in posterior_samples.items():
-
         batch_size, sample_shape = sample.shape[0], sample.shape[1:]
 
         if num_samples is None:

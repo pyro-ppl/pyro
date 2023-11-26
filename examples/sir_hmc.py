@@ -278,18 +278,15 @@ def quantize(name, x_real, min, max):
     ss = s * s
     t = 1 - s
     tt = t * t
-    probs = (
-        torch.stack(
-            [
-                t * tt,
-                4 + ss * (3 * s - 6),
-                4 + tt * (3 * t - 6),
-                s * ss,
-            ],
-            dim=-1,
-        )
-        * (1 / 6)
-    )
+    probs = torch.stack(
+        [
+            t * tt,
+            4 + ss * (3 * s - 6),
+            4 + tt * (3 * t - 6),
+            s * ss,
+        ],
+        dim=-1,
+    ) * (1 / 6)
     q = pyro.sample("Q_" + name, dist.Categorical(probs)).type_as(x_real)
 
     x = lb + q - 1
@@ -397,18 +394,15 @@ def quantize_enumerate(x_real, min, max):
     ss = s * s
     t = 1 - s
     tt = t * t
-    probs = (
-        torch.stack(
-            [
-                t * tt,
-                4 + ss * (3 * s - 6),
-                4 + tt * (3 * t - 6),
-                s * ss,
-            ],
-            dim=-1,
-        )
-        * (1 / 6)
-    )
+    probs = torch.stack(
+        [
+            t * tt,
+            4 + ss * (3 * s - 6),
+            4 + tt * (3 * t - 6),
+            s * ss,
+        ],
+        dim=-1,
+    ) * (1 / 6)
     logits = safe_log(probs)
     q = torch.arange(-1.0, 3.0)
 
@@ -639,7 +633,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.8.6")
     parser = argparse.ArgumentParser(description="SIR epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=10, type=int)
     parser.add_argument("-m", "--min-observations", default=3, type=int)
@@ -669,12 +663,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.double:
-        if args.cuda:
-            torch.set_default_tensor_type(torch.cuda.DoubleTensor)
-        else:
-            torch.set_default_tensor_type(torch.DoubleTensor)
-    elif args.cuda:
-        torch.set_default_tensor_type(torch.cuda.FloatTensor)
+        torch.set_default_dtype(torch.float64)
+    if args.cuda:
+        torch.set_default_device("cuda")
 
     main(args)
 

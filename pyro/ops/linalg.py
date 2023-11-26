@@ -2,8 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+import warnings
+from contextlib import contextmanager
 
 import torch
+
+
+@contextmanager
+def ignore_torch_deprecation_warnings():
+    with warnings.catch_warnings():
+        # Ignore deprecation warning until funsor updates to torch>=1.10.
+        warnings.filterwarnings("ignore", "torch.triangular_solve is deprecated")
+        yield
 
 
 def rinverse(M, sym=False):

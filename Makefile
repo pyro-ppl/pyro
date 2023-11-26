@@ -18,20 +18,17 @@ tutorial: FORCE
 	$(MAKE) -C tutorial html
 
 lint: FORCE
-	flake8
+	ruff check .
 	black --check *.py pyro examples tests scripts profiler
-	isort --check .
 	python scripts/update_headers.py --check
-	mypy pyro
-	# mypy examples  # FIXME
-	mypy scripts
+	mypy --install-types --non-interactive pyro scripts
 
 license: FORCE
 	python scripts/update_headers.py
 
 format: license FORCE
+	ruff check --fix .
 	black *.py pyro examples tests scripts profiler
-	isort .
 
 version: FORCE
 	python scripts/update_version.py
@@ -41,7 +38,9 @@ scrub: FORCE
 	find tutorial -name "*.ipynb" | xargs python tutorial/source/cleannb.py
 
 doctest: FORCE
-	python -m pytest -p tests.doctest_fixtures --doctest-modules -o filterwarnings=ignore pyro
+	# We skip testing pyro.distributions.torch wrapper classes because
+	# they include torch docstrings which are tested upstream.
+	python -m pytest -p tests.doctest_fixtures --doctest-modules -o filterwarnings=ignore pyro --ignore=pyro/distributions/torch.py
 
 perf-test: FORCE
 	bash scripts/perf_test.sh ${ref}
@@ -70,11 +69,11 @@ test-all: lint FORCE
 	  | xargs pytest -vx --nbval-lax
 
 test-cuda: lint FORCE
-	CUDA_TEST=1 PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vx --stage unit
+	CUDA_TEST=1 PYRO_DTYPE=float64 PYRO_DEVICE=cuda pytest -vx --stage unit
 	CUDA_TEST=1 pytest -vx tests/test_examples.py::test_cuda
 
 test-cuda-lax: lint FORCE
-	CUDA_TEST=1 PYRO_TENSOR_TYPE=torch.cuda.DoubleTensor pytest -vx --stage unit --lax
+	CUDA_TEST=1 PYRO_DTYPE=float64 PYRO_DEVICE=cuda pytest -vx --stage unit --lax
 	CUDA_TEST=1 pytest -vx tests/test_examples.py::test_cuda
 
 test-jit: FORCE

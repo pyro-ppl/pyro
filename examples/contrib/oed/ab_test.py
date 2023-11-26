@@ -82,7 +82,7 @@ def estimated_ape(ns, num_vi_steps):
 def true_ape(ns):
     """Analytic APE"""
     true_ape = []
-    prior_cov = torch.diag(prior_sds ** 2)
+    prior_cov = torch.diag(prior_sds**2)
     designs = [group_assignment_matrix(torch.tensor([n1, N - n1])) for n1 in ns]
     for i in range(len(ns)):
         x = designs[i]
@@ -92,7 +92,6 @@ def true_ape(ns):
 
 
 def main(num_vi_steps, num_bo_steps, seed):
-
     pyro.set_rng_seed(seed)
     pyro.clear_param_store()
 
@@ -125,7 +124,7 @@ def main(num_vi_steps, num_bo_steps, seed):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.8.6")
     parser = argparse.ArgumentParser(description="A/B test experiment design using VI")
     parser.add_argument("-n", "--num-vi-steps", nargs="?", default=5000, type=int)
     parser.add_argument("--num-bo-steps", nargs="?", default=5, type=int)

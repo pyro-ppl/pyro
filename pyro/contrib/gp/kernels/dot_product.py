@@ -27,7 +27,7 @@ class DotProduct(Kernel):
             Z = X
         X = self._slice_input(X)
         if diag:
-            return (X ** 2).sum(-1)
+            return (X**2).sum(-1)
 
         Z = self._slice_input(Z)
         if X.size(1) != Z.size(1):

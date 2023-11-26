@@ -43,7 +43,6 @@ def jit_prob(equation, *operands, **kwargs):
     """
     key = "prob", equation, kwargs["plates"]
     if key not in _CACHE:
-
         # This simply wraps einsum for jit compilation.
         def _einsum(*operands):
             return einsum(equation, *operands, **kwargs)
@@ -61,7 +60,6 @@ def jit_logprob(equation, *operands, **kwargs):
     """
     key = "logprob", equation, kwargs["plates"]
     if key not in _CACHE:
-
         # This simply wraps einsum for jit compilation.
         def _einsum(*operands):
             return einsum(
@@ -81,7 +79,6 @@ def jit_gradient(equation, *operands, **kwargs):
     """
     key = "gradient", equation, kwargs["plates"]
     if key not in _CACHE:
-
         # This wraps einsum for jit compilation, but we will call backward on the result.
         def _einsum(*operands):
             return einsum(
@@ -114,7 +111,6 @@ def _jit_adjoint(equation, *operands, **kwargs):
     backend = kwargs.pop("backend", "pyro.ops.einsum.torch_sample")
     key = backend, equation, tuple(x.shape for x in operands), kwargs["plates"]
     if key not in _CACHE:
-
         # This wraps a complete adjoint algorithm call.
         @ignore_jit_warnings()
         def _forward_backward(*operands):
@@ -178,9 +174,7 @@ def time_fn(fn, equation, *operands, **kwargs):
 
 def main(args):
     if args.cuda:
-        torch.set_default_tensor_type("torch.cuda.FloatTensor")
-    else:
-        torch.set_default_tensor_type("torch.FloatTensor")
+        torch.set_default_device("cuda")
 
     if args.method == "all":
         for method in ["prob", "logprob", "gradient", "marginal", "map", "sample"]:

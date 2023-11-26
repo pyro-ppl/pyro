@@ -1,13 +1,24 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 from contextlib import contextmanager
 from functools import partial
+from types import TracebackType
+from typing import Any, Callable, Iterator, List, Optional, Type, TypeVar, cast
 
-from .runtime import _PYRO_STACK
+from .runtime import _PYRO_STACK, Message
+
+_F = TypeVar("_F", bound=Callable)
 
 
-def _context_wrap(context, fn, *args, **kwargs):
+def _context_wrap(
+    context: Messenger,
+    fn: Callable,
+    *args: Any,
+    **kwargs: Any,
+) -> Any:
     with context:
         return fn(*args, **kwargs)
 
@@ -18,13 +29,25 @@ class _bound_partial(partial):
     support class methods as arguments to handlers.
     """
 
-    def __get__(self, instance, owner):
+    # Use '__slots__' for func to avoid the issue
+    #   `_bound_partial(_bound_partial(f)).func is f`
+    # in Python 3.10.
+    __slots__ = "func"
+
+    def __init__(self, func):
+        self.func = func
+
+    def __get__(
+        self,
+        instance: Optional[object],
+        owner: Optional[Type[object]] = None,
+    ) -> object:
         if instance is None:
             return self
         return partial(self.func, instance)
 
 
-def unwrap(fn):
+def unwrap(fn: Callable) -> Callable:
     """
     Recursively unwraps poutines.
     """
@@ -53,17 +76,15 @@ class Messenger:
     Most inference operations are implemented in subclasses of this.
     """
 
-    def __call__(self, fn):
+    def __call__(self, fn: _F) -> _F:
         if not callable(fn):
             raise ValueError(
-                "{} is not callable, did you mean to pass it as a keyword arg?".format(
-                    fn
-                )
+                f"{fn!r} is not callable, did you mean to pass it as a keyword arg?"
             )
         wraps = _bound_partial(partial(_context_wrap, self, fn))
-        return wraps
+        return cast(_F, wraps)
 
-    def __enter__(self):
+    def __enter__(self) -> Messenger:
         """
         :returns: self
         :rtype: pyro.poutine.Messenger
@@ -77,7 +98,7 @@ class Messenger:
         Derived versions cannot be overridden to take arguments
         and must always return self.
         """
-        if not (self in _PYRO_STACK):
+        if self not in _PYRO_STACK:
             # if this poutine is not already installed,
             # put it on the bottom of the stack.
             _PYRO_STACK.append(self)
@@ -95,7 +116,12 @@ class Messenger:
             # but it could in principle be enabled...
             raise ValueError("cannot install a Messenger instance twice")
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(
+        self,
+        exc_type: Optional[Type[Exception]],
+        exc_value: Optional[Exception],
+        traceback: Optional[TracebackType],
+    ) -> None:
         """
         :param exc_type: exception type, e.g. ValueError
         :param exc_value: exception instance?
@@ -138,10 +164,10 @@ class Messenger:
                 for i in range(loc, len(_PYRO_STACK)):
                     _PYRO_STACK.pop()
 
-    def _reset(self):
+    def _reset(self) -> None:
         pass
 
-    def _process_message(self, msg):
+    def _process_message(self, msg: Message) -> None:
         """
         :param msg: current message at a trace site
         :returns: None
@@ -149,19 +175,22 @@ class Messenger:
         Process the message by calling appropriate method of itself based
         on message type. The message is updated in place.
         """
-        method = getattr(self, "_pyro_{}".format(msg["type"]), None)
+        method = getattr(self, f"_pyro_{msg['type']}", None)
         if method is not None:
-            return method(msg)
-        return None
+            method(msg)
 
-    def _postprocess_message(self, msg):
-        method = getattr(self, "_pyro_post_{}".format(msg["type"]), None)
+    def _postprocess_message(self, msg: Message) -> None:
+        method = getattr(self, f"_pyro_post_{msg['type']}", None)
         if method is not None:
-            return method(msg)
-        return None
+            method(msg)
 
     @classmethod
-    def register(cls, fn=None, type=None, post=None):
+    def register(
+        cls,
+        fn: Optional[Callable] = None,
+        type: Optional[str] = None,
+        post: Optional[bool] = None,
+    ) -> Callable:
         """
         :param fn: function implementing operation
         :param str type: name of the operation
@@ -189,7 +218,11 @@ class Messenger:
         return fn
 
     @classmethod
-    def unregister(cls, fn=None, type=None):
+    def unregister(
+        cls,
+        fn: Optional[Callable] = None,
+        type: Optional[str] = None,
+    ) -> Optional[Callable]:
         """
         :param fn: function implementing operation
         :param str type: name of the operation
@@ -219,7 +252,9 @@ class Messenger:
 
 
 @contextmanager
-def block_messengers(predicate):
+def block_messengers(
+    predicate: Callable[[Messenger], bool]
+) -> Iterator[List[Messenger]]:
     """
     EXPERIMENTAL Context manager to temporarily remove matching messengers from
     the _PYRO_STACK. Note this does not call the ``.__exit__()`` and

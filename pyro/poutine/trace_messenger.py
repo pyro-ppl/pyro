@@ -18,7 +18,7 @@ def identify_dense_edges(trace):
             continue
         if node["type"] == "sample":
             for past_name, past_node in trace.nodes.items():
-                if site_is_subsample(node):
+                if site_is_subsample(past_node):
                     continue
                 if past_node["type"] == "sample":
                     if past_name == name:
@@ -175,7 +175,7 @@ class TraceHandler:
             except (ValueError, RuntimeError) as e:
                 exc_type, exc_value, traceback = sys.exc_info()
                 shapes = self.msngr.trace.format_shapes()
-                exc = exc_type(u"{}\n{}".format(exc_value, shapes))
+                exc = exc_type("{}\n{}".format(exc_value, shapes))
                 exc = exc.with_traceback(traceback)
                 raise exc from e
             self.msngr.trace.add_node(

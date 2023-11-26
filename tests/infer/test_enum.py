@@ -50,7 +50,7 @@ def test_iter_discrete_traces_order(depth, graph_type):
 
     traces = list(iter_discrete_traces(graph_type, model, depth))
 
-    assert len(traces) == 2 ** depth
+    assert len(traces) == 2**depth
     for trace in traces:
         sites = [name for name, site in trace.nodes.items() if site["type"] == "sample"]
         assert sites == ["x{}".format(i) for i in range(depth)]
@@ -202,7 +202,7 @@ def test_gmm_iter_discrete_traces(data_size, graph_type, model):
     model = config_enumerate(model, "sequential")
     traces = list(iter_discrete_traces(graph_type, model, data=data, verbose=True))
     # This non-vectorized version is exponential in data_size:
-    assert len(traces) == 2 ** data_size
+    assert len(traces) == 2**data_size
 
 
 # A Gaussian mixture model, with vectorized batching.
@@ -4011,7 +4011,6 @@ def test_backwardsample_posterior_restrictions(
 
 @pytest.mark.parametrize("num_samples", [10000, 100000])
 def test_vectorized_importance(num_samples):
-
     pyro.param(
         "model_probs_a", torch.tensor([0.45, 0.55]), constraint=constraints.simplex
     )

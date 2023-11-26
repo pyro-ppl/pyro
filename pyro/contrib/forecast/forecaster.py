@@ -70,6 +70,8 @@ class ForecastingModel(PyroModule, metaclass=_ForecastingModelMeta):
     @property
     def time_plate(self):
         """
+        Helper to create a ``pyro.plate`` over time.
+
         :returns: A plate named "time" with size ``covariates.size(-2)`` and
             ``dim=-1``. This is available only during model execution.
         :rtype: :class:`~pyro.plate`

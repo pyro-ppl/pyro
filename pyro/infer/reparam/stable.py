@@ -34,7 +34,7 @@ class LatentStableReparam(Reparam):
 
     [1] J.P. Nolan (2017).
         Stable Distributions: Models for Heavy Tailed Data.
-        http://fs2.american.edu/jpnolan/www/stable/chap1.pdf
+        https://edspace.american.edu/jpnolan/wp-content/uploads/sites/1720/2020/09/Chap1.pdf
     """
 
     def apply(self, msg):
@@ -128,7 +128,7 @@ class SymmetricStableReparam(Reparam):
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
 
         # Construct a scaled Gaussian, using Stable(2,0,s,m) == Normal(m,s*sqrt(2)).
-        new_fn = self._wrap(dist.Normal(fn.loc, scale * (2 ** 0.5)), event_dim)
+        new_fn = self._wrap(dist.Normal(fn.loc, scale * (2**0.5)), event_dim)
         return {"fn": new_fn, "value": value, "is_observed": is_observed}
 
 
@@ -223,7 +223,7 @@ class StableReparam(Reparam):
         scale = scale.clamp(min=torch.finfo(scale.dtype).tiny)
 
         # Construct a scaled Gaussian, using Stable(2,0,s,m) == Normal(m,s*sqrt(2)).
-        new_fn = self._wrap(dist.Normal(loc, scale * (2 ** 0.5)), event_dim)
+        new_fn = self._wrap(dist.Normal(loc, scale * (2**0.5)), event_dim)
         return {"fn": new_fn, "value": value, "is_observed": is_observed}
 
 

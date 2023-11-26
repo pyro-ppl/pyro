@@ -2,11 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from functools import partial
+from typing import Callable, List, Optional
 
 from pyro.poutine.messenger import Messenger
+from pyro.poutine.runtime import Message
 
 
-def _block_fn(expose, expose_types, hide, hide_types, hide_all, msg):
+def _block_fn(
+    expose: List[str],
+    expose_types: List[str],
+    hide: List[str],
+    hide_types: List[str],
+    hide_all: bool,
+    msg: Message,
+) -> bool:
     # handle observes
     if msg["type"] == "sample" and msg["is_observed"]:
         msg_type = "observe"
@@ -21,14 +30,20 @@ def _block_fn(expose, expose_types, hide, hide_types, hide_all, msg):
         or (msg_type in hide_types)
         or (is_not_exposed and hide_all)
     ):  # noqa: E129
-
         return True
     # otherwise expose
     else:
         return False
 
 
-def _make_default_hide_fn(hide_all, expose_all, hide, expose, hide_types, expose_types):
+def _make_default_hide_fn(
+    hide_all: bool,
+    expose_all: bool,
+    hide: Optional[List[str]],
+    expose: Optional[List[str]],
+    hide_types: Optional[List[str]],
+    expose_types: Optional[List[str]],
+) -> Callable[[Message], bool]:
     # first, some sanity checks:
     # hide_all and expose_all intersect?
     assert (hide_all is False and expose_all is False) or (
@@ -64,6 +79,14 @@ def _make_default_hide_fn(hide_all, expose_all, hide, expose, hide_types, expose
     ), "cannot hide and expose a site type"
 
     return partial(_block_fn, expose, expose_types, hide, hide_types, hide_all)
+
+
+def _negate_fn(fn: Callable[[Message], Optional[bool]]) -> Callable[[Message], bool]:
+    # typed version of lambda msg: not fn(msg)
+    def negated_fn(msg: Message) -> bool:
+        return not fn(msg)
+
+    return negated_fn
 
 
 class BlockMessenger(Messenger):
@@ -111,20 +134,20 @@ class BlockMessenger(Messenger):
     :param list hide: list of site names to hide
     :param list expose: list of site names to be exposed while all others hidden
     :param list hide_types: list of site types to be hidden
-    :param lits expose_types: list of site types to be exposed while all others hidden
+    :param list expose_types: list of site types to be exposed while all others hidden
     :returns: stochastic function decorated with a :class:`~pyro.poutine.block_messenger.BlockMessenger`
     """
 
     def __init__(
         self,
-        hide_fn=None,
-        expose_fn=None,
-        hide_all=True,
-        expose_all=False,
-        hide=None,
-        expose=None,
-        hide_types=None,
-        expose_types=None,
+        hide_fn: Optional[Callable[[Message], Optional[bool]]] = None,
+        expose_fn: Optional[Callable[[Message], Optional[bool]]] = None,
+        hide_all: bool = True,
+        expose_all: bool = False,
+        hide: Optional[List[str]] = None,
+        expose: Optional[List[str]] = None,
+        hide_types: Optional[List[str]] = None,
+        expose_types: Optional[List[str]] = None,
     ):
         super().__init__()
         if not (hide_fn is None or expose_fn is None):
@@ -132,12 +155,11 @@ class BlockMessenger(Messenger):
         if hide_fn is not None:
             self.hide_fn = hide_fn
         elif expose_fn is not None:
-            self.hide_fn = lambda msg: not expose_fn(msg)
+            self.hide_fn = _negate_fn(expose_fn)
         else:
             self.hide_fn = _make_default_hide_fn(
                 hide_all, expose_all, hide, expose, hide_types, expose_types
             )
 
-    def _process_message(self, msg):
+    def _process_message(self, msg: Message) -> None:
         msg["stop"] = bool(self.hide_fn(msg))
-        return None

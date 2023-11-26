@@ -109,7 +109,7 @@ def test_newton_step_trust(trust_radius, dims):
         assert ((x - x_updated).pow(2).sum(-1) > 1.0).any(), "test is too weak"
     else:
         assert (
-            (x - x_updated).pow(2).sum(-1) <= 1e-8 + trust_radius ** 2
+            (x - x_updated).pow(2).sum(-1) <= 1e-8 + trust_radius**2
         ).all(), "trust region violated"
 
 

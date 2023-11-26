@@ -398,7 +398,7 @@ def test_naive_ubersum(equation, plates):
             assert_equal(
                 expected_part,
                 actual_part,
-                msg=u"For output '{}':\nExpected:\n{}\nActual:\n{}".format(
+                msg="For output '{}':\nExpected:\n{}\nActual:\n{}".format(
                     output, expected_part.detach().cpu(), actual_part.detach().cpu()
                 ),
             )
@@ -422,7 +422,7 @@ def test_ubersum(equation, plates):
         assert_equal(
             expected_part,
             actual_part,
-            msg=u"For output '{}':\nExpected:\n{}\nActual:\n{}".format(
+            msg="For output '{}':\nExpected:\n{}\nActual:\n{}".format(
                 output, expected_part.detach().cpu(), actual_part.detach().cpu()
             ),
         )
@@ -449,7 +449,7 @@ def test_einsum_linear(equation, plates):
         assert_equal(
             expected_part.log(),
             actual_part.log(),
-            msg=u"For output '{}':\nExpected:\n{}\nActual:\n{}".format(
+            msg="For output '{}':\nExpected:\n{}\nActual:\n{}".format(
                 output, expected_part.detach().cpu(), actual_part.detach().cpu()
             ),
         )
@@ -508,7 +508,7 @@ def test_ubersum_total(equation, plates):
     assert_equal(
         expected,
         actual,
-        msg=u"Expected:\n{}\nActual:\n{}".format(
+        msg="Expected:\n{}\nActual:\n{}".format(
             expected.detach().cpu(), actual.detach().cpu()
         ),
     )

@@ -17,7 +17,7 @@ def linear_model_ground_truth(
         target_labels = [target_labels]
 
     w_sd = torch.cat(list(model.w_sds.values()), dim=-1)
-    prior_cov = torch.diag(w_sd ** 2)
+    prior_cov = torch.diag(w_sd**2)
     design_shape = design.shape
     posterior_covs = [
         analytic_posterior_cov(prior_cov, x, model.obs_sd)

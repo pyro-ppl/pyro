@@ -1,8 +1,8 @@
 .PHONY: help create-host-workspace build build-gpu run run-gpu notebook notebook-gpu
 
 DOCKER_FILE=Dockerfile
-BASE_IMG=ubuntu:16.04
-BASE_CUDA_IMG=nvidia/cuda:9.1-cudnn7-devel-ubuntu16.04
+BASE_IMG=ubuntu:18.04
+BASE_CUDA_IMG=nvidia/cuda:11.5.0-cudnn8-runtime-ubuntu18.04
 DOCKER_CMD=docker
 DOCKER_GPU_CMD=nvidia-docker
 HOST_WORK_DIR=${HOME}/pyro_docker

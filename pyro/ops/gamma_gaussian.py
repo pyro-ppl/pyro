@@ -275,13 +275,13 @@ class GammaGaussian:
         P_ba = self.precision[..., b, a]
         P_bb = self.precision[..., b, b]
         P_b = torch.linalg.cholesky(P_bb)
-        P_a = P_ba.triangular_solve(P_b, upper=False).solution
+        P_a = torch.linalg.solve_triangular(P_b, P_ba, upper=False)
         P_at = P_a.transpose(-1, -2)
         precision = P_aa - P_at.matmul(P_a)
 
         info_a = self.info_vec[..., a]
         info_b = self.info_vec[..., b]
-        b_tmp = info_b.unsqueeze(-1).triangular_solve(P_b, upper=False).solution
+        b_tmp = torch.linalg.solve_triangular(P_b, info_b.unsqueeze(-1), upper=False)
         info_vec = info_a
         if n_b < n:
             info_vec = info_vec - P_at.matmul(b_tmp).squeeze(-1)
@@ -320,11 +320,9 @@ class GammaGaussian:
         """
         n = self.dim()
         chol_P = torch.linalg.cholesky(self.precision)
-        chol_P_u = (
-            self.info_vec.unsqueeze(-1)
-            .triangular_solve(chol_P, upper=False)
-            .solution.squeeze(-1)
-        )
+        chol_P_u = torch.linalg.solve_triangular(
+            chol_P, self.info_vec.unsqueeze(-1), upper=False
+        ).squeeze(-1)
         u_P_u = chol_P_u.pow(2).sum(-1)
         # considering GammaGaussian as a Gaussian with precision = s * precision, info_vec = s * info_vec,
         # marginalize x variable, we get

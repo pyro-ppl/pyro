@@ -12,7 +12,7 @@
 #   https://horovod.readthedocs.io/en/stable
 #
 # This assumes you have installed horovod, e.g. via
-#   pip install pyro[horovod]
+#   pip install pyro-ppl[horovod]
 # For detailed instructions see
 #   https://horovod.readthedocs.io/en/stable/install.html
 # On my mac laptop I was able to install horovod with
@@ -78,7 +78,7 @@ def main(args):
         if args.cuda:
             torch.cuda.set_device(hvd.local_rank())
     if args.cuda:
-        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        torch.set_default_device("cuda")
     device = torch.tensor(0).device
 
     if args.horovod:
@@ -154,7 +154,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.0")
+    assert pyro.__version__.startswith("1.8.6")
     parser = argparse.ArgumentParser(description="Distributed training via Horovod")
     parser.add_argument("-o", "--outfile")
     parser.add_argument("-s", "--size", default=1000000, type=int)

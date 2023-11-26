@@ -529,9 +529,9 @@ def AutoGuideList_x(model):
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_quantiles(auto_class, Elbo):
     def model():
-        pyro.sample("x", dist.Normal(0.0, 1.0))
         pyro.sample("y", dist.LogNormal(0.0, 1.0))
         pyro.sample("z", dist.Beta(2.0, 2.0).expand([2]).to_event(1))
+        pyro.sample("x", dist.Normal(0.0, 1.0))
 
     guide = auto_class(model)
     optim = Adam({"lr": 0.05, "betas": (0.8, 0.99)})
@@ -544,6 +544,13 @@ def test_quantiles(auto_class, Elbo):
 
     if auto_class is AutoLaplaceApproximation:
         guide = guide.laplace_approximation()
+
+    if hasattr(auto_class, "get_posterior"):
+        posterior = guide.get_posterior()
+        posterior_scale = posterior.variance[-1].sqrt()
+        q = guide.quantiles([0.158655, 0.8413447])
+        quantile_scale = 0.5 * (q["x"][1] - q["x"][0])  # only x is unconstrained
+        assert_close(quantile_scale, posterior_scale, atol=1.0e-6)
 
     quantiles = guide.quantiles([0.1, 0.5, 0.9])
     median = guide.median()
@@ -1141,7 +1148,6 @@ def test_subsample_model_amortized(auto_class):
 @pytest.mark.parametrize("init_fn", [None, init_to_mean, init_to_median])
 @pytest.mark.parametrize("auto_class", [AutoDelta, AutoNormal, AutoGuideList])
 def test_subsample_guide(auto_class, init_fn):
-
     # The model from tutorial/source/easyguide.ipynb
     def model(batch, subsample, full_size):
         num_time_steps = len(batch)
@@ -1192,7 +1198,6 @@ def test_subsample_guide(auto_class, init_fn):
 @pytest.mark.parametrize("independent", [True, False], ids=["independent", "dependent"])
 @pytest.mark.parametrize("auto_class", [AutoDelta, AutoNormal])
 def test_subsample_guide_2(auto_class, independent):
-
     # Simplified from Model2 in tutorial/source/forecasting_iii.ipynb
     def model(data):
         size, size = data.shape
@@ -1587,3 +1592,30 @@ def test_exact_tree(Guide):
             # Check ELBO loss.
             actual_loss = elbo.loss(model, guide, data)
             assert_close(actual_loss, expected_loss, atol=0.01)
+
+
+def test_autonormal_dynamic_model():
+    def model1():
+        x = pyro.sample("x", dist.Normal(0, 1))
+        pyro.sample("obs", dist.Normal(x, 1), obs=torch.tensor(0.0))
+
+    def model2():
+        x = pyro.sample("x", dist.Normal(0, 1))
+        y = pyro.sample("y", dist.Normal(0, 1))
+        pyro.sample("obs", dist.Normal(x + y, 1), obs=torch.tensor(0.0))
+
+    guide = AutoNormal(model1)
+    guide()  # initialize
+
+    assert hasattr(guide.locs, "x")
+    assert not hasattr(guide.locs, "y")
+    assert guide.locs.x.shape == ()
+    expected = torch.tensor(12.345)
+    guide.locs.x = expected
+
+    guide = AutoNormal(model2)
+    guide()  # initialize
+
+    assert hasattr(guide.locs, "x")
+    assert hasattr(guide.locs, "y")
+    assert_equal(guide.locs.x.data, expected)

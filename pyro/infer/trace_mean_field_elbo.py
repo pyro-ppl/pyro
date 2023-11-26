@@ -120,7 +120,10 @@ class TraceMeanField_ELBO(Trace_ELBO):
                             kl_qp, scale=guide_site["scale"], mask=guide_site["mask"]
                         )
                         if torch.is_tensor(kl_qp):
-                            assert kl_qp.shape == guide_site["fn"].batch_shape
+                            assert (
+                                torch._C._get_tracing_state()
+                                or kl_qp.shape == guide_site["fn"].batch_shape
+                            )
                             kl_qp_sum = kl_qp.sum()
                         else:
                             kl_qp_sum = (

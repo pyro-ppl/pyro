@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
+import torch.nn.functional as F
 
 from pyro.ops.gamma_gaussian import (
     GammaGaussian,
@@ -14,9 +15,12 @@ from pyro.ops.gaussian import (
     gaussian_tensordot,
     matrix_and_mvn_to_gaussian,
     mvn_to_gaussian,
+    sequential_gaussian_filter_sample,
+    sequential_gaussian_tensordot,
 )
+from pyro.ops.indexing import Vindex
 from pyro.ops.special import safe_log
-from pyro.ops.tensor_utils import cholesky, cholesky_solve
+from pyro.ops.tensor_utils import cholesky_solve, safe_cholesky
 
 from . import constraints
 from .torch import Categorical, Gamma, Independent, MultivariateNormal
@@ -46,7 +50,7 @@ def _linear_integrate(init, trans, shift):
 
 def _logmatmulexp(x, y):
     """
-    Numerically stable version of ``(x.log() @ y.log()).exp()``.
+    Numerically stable version of ``(x.exp() @ y.exp()).log()``.
     """
     finfo = torch.finfo(x.dtype)  # avoid nan due to -inf - -inf
     x_shift = x.detach().max(-1, keepdim=True).values.clamp_(min=finfo.min)
@@ -81,113 +85,80 @@ def _sequential_logmatmulexp(logits):
     return logits.squeeze(-3)
 
 
-def _sequential_gaussian_tensordot(gaussian):
+def _markov_index(x, y):
     """
-    Integrates a Gaussian ``x`` whose rightmost batch dimension is time, computes::
+    Join ends of two Markov paths.
+    """
+    y = Vindex(y.unsqueeze(-2))[..., x[..., -1:, :]]
+    return torch.cat([x, y], -2)
 
-        x[..., 0] @ x[..., 1] @ ... @ x[..., T-1]
+
+def _sequential_index(samples):
     """
-    assert isinstance(gaussian, Gaussian)
-    assert gaussian.dim() % 2 == 0, "dim is not even"
-    batch_shape = gaussian.batch_shape[:-1]
-    state_dim = gaussian.dim() // 2
-    while gaussian.batch_shape[-1] > 1:
-        time = gaussian.batch_shape[-1]
+    For a tensor ``samples`` whose time dimension is -2 and state dimension
+    is -1, compute Markov paths by sequential indexing.
+
+    For example, for ``samples`` with 3 states and time duration 5::
+
+        tensor([[0, 1, 1],
+                [1, 0, 2],
+                [2, 1, 0],
+                [0, 2, 1],
+                [1, 1, 0]])
+
+    computed paths are::
+
+        tensor([[0, 1, 1],
+                [1, 0, 0],
+                [1, 2, 2],
+                [2, 1, 1],
+                [0, 1, 1]])
+
+        # path for a 0th state
+        #
+        # 0 1 1
+        # |
+        # 1 0 2
+        #  \
+        # 2 1 0
+        #   |
+        # 0 2 1
+        #    \
+        # 1 1 0
+        #
+        # paths for 1st and 2nd states
+        #
+        # 0 1 1
+        #   |/
+        # 1 0 2
+        #  /
+        # 2 1 0
+        #  \
+        #    \
+        # 0 2 1
+        #    /
+        # 1 1 0
+    """
+    # new Markov time dimension at -2
+    samples = samples.unsqueeze(-2)
+    batch_shape = samples.shape[:-3]
+    state_dim = samples.size(-1)
+    duration = samples.size(-3)
+    while samples.size(-3) > 1:
+        time = samples.size(-3)
         even_time = time // 2 * 2
-        even_part = gaussian[..., :even_time]
-        x_y = even_part.reshape(batch_shape + (even_time // 2, 2))
-        x, y = x_y[..., 0], x_y[..., 1]
-        contracted = gaussian_tensordot(x, y, state_dim)
+        even_part = samples[..., :even_time, :, :]
+        x_y = even_part.reshape(batch_shape + (even_time // 2, 2, -1, state_dim))
+        x, y = x_y.unbind(-3)
+        contracted = _markov_index(x, y)
         if time > even_time:
-            contracted = Gaussian.cat((contracted, gaussian[..., -1:]), dim=-1)
-        gaussian = contracted
-    return gaussian[..., 0]
-
-
-def _is_subshape(x, y):
-    return broadcast_shape(x, y) == y
-
-
-def _sequential_gaussian_filter_sample(init, trans, sample_shape):
-    """
-    Draws a reparameterized sample from a Markov product of Gaussians via
-    parallel-scan forward-filter backward-sample.
-    """
-    assert isinstance(init, Gaussian)
-    assert isinstance(trans, Gaussian)
-    assert trans.dim() == 2 * init.dim()
-    assert _is_subshape(trans.batch_shape[:-1], init.batch_shape)
-    state_dim = trans.dim() // 2
-    device = trans.precision.device
-    perm = torch.cat(
-        [
-            torch.arange(1 * state_dim, 2 * state_dim, device=device),
-            torch.arange(0 * state_dim, 1 * state_dim, device=device),
-            torch.arange(2 * state_dim, 3 * state_dim, device=device),
-        ]
-    )
-
-    # Forward filter, similar to _sequential_gaussian_tensordot().
-    tape = []
-    shape = trans.batch_shape[:-1]  # Note trans may be unbroadcasted.
-    gaussian = trans
-    while gaussian.batch_shape[-1] > 1:
-        time = gaussian.batch_shape[-1]
-        even_time = time // 2 * 2
-        even_part = gaussian[..., :even_time]
-        x_y = even_part.reshape(shape + (even_time // 2, 2))
-        x, y = x_y[..., 0], x_y[..., 1]
-        x = x.event_pad(right=state_dim)
-        y = y.event_pad(left=state_dim)
-        joint = (x + y).event_permute(perm)
-        tape.append(joint)
-        contracted = joint.marginalize(left=state_dim)
-        if time > even_time:
-            contracted = Gaussian.cat((contracted, gaussian[..., -1:]), dim=-1)
-        gaussian = contracted
-    gaussian = gaussian[..., 0] + init.event_pad(right=state_dim)
-
-    # Backward sample.
-    shape = sample_shape + init.batch_shape
-    result = gaussian.rsample(sample_shape).reshape(shape + (2, state_dim))
-    for joint in reversed(tape):
-        # The following comments demonstrate two example computations, one
-        # EVEN, one ODD.  Ignoring sample_shape and batch_shape, let each zn be
-        # a single sampled event of shape (state_dim,).
-        if joint.batch_shape[-1] == result.size(-2) - 1:  # EVEN case.
-            # Suppose e.g. result = [z0, z2, z4]
-            cond = result.repeat_interleave(2, dim=-2)  # [z0, z0, z2, z2, z4, z4]
-            cond = cond[..., 1:-1, :]  # [z0, z2, z2, z4]
-            cond = cond.reshape(shape + (-1, 2 * state_dim))  # [z0z2, z2z4]
-            sample = joint.condition(cond).rsample()  # [z1, z3]
-            sample = torch.nn.functional.pad(sample, (0, 0, 0, 1))  # [z1, z3, 0]
-            result = torch.stack(
-                [
-                    result,  # [z0, z2, z4]
-                    sample,  # [z1, z3, 0]
-                ],
-                dim=-2,
-            )  # [[z0, z1], [z2, z3], [z4, 0]]
-            result = result.reshape(shape + (-1, state_dim))  # [z0, z1, z2, z3, z4, 0]
-            result = result[..., :-1, :]  # [z0, z1, z2, z3, z4]
-        else:  # ODD case.
-            assert joint.batch_shape[-1] == result.size(-2) - 2
-            # Suppose e.g. result = [z0, z2, z3]
-            cond = result[..., :-1, :].repeat_interleave(2, dim=-2)  # [z0, z0, z2, z2]
-            cond = cond[..., 1:-1, :]  # [z0, z2]
-            cond = cond.reshape(shape + (-1, 2 * state_dim))  # [z0z2]
-            sample = joint.condition(cond).rsample()  # [z1]
-            sample = torch.cat([sample, result[..., -1:, :]], dim=-2)  # [z1, z3]
-            result = torch.stack(
-                [
-                    result[..., :-1, :],  # [z0, z2]
-                    sample,  # [z1, z3]
-                ],
-                dim=-2,
-            )  # [[z0, z1], [z2, z3]]
-            result = result.reshape(shape + (-1, state_dim))  # [z0, z1, z2, z3]
-
-    return result[..., 1:, :]  # [z1, z2, z3, ...]
+            padded = F.pad(
+                input=samples[..., -1:, :, :],
+                pad=(0, 0, 0, contracted.size(-2) // 2),
+            )
+            contracted = torch.cat((contracted, padded), dim=-3)
+        samples = contracted
+    return samples.squeeze(-3)[..., :duration, :]
 
 
 def _sequential_gamma_gaussian_tensordot(gamma_gaussian):
@@ -272,8 +243,10 @@ class HiddenMarkovModel(TorchDistribution):
 class DiscreteHMM(HiddenMarkovModel):
     """
     Hidden Markov Model with discrete latent state and arbitrary observation
-    distribution. This uses [1] to parallelize over time, achieving
-    O(log(time)) parallel complexity.
+    distribution.
+
+    This uses [1] to parallelize over time, achieving O(log(time)) parallel
+    complexity for computing :meth:`log_prob`, :meth:`filter`, and :meth:`sample`.
 
     The event_shape of this distribution includes time on the left::
 
@@ -423,6 +396,40 @@ class DiscreteHMM(HiddenMarkovModel):
         # Convert to a distribution.
         return Categorical(logits=logp, validate_args=self._validate_args)
 
+    @torch.no_grad()
+    def sample(self, sample_shape=torch.Size()):
+        assert self.duration is not None
+
+        # Sample initial state.
+        S = self.initial_logits.size(-1)  # state space size
+        init_shape = torch.Size(sample_shape) + self.batch_shape + (S,)
+        init_logits = self.initial_logits.expand(init_shape)
+        x = Categorical(logits=init_logits).sample()
+
+        # Sample hidden states over time.
+        trans_shape = (
+            torch.Size(sample_shape) + self.batch_shape + (self.duration, S, S)
+        )
+        trans_logits = self.transition_logits.expand(trans_shape)
+        xs = Categorical(logits=trans_logits).sample()
+        xs = _sequential_index(xs)
+        x = Vindex(xs)[..., :, x]
+
+        # Sample observations conditioned on hidden states.
+        # Note the simple sample-then-slice approach here generalizes to all
+        # distributions, but is inefficient. To implement a general optimal
+        # slice-then-sample strategy would require distributions to support
+        # slicing https://github.com/pyro-ppl/pyro/issues/3052. A simpler
+        # implementation might register a few slicing operators as is done with
+        # pyro.contrib.forecast.util.reshape_batch(). If you as a user need
+        # this function to be cheaper, feel free to submit a PR implementing
+        # one of these approaches.
+        obs_shape = self.batch_shape + (self.duration, S)
+        obs_dist = self.observation_dist.expand(obs_shape)
+        y = obs_dist.sample(sample_shape)
+        y = Vindex(y)[(Ellipsis, x) + (slice(None),) * obs_dist.event_dim]
+        return y
+
 
 class GaussianHMM(HiddenMarkovModel):
     """
@@ -543,9 +550,9 @@ class GaussianHMM(HiddenMarkovModel):
         new._obs = self._obs
         new._trans = self._trans
 
-        # To save computation in _sequential_gaussian_tensordot(), we expand
+        # To save computation in sequential_gaussian_tensordot(), we expand
         # only _init, which is applied only after
-        # _sequential_gaussian_tensordot().
+        # sequential_gaussian_tensordot().
         batch_shape = torch.Size(broadcast_shape(self.batch_shape, batch_shape))
         new._init = self._init.expand(batch_shape)
 
@@ -565,7 +572,7 @@ class GaussianHMM(HiddenMarkovModel):
         )
 
         # Eliminate time dimension.
-        result = _sequential_gaussian_tensordot(result.expand(result.batch_shape))
+        result = sequential_gaussian_tensordot(result.expand(result.batch_shape))
 
         # Combine initial factor.
         result = gaussian_tensordot(self._init, result, dims=self.hidden_dim)
@@ -581,7 +588,8 @@ class GaussianHMM(HiddenMarkovModel):
             left=self.hidden_dim
         )
         trans = trans.expand(trans.batch_shape[:-1] + (self.duration,))
-        z = _sequential_gaussian_filter_sample(self._init, trans, sample_shape)
+        z = sequential_gaussian_filter_sample(self._init, trans, sample_shape)
+        z = z[..., 1:, :]  # drop the initial hidden state
         x = self._obs.left_condition(z).rsample()
         return x
 
@@ -591,7 +599,8 @@ class GaussianHMM(HiddenMarkovModel):
         """
         trans = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
         trans = trans.expand(trans.batch_shape)
-        z = _sequential_gaussian_filter_sample(self._init, trans, sample_shape)
+        z = sequential_gaussian_filter_sample(self._init, trans, sample_shape)
+        z = z[..., 1:, :]  # drop the initial hidden state
         return z
 
     def filter(self, value):
@@ -612,16 +621,16 @@ class GaussianHMM(HiddenMarkovModel):
         logp = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
 
         # Eliminate time dimension.
-        logp = _sequential_gaussian_tensordot(logp.expand(logp.batch_shape))
+        logp = sequential_gaussian_tensordot(logp.expand(logp.batch_shape))
 
         # Combine initial factor.
         logp = gaussian_tensordot(self._init, logp, dims=self.hidden_dim)
 
         # Convert to a distribution
         precision = logp.precision
-        loc = cholesky_solve(logp.info_vec.unsqueeze(-1), cholesky(precision)).squeeze(
-            -1
-        )
+        loc = cholesky_solve(
+            logp.info_vec.unsqueeze(-1), safe_cholesky(precision)
+        ).squeeze(-1)
         return MultivariateNormal(
             loc, precision_matrix=precision, validate_args=self._validate_args
         )
@@ -666,7 +675,7 @@ class GaussianHMM(HiddenMarkovModel):
         logp = new._trans + new._obs.marginalize(right=new.obs_dim).event_pad(
             left=new.hidden_dim
         )
-        logp = _sequential_gaussian_tensordot(logp.expand(logp.batch_shape))
+        logp = sequential_gaussian_tensordot(logp.expand(logp.batch_shape))
         logp = gaussian_tensordot(new._init, logp, dims=new.hidden_dim)
         log_normalizer = logp.event_logsumexp()
         new._init = new._init - log_normalizer
@@ -856,8 +865,8 @@ class GammaGaussianHMM(HiddenMarkovModel):
         new.hidden_dim = self.hidden_dim
         new.obs_dim = self.obs_dim
         # We only need to expand one of the inputs, since batch_shape is determined
-        # by broadcasting all three. To save computation in _sequential_gaussian_tensordot(),
-        # we expand only _init, which is applied only after _sequential_gaussian_tensordot().
+        # by broadcasting all three. To save computation in sequential_gaussian_tensordot(),
+        # we expand only _init, which is applied only after sequential_gaussian_tensordot().
         new._init = self._init.expand(batch_shape)
         new._trans = self._trans
         new._obs = self._obs
@@ -919,7 +928,7 @@ class GammaGaussianHMM(HiddenMarkovModel):
             gamma_dist.concentration, gamma_dist.rate, validate_args=self._validate_args
         )
         # Conditional of last state on unit scale
-        scale_tril = cholesky(logp.precision)
+        scale_tril = safe_cholesky(logp.precision)
         loc = cholesky_solve(logp.info_vec.unsqueeze(-1), scale_tril).squeeze(-1)
         mvn = MultivariateNormal(
             loc, scale_tril=scale_tril, validate_args=self._validate_args
@@ -1266,8 +1275,8 @@ class GaussianMRF(TorchDistribution):
         new.hidden_dim = self.hidden_dim
         new.obs_dim = self.obs_dim
         # We only need to expand one of the inputs, since batch_shape is determined
-        # by broadcasting all three. To save computation in _sequential_gaussian_tensordot(),
-        # we expand only _init, which is applied only after _sequential_gaussian_tensordot().
+        # by broadcasting all three. To save computation in sequential_gaussian_tensordot(),
+        # we expand only _init, which is applied only after sequential_gaussian_tensordot().
         new._init = self._init.expand(batch_shape)
         new._trans = self._trans
         new._obs = self._obs
@@ -1297,7 +1306,7 @@ class GaussianMRF(TorchDistribution):
         logp = Gaussian.cat([logp_oh.expand(batch_shape), logp_h.expand(batch_shape)])
 
         # Eliminate time dimension.
-        logp = _sequential_gaussian_tensordot(logp)
+        logp = sequential_gaussian_tensordot(logp)
 
         # Combine initial factor.
         logp = gaussian_tensordot(self._init, logp, dims=self.hidden_dim)
