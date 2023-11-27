@@ -51,6 +51,22 @@ class TorchDistributionMixin(Distribution):
         )
 
     @property
+    def batch_shape(self) -> torch.Size:
+        """
+        :return: The shape over which parameters are batched.
+        :rtype: torch.Size
+        """
+        raise NotImplementedError
+
+    @property
+    def event_shape(self) -> torch.Size:
+        """
+        :return: The shape of a single sample from the distribution (without batching).
+        :rtype: torch.Size
+        """
+        raise NotImplementedError
+
+    @property
     def event_dim(self) -> int:
         """
         :return: Number of dimensions of individual events.

@@ -6,7 +6,7 @@ import warnings
 from collections import OrderedDict
 from contextlib import ExitStack, contextmanager
 from inspect import isclass
-from typing import Callable, Dict, Iterator, Optional, Sequence, Union
+from typing import Callable, Iterator, Optional, Sequence, Union
 
 import torch
 from torch.distributions import constraints
@@ -14,13 +14,14 @@ from torch.distributions import constraints
 import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.poutine as poutine
-from pyro.distributions import TorchDistribution
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.params import param_with_module_name
 from pyro.params.param_store import ParamStoreDict
 from pyro.poutine.plate_messenger import PlateMessenger
 from pyro.poutine.runtime import (
     _MODULE_NAMESPACE_DIVIDER,
     _PYRO_PARAM_STORE,
+    InferDict,
     Message,
     am_i_wrapped,
     apply_stack,
@@ -91,7 +92,7 @@ def param(
 
 def _masked_observe(
     name: str,
-    fn: TorchDistribution,
+    fn: TorchDistributionMixin,
     obs: Optional[torch.Tensor],
     obs_mask: torch.Tensor,
     *args,
@@ -122,11 +123,11 @@ def _masked_observe(
 
 def sample(
     name: str,
-    fn: TorchDistribution,
+    fn: TorchDistributionMixin,
     *args,
     obs: Optional[torch.Tensor] = None,
     obs_mask: Optional[torch.Tensor] = None,
-    infer: Optional[Dict[str, Union[str, bool]]] = None,
+    infer: Optional[InferDict] = None,
     **kwargs,
 ) -> torch.Tensor:
     """

@@ -18,7 +18,7 @@ from typing import (
 )
 
 import torch
-from typing_extensions import ParamSpec, TypedDict
+from typing_extensions import Literal, ParamSpec, TypedDict
 
 from pyro.params.param_store import (  # noqa: F401
     _MODULE_NAMESPACE_DIVIDER,
@@ -29,6 +29,7 @@ P = ParamSpec("P")
 T = TypeVar("T")
 
 if TYPE_CHECKING:
+    from pyro.distributions.torch_distribution import TorchDistributionMixin
     from pyro.poutine.indep_messenger import CondIndepStackFrame
     from pyro.poutine.messenger import Messenger
 
@@ -39,10 +40,28 @@ _PYRO_STACK: List[Messenger] = []
 _PYRO_PARAM_STORE = ParamStoreDict()
 
 
+class InferDict(TypedDict, total=False):
+    """
+    A dictionary that contains information about inference.
+    """
+
+    expand: bool
+    is_auxiliary: bool
+    is_observed: bool
+    num_samples: int
+    tmc: Literal["diagonal", "mixture"]
+    _deterministic: bool
+    _do_not_trace: bool
+    _markov_scope: Optional[Dict[str, int]]
+    _enumerate_dim: int
+    _dim_to_id: Dict[int, int]
+    _markov_depth: int
+
+
 class Message(TypedDict, total=False):
     type: str
     name: Optional[str]
-    fn: Callable
+    fn: Union[Callable, TorchDistributionMixin]
     is_observed: bool
     args: Tuple
     kwargs: Dict
@@ -53,8 +72,9 @@ class Message(TypedDict, total=False):
     done: bool
     stop: bool
     continuation: Optional[Callable[[Message], None]]
-    infer: Optional[Dict[str, Union[str, bool]]]
+    infer: Optional[InferDict]
     obs: Optional[torch.Tensor]
+    _intervener_id: Optional[str]
 
 
 class _DimAllocator:
@@ -310,7 +330,7 @@ def effectful(
     def _fn(
         *args: P.args,
         name: Optional[str] = None,
-        infer: Optional[Dict] = None,
+        infer: Optional[InferDict] = None,
         obs: Optional[torch.Tensor] = None,
         **kwargs: P.kwargs,
     ) -> Union[T, torch.Tensor, None]:
