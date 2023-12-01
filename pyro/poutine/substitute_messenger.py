@@ -20,7 +20,7 @@ class SubstituteMessenger(Messenger):
         ...     a = pyro.param("a", torch.tensor(0.5))
         ...     x = pyro.sample("x", dist.Bernoulli(probs=a))
         ...     return x
-        >>> substituted_model = pyro.poutine.substitute(model, data={"s": 0.3})
+        >>> substituted_model = pyro.poutine.substitute(model, data={"a": 0.3})
 
     In this example, site `a` will now have value `0.3`.
     :param data: dictionary of values keyed by site names.
