@@ -36,7 +36,7 @@ class GuideMessenger(TraceMessenger, ABC):
         del state["trace"]
         return state
 
-    def __call__(self, *args, **kwargs) -> Dict[str, Optional[torch.Tensor]]:  # type: ignore[override]
+    def __call__(self, *args, **kwargs) -> Dict[str, torch.Tensor]:  # type: ignore[override]
         """
         Draws posterior samples from the guide and replays the model against
         those samples.
@@ -53,11 +53,11 @@ class GuideMessenger(TraceMessenger, ABC):
             del self.args_kwargs
 
         model_trace, guide_trace = self.get_traces()
-        samples = {
-            name: site["value"]
-            for name, site in model_trace.nodes.items()
-            if site["type"] == "sample"
-        }
+        samples = {}
+        for name, site in model_trace.nodes.items():
+            if site["type"] == "sample":
+                assert isinstance(site["value"], torch.Tensor)
+                samples[name] = site["value"]
         return samples
 
     def _pyro_sample(self, msg: Message) -> None:
