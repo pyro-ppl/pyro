@@ -118,7 +118,7 @@ class TorchDistributionMixin(Distribution):
         event_shape = torch.Size()
         return batch_shape, event_shape
 
-    def expand(self, batch_shape, _instance=None):
+    def expand(self, batch_shape, _instance=None) -> "ExpandedDistribution":
         """
         Returns a new :class:`ExpandedDistribution` instance with batch
         dimensions expanded to `batch_shape`.

@@ -90,7 +90,7 @@ class Trace:
     :param string graph_type: string specifying the kind of trace graph to construct
     """
 
-    def __init__(self, graph_type=Literal["flat", "dense"]) -> None:
+    def __init__(self, graph_type: Literal["flat", "dense"] = "flat") -> None:
         assert graph_type in ("flat", "dense"), "{} not a valid graph type".format(
             graph_type
         )

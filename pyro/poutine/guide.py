@@ -36,7 +36,7 @@ class GuideMessenger(TraceMessenger, ABC):
         del state["trace"]
         return state
 
-    def __call__(self, *args, **kwargs) -> Dict[str, torch.Tensor]:  # type: ignore[override]
+    def __call__(self, *args, **kwargs) -> Dict[str, Optional[torch.Tensor]]:  # type: ignore[override]
         """
         Draws posterior samples from the guide and replays the model against
         those samples.
@@ -56,9 +56,9 @@ class GuideMessenger(TraceMessenger, ABC):
         samples = {
             name: site["value"]
             for name, site in model_trace.nodes.items()
-            if site["type"] == "sample" and site["value"] is not None
+            if site["type"] == "sample"
         }
-        return samples  # type: ignore[return-value]
+        return samples
 
     def _pyro_sample(self, msg: Message) -> None:
         if msg["is_observed"] or site_is_subsample(msg):
@@ -70,10 +70,10 @@ class GuideMessenger(TraceMessenger, ABC):
         msg["infer"]["prior"] = prior
         posterior = self.get_posterior(msg["name"], prior)
         if isinstance(posterior, torch.Tensor):
-            posterior_dist = dist.Delta(posterior, event_dim=prior.event_dim)
-        if posterior_dist.batch_shape != prior.batch_shape:
-            posterior_dist = posterior_dist.expand(prior.batch_shape)
-        msg["fn"] = posterior_dist
+            posterior = dist.Delta(posterior, event_dim=prior.event_dim)
+        if posterior.batch_shape != prior.batch_shape:
+            posterior = posterior.expand(prior.batch_shape)
+        msg["fn"] = posterior
 
     def _pyro_post_sample(self, msg: Message) -> None:
         # Manually apply outer plates.

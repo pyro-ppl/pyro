@@ -1,7 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, Union
 
 import torch
 
@@ -19,7 +19,9 @@ class ScoreParts(NamedTuple):
     entropy_term: torch.Tensor
 
     def scale_and_mask(
-        self, scale: float = 1.0, mask: Optional[torch.Tensor] = None
+        self,
+        scale: Union[float, torch.Tensor] = 1.0,
+        mask: Optional[torch.BoolTensor] = None,
     ) -> "ScoreParts":
         """
         Scale and mask appropriate terms of a gradient estimator by a data multiplicity factor.
