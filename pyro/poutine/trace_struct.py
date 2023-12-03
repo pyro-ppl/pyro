@@ -29,7 +29,7 @@ from pyro.poutine.util import is_validation_enabled
 from pyro.util import warn_if_inf, warn_if_nan
 
 
-def allow_all(name: str, site: Message) -> bool:
+def allow_all_sites(name: str, site: Message) -> bool:
     return True
 
 
@@ -198,7 +198,7 @@ class Trace:
 
     def log_prob_sum(
         self,
-        site_filter: Callable[[str, Message], bool] = allow_all,
+        site_filter: Callable[[str, Message], bool] = allow_all_sites,
     ) -> Union[torch.Tensor, float]:
         """
         Compute the site-wise log probabilities of the trace.
@@ -242,7 +242,7 @@ class Trace:
 
     def compute_log_prob(
         self,
-        site_filter: Callable[[str, Message], bool] = allow_all,
+        site_filter: Callable[[str, Message], bool] = allow_all_sites,
     ) -> None:
         """
         Compute the site-wise log probabilities of the trace.
