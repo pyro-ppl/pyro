@@ -20,8 +20,8 @@ from typing import (
 import opt_einsum
 import torch
 
+from pyro.distributions.distribution import Distribution
 from pyro.distributions.score_parts import ScoreParts
-from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.distributions.util import scale_and_mask
 from pyro.ops.packed import pack
 from pyro.poutine.runtime import Message
@@ -212,7 +212,7 @@ class Trace:
         result = 0.0
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
-                assert isinstance(site["fn"], TorchDistributionMixin)
+                assert isinstance(site["fn"], Distribution)
                 if "log_prob_sum" in site:
                     log_p = site["log_prob_sum"]
                 else:
@@ -252,7 +252,7 @@ class Trace:
         """
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
-                assert isinstance(site["fn"], TorchDistributionMixin)
+                assert isinstance(site["fn"], Distribution)
                 if "log_prob" not in site:
                     try:
                         log_p = site["fn"].log_prob(
@@ -290,7 +290,7 @@ class Trace:
         """
         for name, site in self.nodes.items():
             if site["type"] == "sample" and "score_parts" not in site:
-                assert isinstance(site["fn"], TorchDistributionMixin)
+                assert isinstance(site["fn"], Distribution)
                 # Note that ScoreParts overloads the multiplication operator
                 # to correctly scale each of its three parts.
                 try:
