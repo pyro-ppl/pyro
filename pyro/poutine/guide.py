@@ -77,11 +77,12 @@ class GuideMessenger(TraceMessenger, ABC):
 
     def _pyro_post_sample(self, msg: Message) -> None:
         # Manually apply outer plates.
-        assert isinstance(msg["fn"], TorchDistributionMixin)
         assert msg["infer"] is not None
         prior = msg["infer"].get("prior")
-        if prior is not None and prior.batch_shape != msg["fn"].batch_shape:
-            msg["infer"]["prior"] = prior.expand(msg["fn"].batch_shape)
+        if prior is not None:
+            assert isinstance(msg["fn"], TorchDistributionMixin)
+            if prior.batch_shape != msg["fn"].batch_shape:
+                msg["infer"]["prior"] = prior.expand(msg["fn"].batch_shape)
         return super()._pyro_post_sample(msg)
 
     @abstractmethod
