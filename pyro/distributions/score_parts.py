@@ -1,20 +1,26 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from collections import namedtuple
+from typing import NamedTuple, Optional
+
+import torch
 
 from pyro.distributions.util import scale_and_mask
 
 
-class ScoreParts(
-    namedtuple("ScoreParts", ["log_prob", "score_function", "entropy_term"])
-):
+class ScoreParts(NamedTuple):
     """
     This data structure stores terms used in stochastic gradient estimators that
     combine the pathwise estimator and the score function estimator.
     """
 
-    def scale_and_mask(self, scale=1.0, mask=None):
+    log_prob: torch.Tensor
+    score_function: torch.Tensor
+    entropy_term: torch.Tensor
+
+    def scale_and_mask(
+        self, scale: float = 1.0, mask: Optional[torch.Tensor] = None
+    ) -> "ScoreParts":
         """
         Scale and mask appropriate terms of a gradient estimator by a data multiplicity factor.
         Note that the `score_function` term should not be scaled or masked.

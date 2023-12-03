@@ -2,13 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import sys
+from typing import Any, Callable, Literal, Optional
 
-from .messenger import Messenger
-from .trace_struct import Trace
-from .util import site_is_subsample
+from typing_extensions import Self
+
+from pyro.poutine.messenger import Messenger
+from pyro.poutine.runtime import Message
+from pyro.poutine.trace_struct import Trace
+from pyro.poutine.util import site_is_subsample
 
 
-def identify_dense_edges(trace):
+def identify_dense_edges(trace: Trace) -> None:
     """
     Modifies a trace in-place by adding all edges based on the
     `cond_indep_stack` information stored at each site.
@@ -63,7 +67,11 @@ class TraceMessenger(Messenger):
     :returns: stochastic function decorated with a :class:`~pyro.poutine.trace_messenger.TraceMessenger`
     """
 
-    def __init__(self, graph_type=None, param_only=None):
+    def __init__(
+        self,
+        graph_type: Optional[Literal["flat", "dense"]] = None,
+        param_only: Optional[bool] = None,
+    ) -> None:
         """
         :param string graph_type: string that specifies the type of graph
             to construct (currently only "flat" or "dense" supported)
@@ -79,11 +87,11 @@ class TraceMessenger(Messenger):
         self.param_only = param_only
         self.trace = Trace(graph_type=self.graph_type)
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         self.trace = Trace(graph_type=self.graph_type)
         return super().__enter__()
 
-    def __exit__(self, *args, **kwargs):
+    def __exit__(self, *args, **kwargs) -> None:
         """
         Adds appropriate edges based on cond_indep_stack information
         upon exiting the context.
@@ -91,18 +99,19 @@ class TraceMessenger(Messenger):
         if self.param_only:
             for node in list(self.trace.nodes.values()):
                 if node["type"] != "param":
+                    assert node["name"] is not None
                     self.trace.remove_node(node["name"])
         if self.graph_type == "dense":
             identify_dense_edges(self.trace)
         return super().__exit__(*args, **kwargs)
 
-    def __call__(self, fn):
+    def __call__(self, fn: Callable) -> "TraceHandler":  # type: ignore[override]
         """
         TODO docs
         """
         return TraceHandler(self, fn)
 
-    def get_trace(self):
+    def get_trace(self) -> Trace:
         """
         :returns: data structure
         :rtype: pyro.poutine.Trace
@@ -112,7 +121,7 @@ class TraceMessenger(Messenger):
         """
         return self.trace.copy()
 
-    def _reset(self):
+    def _reset(self) -> None:
         tr = Trace(graph_type=self.graph_type)
         if "_INPUT" in self.trace.nodes:
             tr.add_node(
@@ -125,16 +134,19 @@ class TraceMessenger(Messenger):
         self.trace = tr
         super()._reset()
 
-    def _pyro_post_sample(self, msg):
+    def _pyro_post_sample(self, msg: Message) -> None:
         if self.param_only:
             return
+        assert msg["name"] is not None
+        assert msg["infer"] is not None
         if msg["infer"].get("_do_not_trace"):
             assert msg["infer"].get("is_auxiliary")
             assert not msg["is_observed"]
             return
         self.trace.add_node(msg["name"], **msg.copy())
 
-    def _pyro_post_param(self, msg):
+    def _pyro_post_param(self, msg: Message) -> None:
+        assert msg["name"] is not None
         self.trace.add_node(msg["name"], **msg.copy())
 
 
@@ -150,11 +162,11 @@ class TraceHandler:
     We can also use this for visualization.
     """
 
-    def __init__(self, msngr, fn):
+    def __init__(self, msngr: TraceMessenger, fn: Callable):
         self.fn = fn
         self.msngr = msngr
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> Any:
         """
         Runs the stochastic function stored in this poutine,
         with additional side effects.
@@ -175,6 +187,7 @@ class TraceHandler:
             except (ValueError, RuntimeError) as e:
                 exc_type, exc_value, traceback = sys.exc_info()
                 shapes = self.msngr.trace.format_shapes()
+                assert exc_type is not None
                 exc = exc_type("{}\n{}".format(exc_value, shapes))
                 exc = exc.with_traceback(traceback)
                 raise exc from e
@@ -184,10 +197,10 @@ class TraceHandler:
         return ret
 
     @property
-    def trace(self):
+    def trace(self) -> Trace:
         return self.msngr.trace
 
-    def get_trace(self, *args, **kwargs):
+    def get_trace(self, *args, **kwargs) -> Trace:
         """
         :returns: data structure
         :rtype: pyro.poutine.Trace

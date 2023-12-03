@@ -2,16 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC, abstractmethod
-from typing import Callable, Dict, Tuple, Union
+from typing import Callable, Dict, Optional, Tuple, Union
 
 import torch
 
 import pyro.distributions as dist
-from pyro.distributions.distribution import Distribution
-
-from .trace_messenger import TraceMessenger
-from .trace_struct import Trace
-from .util import prune_subsample_sites, site_is_subsample
+from pyro.distributions.torch_distribution import TorchDistributionMixin
+from pyro.poutine.runtime import Message
+from pyro.poutine.trace_messenger import TraceMessenger
+from pyro.poutine.trace_struct import Trace
+from pyro.poutine.util import prune_subsample_sites, site_is_subsample
 
 
 class GuideMessenger(TraceMessenger, ABC):
@@ -21,19 +21,19 @@ class GuideMessenger(TraceMessenger, ABC):
     Derived classes must implement the :meth:`get_posterior` method.
     """
 
-    def __init__(self, model: Callable):
+    def __init__(self, model: Callable) -> None:
         super().__init__()
         # Do not register model as submodule
         self._model = (model,)
 
     @property
-    def model(self):
+    def model(self) -> Callable:
         return self._model[0]
 
-    def __getstate__(self):
+    def __getstate__(self) -> Dict[str, object]:
         # Avoid pickling the trace.
-        state = super().__getstate__()
-        state.pop("trace")
+        state = self.__dict__.copy()
+        del state["trace"]
         return state
 
     def __call__(self, *args, **kwargs) -> Dict[str, torch.Tensor]:  # type: ignore[override]
@@ -56,24 +56,29 @@ class GuideMessenger(TraceMessenger, ABC):
         samples = {
             name: site["value"]
             for name, site in model_trace.nodes.items()
-            if site["type"] == "sample"
+            if site["type"] == "sample" and site["value"] is not None
         }
-        return samples
+        return samples  # type: ignore[return-value]
 
-    def _pyro_sample(self, msg):
+    def _pyro_sample(self, msg: Message) -> None:
         if msg["is_observed"] or site_is_subsample(msg):
             return
+        assert isinstance(msg["name"], str)
+        assert isinstance(msg["fn"], TorchDistributionMixin)
+        assert msg["infer"] is not None
         prior = msg["fn"]
         msg["infer"]["prior"] = prior
         posterior = self.get_posterior(msg["name"], prior)
         if isinstance(posterior, torch.Tensor):
-            posterior = dist.Delta(posterior, event_dim=prior.event_dim)
-        if posterior.batch_shape != prior.batch_shape:
-            posterior = posterior.expand(prior.batch_shape)
-        msg["fn"] = posterior
+            posterior_dist = dist.Delta(posterior, event_dim=prior.event_dim)
+        if posterior_dist.batch_shape != prior.batch_shape:
+            posterior_dist = posterior_dist.expand(prior.batch_shape)
+        msg["fn"] = posterior_dist
 
-    def _pyro_post_sample(self, msg):
+    def _pyro_post_sample(self, msg: Message) -> None:
         # Manually apply outer plates.
+        assert isinstance(msg["fn"], TorchDistributionMixin)
+        assert msg["infer"] is not None
         prior = msg["infer"].get("prior")
         if prior is not None and prior.batch_shape != msg["fn"].batch_shape:
             msg["infer"]["prior"] = prior.expand(msg["fn"].batch_shape)
@@ -81,8 +86,8 @@ class GuideMessenger(TraceMessenger, ABC):
 
     @abstractmethod
     def get_posterior(
-        self, name: str, prior: Distribution
-    ) -> Union[Distribution, torch.Tensor]:
+        self, name: str, prior: TorchDistributionMixin
+    ) -> Union[TorchDistributionMixin, torch.Tensor]:
         """
         Abstract method to compute a posterior distribution or sample a
         posterior value given a prior distribution conditioned on upstream
@@ -112,7 +117,7 @@ class GuideMessenger(TraceMessenger, ABC):
         """
         raise NotImplementedError
 
-    def upstream_value(self, name: str):
+    def upstream_value(self, name: str) -> Optional[torch.Tensor]:
         """
         For use in :meth:`get_posterior` .
 

@@ -29,6 +29,7 @@ P = ParamSpec("P")
 T = TypeVar("T")
 
 if TYPE_CHECKING:
+    from pyro.distributions.score_parts import ScoreParts
     from pyro.distributions.torch_distribution import TorchDistributionMixin
     from pyro.poutine.indep_messenger import CondIndepStackFrame
     from pyro.poutine.messenger import Messenger
@@ -49,9 +50,12 @@ class InferDict(TypedDict, total=False):
     is_auxiliary: bool
     is_observed: bool
     num_samples: int
+    prior: TorchDistributionMixin
     tmc: Literal["diagonal", "mixture"]
     _deterministic: bool
+    _dim_to_symbol: Dict[int, str]
     _do_not_trace: bool
+    _enumerate_symbol: str
     _markov_scope: Optional[Dict[str, int]]
     _enumerate_dim: int
     _dim_to_id: Dict[int, int]
@@ -74,6 +78,11 @@ class Message(TypedDict, total=False):
     continuation: Optional[Callable[[Message], None]]
     infer: Optional[InferDict]
     obs: Optional[torch.Tensor]
+    log_prob: torch.Tensor
+    log_prob_sum: torch.Tensor
+    unscaled_log_prob: torch.Tensor
+    score_parts: ScoreParts
+    packed: "Message"
     _intervener_id: Optional[str]
 
 
