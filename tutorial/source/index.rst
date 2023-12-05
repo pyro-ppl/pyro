@@ -97,6 +97,7 @@ List of Tutorials
    jit
    svi_horovod
    svi_lightning
+   svi_flow_guide
 
 .. toctree::
    :maxdepth: 1
