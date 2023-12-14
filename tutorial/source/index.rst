@@ -105,10 +105,10 @@ List of Tutorials
    :name: deep-generative-models
 
    vae
-   vae_flow_prior
    ss-vae
    cvae
    normalizing_flows_intro
+   vae_flow_prior
    dmm
    air
    cevae
