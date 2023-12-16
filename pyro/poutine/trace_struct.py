@@ -388,7 +388,7 @@ class Trace:
             if node["type"] == "sample" and not node["is_observed"]:
                 yield name, node
 
-    def symbolize_dims(self, plate_to_symbol: Optional[Dict[int, str]] = None) -> None:
+    def symbolize_dims(self, plate_to_symbol: Optional[Dict[str, str]] = None) -> None:
         """
         Assign unique symbols to all tensor dimensions.
         """
@@ -401,7 +401,7 @@ class Trace:
             # allocate even symbols for plate dims
             dim_to_symbol: Dict[int, str] = {}
             for frame in site["cond_indep_stack"]:
-                if frame.vectorized:
+                if frame.dim is not None:
                     if frame.name in plate_to_symbol:
                         symbol = plate_to_symbol[frame.name]
                     else:
@@ -424,7 +424,7 @@ class Trace:
         self.plate_to_symbol = plate_to_symbol
         self.symbol_to_dim = symbol_to_dim
 
-    def pack_tensors(self, plate_to_symbol: Optional[Dict[int, str]] = None) -> None:
+    def pack_tensors(self, plate_to_symbol: Optional[Dict[str, str]] = None) -> None:
         """
         Computes packed representations of tensors in the trace.
         This should be called after :meth:`compute_log_prob` or :meth:`compute_score_parts`.

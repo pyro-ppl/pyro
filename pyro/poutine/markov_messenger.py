@@ -4,7 +4,7 @@
 from collections import Counter
 from contextlib import ExitStack  # python 3
 
-from .reentrant_messenger import ReentrantMessenger
+from pyro.poutine.reentrant_messenger import ReentrantMessenger
 
 
 class MarkovMessenger(ReentrantMessenger):

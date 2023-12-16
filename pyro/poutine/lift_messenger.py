@@ -2,12 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
+from typing import Callable, Dict, Set, Union
+
+from typing_extensions import Self
 
 from pyro import params
 from pyro.distributions.distribution import Distribution
+from pyro.poutine.messenger import Messenger
+from pyro.poutine.runtime import Message
 from pyro.poutine.util import is_validation_enabled
-
-from .messenger import Messenger
 
 
 class LiftMessenger(Messenger):
@@ -40,7 +43,10 @@ class LiftMessenger(Messenger):
     :returns: ``fn`` decorated with a :class:`~pyro.poutine.lift_messenger.LiftMessenger`
     """
 
-    def __init__(self, prior):
+    def __init__(
+        self,
+        prior: Union[Callable, Distribution, Dict[str, Union[Distribution, Callable]]],
+    ) -> None:
         """
         :param prior: prior used to lift parameters. Prior can be of type
                       dict, pyro.distributions, or a python stochastic fn
@@ -49,16 +55,16 @@ class LiftMessenger(Messenger):
         """
         super().__init__()
         self.prior = prior
-        self._samples_cache = {}
+        self._samples_cache: Dict[str, Message] = {}
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         self._samples_cache = {}
         if is_validation_enabled() and isinstance(self.prior, dict):
-            self._param_hits = set()
-            self._param_misses = set()
+            self._param_hits: Set[str] = set()
+            self._param_misses: Set[str] = set()
         return super().__enter__()
 
-    def __exit__(self, *args, **kwargs):
+    def __exit__(self, *args, **kwargs) -> None:
         self._samples_cache = {}
         if is_validation_enabled() and isinstance(self.prior, dict):
             extra = set(self.prior) - self._param_hits
@@ -71,10 +77,10 @@ class LiftMessenger(Messenger):
                 )
         return super().__exit__(*args, **kwargs)
 
-    def _pyro_sample(self, msg):
+    def _pyro_sample(self, msg: Message) -> None:
         return None
 
-    def _pyro_param(self, msg):
+    def _pyro_param(self, msg: Message) -> None:
         """
         Overrides the `pyro.param` call with samples sampled from the
         distribution specified in the prior. The prior can be a
@@ -82,6 +88,7 @@ class LiftMessenger(Messenger):
         on the param names. If the param name does not match the
         name the keys in the prior, that param name is unchanged.
         """
+        assert msg["name"] is not None
         name = msg["name"]
         param_name = params.user_param_name(name)
         if isinstance(self.prior, dict):

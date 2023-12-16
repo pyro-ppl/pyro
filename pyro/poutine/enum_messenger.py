@@ -22,7 +22,7 @@ def _tmc_mixture_sample(msg: Message) -> torch.Tensor:
     # find batch dims that aren't plate dims
     batch_shape = [1] * len(dist.batch_shape)
     for f in msg["cond_indep_stack"]:
-        if f.vectorized:
+        if f.dim is not None:
             batch_shape[f.dim] = f.size if f.size > 0 else dist.batch_shape[f.dim]
     batch_shape_tuple = tuple(batch_shape)
 
@@ -71,7 +71,7 @@ def _tmc_diagonal_sample(msg: Message) -> torch.Tensor:
     # find batch dims that aren't plate dims
     batch_shape = [1] * len(dist.batch_shape)
     for f in msg["cond_indep_stack"]:
-        if f.vectorized:
+        if f.dim is not None:
             batch_shape[f.dim] = f.size if f.size > 0 else dist.batch_shape[f.dim]
     batch_shape_tuple = tuple(batch_shape)
 
