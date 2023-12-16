@@ -100,7 +100,7 @@ class _DimAllocator:
         # in reverse orientation of log_prob.shape
         self._stack: List[Optional[str]] = []
 
-    def allocate(self, name: Optional[str], dim: Optional[int]) -> int:
+    def allocate(self, name: str, dim: Optional[int]) -> int:
         """
         Allocate a dimension to an :class:`plate` with given name.
         Dim should be either None for automatic allocation or a negative
@@ -135,7 +135,7 @@ class _DimAllocator:
         self._stack[-1 - dim] = name
         return dim
 
-    def free(self, name: Optional[str], dim: int) -> None:
+    def free(self, name: str, dim: int) -> None:
         """
         Free a dimension.
         """

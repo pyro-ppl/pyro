@@ -22,7 +22,7 @@ class CondIndepStackFrame(NamedTuple):
     def vectorized(self) -> bool:
         return self.dim is not None
 
-    def _key(self) -> Tuple[Optional[str], Optional[int], int, int]:
+    def _key(self) -> Tuple[str, Optional[int], int, int]:
         with ignore_jit_warnings(["Converting a tensor to a Python number"]):
             size = (
                 self.size.item() if isinstance(self.size, torch.Tensor) else self.size  # type: ignore[attr-defined]
