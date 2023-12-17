@@ -1,7 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import numpy
+import numpy as np
 import torch
 
 import pyro
@@ -168,7 +168,7 @@ W16 = [
     ],
 ]
 
-W16 = numpy.array(W16)
+W16 = np.array(W16)
 
 
 def compute_bin_probs(s, num_quant_bins):
