@@ -401,7 +401,8 @@ class Trace:
             # allocate even symbols for plate dims
             dim_to_symbol: Dict[int, str] = {}
             for frame in site["cond_indep_stack"]:
-                if frame.dim is not None:
+                if frame.vectorized:
+                    assert frame.dim is not None
                     if frame.name in plate_to_symbol:
                         symbol = plate_to_symbol[frame.name]
                     else:

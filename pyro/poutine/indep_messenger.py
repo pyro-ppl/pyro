@@ -13,7 +13,7 @@ from pyro.poutine.runtime import _DIM_ALLOCATOR, Message
 from pyro.util import ignore_jit_warnings
 
 
-@dataclass
+@dataclass(eq=False)
 class CondIndepStackFrame:
     name: str
     dim: Optional[int]
