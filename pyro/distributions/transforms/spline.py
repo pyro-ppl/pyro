@@ -208,8 +208,8 @@ def _monotonic_rational_spline(
                 + wb * wc * (1 - input_lambdas) * (yb - yc) * (inputs > yc).float()
             ) * input_widths
 
-            logabsdet = torch.log(derivative_numerator) - 2 * torch.log(
-                torch.abs(denominator)
+            logabsdet = torch.log(torch.clamp(derivative_numerator, 1e-10)) - 2 * torch.log(
+                torch.clamp(torch.abs(denominator), 1e-10)
             )
 
         else:
@@ -238,8 +238,8 @@ def _monotonic_rational_spline(
                 * (theta > input_lambdas).float()
             ) / input_widths
 
-            logabsdet = torch.log(derivative_numerator) - 2 * torch.log(
-                torch.abs(denominator)
+            logabsdet = torch.log(torch.clamp(derivative_numerator, 1e-10)) - 2 * torch.log(
+                torch.clamp(torch.abs(denominator), 1e-10)
             )
 
     # Calculate monotonic *quadratic* rational spline
@@ -271,7 +271,7 @@ def _monotonic_rational_spline(
                 + 2 * input_delta * theta_one_minus_theta
                 + input_derivatives * (1 - root).pow(2)
             )
-            logabsdet = -(torch.log(derivative_numerator) - 2 * torch.log(denominator))
+            logabsdet = -(torch.log(torch.clamp(derivative_numerator, 1e-10)) - 2 * torch.log(torch.clamp(denominator, 1e-10)))
 
         else:
             theta = (inputs - input_cumwidths) / input_widths
@@ -291,7 +291,7 @@ def _monotonic_rational_spline(
                 + 2 * input_delta * theta_one_minus_theta
                 + input_derivatives * (1 - theta).pow(2)
             )
-            logabsdet = torch.log(derivative_numerator) - 2 * torch.log(denominator)
+            logabsdet = torch.log(torch.clamp(derivative_numerator, 1e-10)) - 2 * torch.log(torch.clamp(denominator, 1e-10))
 
     # Apply the identity function outside the bounding box
     outputs[outside_interval_mask] = inputs[outside_interval_mask]

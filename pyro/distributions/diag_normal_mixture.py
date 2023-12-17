@@ -189,7 +189,7 @@ class _MixDiagNormalSample(Function):
         z_tilde_cumsum[..., 0] = 0.0
         r_sqr_ji = z_shift_cumsum + z_tilde_cumsum  # l b j i
 
-        log_scales = torch.log(scales)  # b j i
+        log_scales = torch.log(torch.clamp(scales, 1e-10))  # b j i
         epsilons_sqr = torch.pow(z_tilde, 2.0)  # l b j i
         log_qs = (
             -0.5 * epsilons_sqr - 0.5 * math.log(2.0 * math.pi) - log_scales

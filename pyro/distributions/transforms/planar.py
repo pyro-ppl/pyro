@@ -54,11 +54,14 @@ class ConditionedPlanar(Transform):
 
         psi_z = (1.0 - act.pow(2)) * w
         self._cached_logDetJ = torch.log(
-            torch.abs(
-                1
-                + torch.matmul(psi_z.unsqueeze(-2), u_hat.unsqueeze(-1))
-                .squeeze(-1)
-                .squeeze(-1)
+            torch.clamp(
+                torch.abs(
+                    1
+                    + torch.matmul(psi_z.unsqueeze(-2), u_hat.unsqueeze(-1))
+                    .squeeze(-1)
+                    .squeeze(-1)
+                ),
+                1e-10
             )
         )
 

@@ -173,7 +173,7 @@ class IMQSteinKernel(SteinKernel):
         norm_sq = delta_x.pow(2.0)  # N N D
         h = self._bandwidth(norm_sq)  # D
         base_term = self.alpha + norm_sq / h
-        log_kernel = self.beta * torch.log(base_term)  # N N D
+        log_kernel = self.beta * torch.log(torch.clamp(base_term, 1e-10))  # N N D
         grad_term = (-2.0 * self.beta) * delta_x / h  # N N D
         grad_term = grad_term / base_term
         assert log_kernel.shape == grad_term.shape

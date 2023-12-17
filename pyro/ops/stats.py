@@ -383,7 +383,7 @@ def fit_generalized_pareto(X):
     bs += 1 / X[-1]
 
     ks = torch.log1p(-bs.unsqueeze(-1) * X).mean(-1)
-    Ls = N * (torch.log(-bs / ks) - (ks + 1.0))
+    Ls = N * (torch.log(torch.clamp(-bs / ks, 1e-10)) - (ks + 1.0))
 
     weights = torch.exp(Ls - Ls.unsqueeze(-1))
     weights = 1.0 / weights.sum(-1)

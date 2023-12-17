@@ -75,7 +75,7 @@ class RejectionStandardGamma(Rejector):
         v = value / self._d
         result = -self._d.log()
         y = v.pow(1 / 3)
-        result -= torch.log(3 * y**2)
+        result -= torch.log(torch.clamp(3 * y**2, 1e-10))
         x = (y - 1) / self._c
         result -= self._c.log()
         result += Normal(
@@ -88,7 +88,7 @@ class RejectionStandardGamma(Rejector):
         v = value / self._d
         y = torch.pow(v, 1.0 / 3.0)
         x = (y - 1.0) / self._c
-        log_prob_accept = 0.5 * x * x + self._d * (1.0 - v + torch.log(v))
+        log_prob_accept = 0.5 * x * x + self._d * (1.0 - v + torch.log(torch.clamp(v, 1e-10)))
         log_prob_accept[y <= 0] = -float("inf")
         return log_prob_accept
 
@@ -116,11 +116,11 @@ class RejectionGamma(Gamma):
         return self._standard_gamma.rsample(sample_shape) / self.rate
 
     def log_prob(self, x):
-        return self._standard_gamma.log_prob(x * self.rate) + torch.log(self.rate)
+        return self._standard_gamma.log_prob(x * self.rate) + torch.log(torch.clamp(self.rate, 1e-10))
 
     def score_parts(self, x):
         log_prob, score_function, _ = self._standard_gamma.score_parts(x * self.rate)
-        log_prob = log_prob + torch.log(self.rate)
+        log_prob = log_prob + torch.log(torch.clamp(self.rate, 1e-10))
         return ScoreParts(log_prob, score_function, log_prob)
 
 

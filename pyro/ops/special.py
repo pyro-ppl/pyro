@@ -133,7 +133,7 @@ def log_I1(orders: int, value: torch.Tensor, terms=250):
     lgammas_all = torch.lgamma(torch.arange(1, terms + orders + 1, device=value.device))
     assert lgammas_all.shape == (orders + terms,)  # lgamma(0) = inf => start from 1
 
-    lvalues = torch.log(value / 2) * k.view(1, -1)
+    lvalues = torch.log(torch.clamp(value / 2, 1e-10)) * k.view(1, -1)
     assert lvalues.shape == (vshape.numel(), terms)
 
     lfactorials = lgammas_all[:terms]
