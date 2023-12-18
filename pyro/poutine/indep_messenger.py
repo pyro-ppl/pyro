@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import numbers
-from dataclasses import dataclass
-from typing import Iterator, Optional, Tuple
+from typing import Iterator, NamedTuple, Optional, Tuple
 
 import torch
 from typing_extensions import Self
@@ -13,12 +12,12 @@ from pyro.poutine.runtime import _DIM_ALLOCATOR, Message
 from pyro.util import ignore_jit_warnings
 
 
-@dataclass(eq=False)
-class CondIndepStackFrame:
+class CondIndepStackFrame(NamedTuple):
     name: str
     dim: Optional[int]
     size: int
     counter: int
+    full_size: Optional[int] = None
 
     @property
     def vectorized(self) -> bool:
