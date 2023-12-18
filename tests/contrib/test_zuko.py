@@ -3,12 +3,12 @@
 
 
 import pytest
-import pyro
 import torch
 
+import pyro
 from pyro.contrib.zuko import Zuko2Pyro
-from pyro.optim import Adam
 from pyro.infer import SVI, Trace_ELBO
+from pyro.optim import Adam
 
 
 @pytest.mark.parametrize("multivariate", [True, False])

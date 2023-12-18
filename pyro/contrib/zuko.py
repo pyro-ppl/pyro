@@ -1,10 +1,10 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-import pyro
 import torch
-
 from torch import Size, Tensor
+
+import pyro
 
 
 class Zuko2Pyro(pyro.distributions.TorchDistribution):
