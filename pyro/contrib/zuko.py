@@ -27,7 +27,7 @@ class Zuko2Pyro(pyro.distributions.TorchDistribution):
         return self.dist.batch_shape
 
     def __call__(self, shape: Size = ()) -> Tensor:
-        if hasattr(self.dist, "rsample_and_log_prob"):  # special method for fast sampling + scoring
+        if hasattr(self.dist, "rsample_and_log_prob"):  # fast sampling + scoring
             x, self.cache[x] = self.dist.rsample_and_log_prob(shape)
         elif self.has_rsample:
             x = self.dist.rsample(shape)
