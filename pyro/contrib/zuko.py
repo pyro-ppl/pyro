@@ -5,7 +5,6 @@ import pyro
 import torch
 
 from torch import Size, Tensor
-from typing import *
 
 
 class Zuko2Pyro(pyro.distributions.TorchDistribution):
