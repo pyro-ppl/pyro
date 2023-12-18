@@ -50,8 +50,10 @@ class InferDict(TypedDict, total=False):
     is_auxiliary: bool
     is_observed: bool
     num_samples: int
+    obs: Optional[torch.Tensor]
     prior: TorchDistributionMixin
     tmc: Literal["diagonal", "mixture"]
+    was_observed: bool
     _deterministic: bool
     _dim_to_symbol: Dict[int, str]
     _do_not_trace: bool

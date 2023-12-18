@@ -138,7 +138,7 @@ class AutoGuide(PyroModule):
                 self.plates = {p.name: p for p in plates}
             for name, frame in sorted(self._prototype_frames.items()):
                 if name not in self.plates:
-                    full_size = getattr(frame, "full_size", frame.size)
+                    full_size = frame.full_size or frame.size
                     self.plates[name] = pyro.plate(
                         name, full_size, dim=frame.dim, subsample_size=frame.size
                     )
@@ -363,7 +363,7 @@ class AutoDelta(AutoGuide):
 
             # If subsampling, repeat init_value to full size.
             for frame in site["cond_indep_stack"]:
-                full_size = getattr(frame, "full_size", frame.size)
+                full_size = frame.full_size or frame.size
                 if full_size != frame.size:
                     dim = frame.dim - event_dim
                     value = periodic_repeat(value, full_size, dim).contiguous()
@@ -475,7 +475,7 @@ class AutoNormal(AutoGuide):
 
             # If subsampling, repeat init_value to full size.
             for frame in site["cond_indep_stack"]:
-                full_size = getattr(frame, "full_size", frame.size)
+                full_size = frame.full_size or frame.size
                 if full_size != frame.size:
                     dim = frame.dim - event_dim
                     init_loc = periodic_repeat(init_loc, full_size, dim).contiguous()
