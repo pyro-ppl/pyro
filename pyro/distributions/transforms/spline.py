@@ -271,7 +271,8 @@ def _monotonic_rational_spline(
                 + 2 * input_delta * theta_one_minus_theta
                 + input_derivatives * (1 - root).pow(2)
             )
-            logabsdet = -(torch.log(torch.clamp(derivative_numerator, 1e-10)) - 2 * torch.log(torch.clamp(denominator, 1e-10)))
+            logabsdet = -(torch.log(torch.clamp(derivative_numerator, 1e-10)) - 2
+                          * torch.log(torch.clamp(denominator, 1e-10)))
 
         else:
             theta = (inputs - input_cumwidths) / input_widths
@@ -291,7 +292,8 @@ def _monotonic_rational_spline(
                 + 2 * input_delta * theta_one_minus_theta
                 + input_derivatives * (1 - theta).pow(2)
             )
-            logabsdet = torch.log(torch.clamp(derivative_numerator, 1e-10)) - 2 * torch.log(torch.clamp(denominator, 1e-10))
+            logabsdet = (torch.log(torch.clamp(derivative_numerator, 1e-10)) - 2
+                         * torch.log(torch.clamp(denominator, 1e-10)))
 
     # Apply the identity function outside the bounding box
     outputs[outside_interval_mask] = inputs[outside_interval_mask]
