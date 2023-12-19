@@ -134,10 +134,7 @@ class Polynomial(TransformModule):
         # term and the integral from eq (8) (the equation for this isn't given in the paper)
         x_pow_matrix = x_view.pow(self.power_mask.unsqueeze(-1) - 1).unsqueeze(-4)
         self._cached_logDetJ = torch.log(
-            torch.clamp(
-                (coefs * x_pow_matrix).sum((1, 2, 3)).view_as(x) + 1e-8
-                , 1e-10
-            )
+            (coefs * x_pow_matrix).sum((1, 2, 3)).view_as(x) + 1e-8
         ).sum(-1)
 
         return y

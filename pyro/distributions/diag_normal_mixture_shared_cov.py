@@ -117,7 +117,7 @@ class MixtureOfDiagNormalsSharedCovariance(TorchDistribution):
         )  # L B K
         result = torch.logsumexp(result, dim=-1)  # L B
         result = result - (0.5 * math.log(2.0 * math.pi) * float(self.dim))
-        result = result - (torch.log(torch.clamp(self.coord_scale, 1e-10)).sum(-1))
+        result = result - (torch.log(self.coord_scale).sum(-1))
         result = result - eps_sqr_min
         return result
 

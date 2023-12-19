@@ -137,11 +137,11 @@ class SineBivariateVonMises(TorchDistribution):
         fs = (
             SineBivariateVonMises._lbinoms(m.max() + 1).view(-1, 1)
             + m * torch.log((corr**2).clamp(min=tiny))
-            - m * torch.log(torch.clamp(4 * torch.prod(conc, dim=-1), 1e-10))
+            - m * torch.log(4 * torch.prod(conc, dim=-1))
         )
         fs += log_I1(m.max(), conc, 51).sum(-1)
         mfs = fs.max()
-        norm_const = 2 * torch.log(torch.clamp(torch.tensor(2 * pi), 1e-10)) + mfs + (fs - mfs).logsumexp(0)
+        norm_const = 2 * torch.log(torch.tensor(2 * pi)) + mfs + (fs - mfs).logsumexp(0)
         return norm_const.reshape(self.phi_loc.shape)
 
     def log_prob(self, value):
@@ -224,7 +224,7 @@ class SineBivariateVonMises(TorchDistribution):
                 1.0
                 - curr_b0.view(-1, 1) / 2
                 + torch.log(
-                    torch.clamp(curr_b0.view(-1, 1) / 2 + (curr_eig.view(2, -1, 1) * x**2).sum(0), 1e-10)
+                    curr_b0.view(-1, 1) / 2 + (curr_eig.view(2, -1, 1) * x**2).sum(0)
                 )
             )
             assert lg_inv.shape == lf.shape

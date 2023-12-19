@@ -94,7 +94,7 @@ class HiddenLayer(TorchDistribution):
         KL_A = torch.pow(self.A_mean / self.A_prior_scale, 2.0).sum()
         KL_A -= self.dim_X * self.dim_H
         KL_A += torch.pow(self.A_scale / self.A_prior_scale, 2.0).sum()
-        KL_A -= 2.0 * torch.log(torch.clamp(self.A_scale / self.A_prior_scale, 1e-10)).sum()
+        KL_A -= 2.0 * torch.log(self.A_scale / self.A_prior_scale).sum()
         return 0.5 * KL_A
 
     def rsample(self, sample_shape=torch.Size()):

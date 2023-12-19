@@ -62,7 +62,7 @@ class Importance(TracePosterior):
         # ensure list is not empty
         if self.log_weights:
             log_w = torch.tensor(self.log_weights)
-            log_num_samples = torch.log(torch.clamp(torch.tensor(self.num_samples * 1.0), 1e-10))
+            log_num_samples = torch.log(torch.tensor(self.num_samples * 1.0))
             return torch.logsumexp(log_w - log_num_samples, 0)
         else:
             warnings.warn(

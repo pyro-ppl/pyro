@@ -137,7 +137,7 @@ class BatchNorm(TransformModule):
         else:
             # NOTE: You wouldn't typically run this function in eval mode, but included for gradient tests
             var = self.moving_variance
-        return -self.constrained_gamma.log() + 0.5 * torch.log(torch.clamp(var + self.epsilon, 1e-10))
+        return -self.constrained_gamma.log() + 0.5 * torch.log(var + self.epsilon)
 
 
 def batchnorm(input_dim, **kwargs):

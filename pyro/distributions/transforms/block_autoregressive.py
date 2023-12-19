@@ -162,9 +162,9 @@ class BlockAutoregressive(TransformModule):
             self._cached_logDetJ = F.softplus(self._cached_logDetJ)
         elif self.residual == "gated":
             y = self.gate.sigmoid() * x + (1.0 - self.gate.sigmoid()) * y
-            term1 = torch.log(torch.clamp(self.gate.sigmoid() + eps, 1e-10))
+            term1 = torch.log(self.gate.sigmoid() + eps)
             log1p_gate = torch.log1p(eps - self.gate.sigmoid())
-            log_gate = torch.log(torch.clamp(self.gate.sigmoid() + eps, 1e-10))
+            log_gate = torch.log(self.gate.sigmoid() + eps)
             term2 = F.softplus(log1p_gate - log_gate + self._cached_logDetJ)
             self._cached_logDetJ = term1 + term2
 
@@ -272,7 +272,7 @@ class MaskedBlockLinear(torch.nn.Module):
         # Taking the effect of weight normalization into account in calculating the log-gradient is straightforward!
         # Instead of differentiating, e.g. d(W_1x)/dx, we have d(g_1W_1/(W_1^TW_1)^0.5x)/dx, roughly speaking, and
         # taking the log gives the right hand side below:
-        wpl = self._diag_weight + self._weight - 0.5 * torch.log(torch.clamp(w_squared_norm + eps, 1e-10))
+        wpl = self._diag_weight + self._weight - 0.5 * torch.log(w_squared_norm + eps)
 
         return w, wpl[self.mask_d.bool()].view(
             self.dim, self.out_features // self.dim, self.in_features // self.dim

@@ -131,7 +131,7 @@ class NeuralAutoregressive(TransformModule):
 
         log_dydD = self._cached_log_df_inv_dx
         log_dDdx = torch.logsumexp(
-            torch.log(torch.clamp(A + self.eps, 1e-10))
+            torch.log(A + self.eps)
             + self.logsoftmax(W_pre)
             + T.log_abs_det_jacobian(C, T_C),
             dim=-2,
