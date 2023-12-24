@@ -79,26 +79,23 @@ class SubsampleMessenger(IndepMessenger):
     def __init__(
         self,
         name: str,
-        size: int,
+        size: Optional[int] = None,
         subsample_size: Optional[int] = None,
         subsample: Optional[torch.Tensor] = None,
         dim: Optional[int] = None,
         use_cuda: Optional[bool] = None,
         device: Optional[str] = None,
     ) -> None:
-        super().__init__(name, size, dim, device)
-        self._indices = subsample
-        self.use_cuda = use_cuda
-        self.device = device
-
-        self.size, self.subsample_size, self._indices = self._subsample(
-            self.name,
-            self.size,
+        full_size, self.subsample_size, subsample = self._subsample(
+            name,
+            size,
             subsample_size,
-            self._indices,
-            self.use_cuda,
-            self.device,
+            subsample,
+            use_cuda,
+            device,
         )
+        super().__init__(name, full_size, dim, device)
+        self._indices = subsample
 
     @staticmethod
     def _subsample(
@@ -108,7 +105,7 @@ class SubsampleMessenger(IndepMessenger):
         subsample: Optional[torch.Tensor] = None,
         use_cuda: Optional[bool] = None,
         device: Optional[str] = None,
-    ) -> Tuple[int, int, torch.Tensor]:
+    ) -> Tuple[int, int, Optional[torch.Tensor]]:
         """
         Helper function for plate. See its docstrings for details.
         """
@@ -137,9 +134,9 @@ class SubsampleMessenger(IndepMessenger):
             apply_stack(msg)
             subsample = msg["value"]
 
-        assert subsample is not None
         with ignore_jit_warnings():
             if subsample_size is None:
+                assert subsample is not None
                 subsample_size = (
                     subsample.size(0)
                     if isinstance(subsample, torch.Tensor)
