@@ -72,7 +72,7 @@ class Message(TypedDict, total=False):
     args: Tuple
     kwargs: Dict
     value: Optional[torch.Tensor]
-    scale: float
+    scale: Union[torch.Tensor, float]
     mask: Union[bool, torch.Tensor, None]
     cond_indep_stack: Tuple[CondIndepStackFrame, ...]
     done: bool

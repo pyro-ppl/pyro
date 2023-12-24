@@ -1,9 +1,11 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from pyro.util import get_rng_state, set_rng_seed, set_rng_state
+from types import TracebackType
+from typing import Optional, Type
 
-from .messenger import Messenger
+from pyro.poutine.messenger import Messenger
+from pyro.util import get_rng_state, set_rng_seed, set_rng_state
 
 
 class SeedMessenger(Messenger):
@@ -18,14 +20,19 @@ class SeedMessenger(Messenger):
     :param int rng_seed: rng seed.
     """
 
-    def __init__(self, rng_seed):
+    def __init__(self, rng_seed: int) -> None:
         assert isinstance(rng_seed, int)
         self.rng_seed = rng_seed
         super().__init__()
 
-    def __enter__(self):
+    def __enter__(self) -> None:  # type: ignore[override]
         self.old_state = get_rng_state()
         set_rng_seed(self.rng_seed)
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(
+        self,
+        exc_type: Optional[Type[Exception]],
+        exc_value: Optional[Exception],
+        traceback: Optional[TracebackType],
+    ) -> None:
         set_rng_state(self.old_state)
