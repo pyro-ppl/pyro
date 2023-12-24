@@ -36,7 +36,7 @@ class EscapeMessenger(Messenger):
             msg["done"] = True
             msg["stop"] = True
 
-            def cont(m):
+            def cont(m: Message) -> None:
                 raise NonlocalExit(m)
 
             msg["continuation"] = cont
