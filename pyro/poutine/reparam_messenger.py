@@ -16,11 +16,11 @@ from typing import (
 import torch
 from typing_extensions import ParamSpec
 
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.runtime import Message, effectful
 
 if TYPE_CHECKING:
-    from pyro.distributions.torch_distribution import TorchDistributionMixin
     from pyro.infer.reparam.reparam import Reparam
 
 P = ParamSpec("P")

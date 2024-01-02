@@ -1,8 +1,6 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import annotations
-
 import functools
 from typing import (
     TYPE_CHECKING,
@@ -78,7 +76,7 @@ class Message(TypedDict, Generic[P, T], total=False):
     cond_indep_stack: Tuple[CondIndepStackFrame, ...]
     done: bool
     stop: bool
-    continuation: Optional[Callable[[Message], None]]
+    continuation: Optional[Callable[["Message"], None]]
     infer: Optional[InferDict]
     obs: Optional[torch.Tensor]
     log_prob: torch.Tensor
