@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from pyro.poutine.messenger import Messenger
 
 # the global pyro stack
-_PYRO_STACK: List[Messenger] = []
+_PYRO_STACK: List["Messenger"] = []
 
 # the global ParamStore
 _PYRO_PARAM_STORE = ParamStoreDict()
@@ -50,7 +50,7 @@ class InferDict(TypedDict, total=False):
     is_observed: bool
     num_samples: int
     obs: Optional[torch.Tensor]
-    prior: TorchDistributionMixin
+    prior: "TorchDistributionMixin"
     tmc: Literal["diagonal", "mixture"]
     was_observed: bool
     _deterministic: bool
@@ -73,7 +73,7 @@ class Message(TypedDict, Generic[P, T], total=False):
     value: Optional[T]
     scale: Union[torch.Tensor, float]
     mask: Union[bool, torch.Tensor, None]
-    cond_indep_stack: Tuple[CondIndepStackFrame, ...]
+    cond_indep_stack: Tuple["CondIndepStackFrame", ...]
     done: bool
     stop: bool
     continuation: Optional[Callable[["Message"], None]]
@@ -82,7 +82,7 @@ class Message(TypedDict, Generic[P, T], total=False):
     log_prob: torch.Tensor
     log_prob_sum: torch.Tensor
     unscaled_log_prob: torch.Tensor
-    score_parts: ScoreParts
+    score_parts: "ScoreParts"
     packed: "Message"
     _intervener_id: Optional[str]
 
@@ -422,7 +422,7 @@ def get_mask() -> Union[bool, torch.Tensor, None]:
     return _inspect()["mask"]
 
 
-def get_plates() -> Tuple[CondIndepStackFrame, ...]:
+def get_plates() -> Tuple["CondIndepStackFrame", ...]:
     """
     Records the effects of enclosing ``pyro.plate`` contexts.
 
