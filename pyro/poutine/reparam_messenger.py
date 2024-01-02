@@ -2,16 +2,33 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-from typing import Callable, Dict, Union
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    TypeVar,
+    Union,
+)
 
 import torch
+from typing_extensions import ParamSpec
 
-from .messenger import Messenger
-from .runtime import effectful
+from pyro.distributions.torch_distribution import TorchDistributionMixin
+from pyro.poutine.messenger import Messenger
+from pyro.poutine.runtime import Message, effectful
+
+if TYPE_CHECKING:
+    from pyro.infer.reparam.reparam import Reparam
+
+P = ParamSpec("P")
+T = TypeVar("T")
 
 
 @effectful(type="get_init_messengers")
-def _get_init_messengers():
+def _get_init_messengers() -> List[Messenger]:
     return []
 
 
@@ -34,24 +51,29 @@ class ReparamMessenger(Messenger):
 
     :param config: Configuration, either a dict mapping site name to
         :class:`~pyro.infer.reparam.reparam.Reparameterizer` , or a function
-        mapping site to :class:`~pyro.infer.reparam.reparam.Reparameterizer` or
+        mapping site to :class:`~pyro.infer.reparam.reparam.Reparam` or
         None. See :mod:`pyro.infer.reparam.strategies` for built-in
         configuration strategies.
     :type config: dict or callable
     """
 
-    def __init__(self, config: Union[Dict[str, object], Callable]):
+    def __init__(
+        self,
+        config: Union[Dict[str, "Reparam"], Callable[[Message], Optional["Reparam"]]],
+    ) -> None:
         super().__init__()
         assert isinstance(config, dict) or callable(config)
         self.config = config
         self._args_kwargs = None
 
-    def __call__(self, fn):
+    def __call__(self, fn: Callable[P, T]) -> Callable[P, T]:
         return ReparamHandler(self, fn)
 
-    def _pyro_sample(self, msg):
+    def _pyro_sample(self, msg: Message) -> None:
         if type(msg["fn"]).__name__ == "_Subsample":
             return
+        assert msg["name"] is not None
+        assert isinstance(msg["fn"], TorchDistributionMixin)
         if isinstance(self.config, dict):
             reparam = self.config.get(msg["name"])
         else:
@@ -80,10 +102,10 @@ class ReparamMessenger(Messenger):
         # similarly be safely applied twice, with the second application
         # avoiding overwriting the original application.
         for m in _get_init_messengers():
-            m._pyro_sample(msg)
+            m._process_message(msg)
 
         # Pass args_kwargs to the reparam via a side channel.
-        reparam.args_kwargs = self._args_kwargs
+        reparam.args_kwargs = self._args_kwargs  # type: ignore[attr-defined]
         try:
             new_msg = reparam.apply(
                 {
@@ -94,7 +116,7 @@ class ReparamMessenger(Messenger):
                 }
             )
         finally:
-            reparam.args_kwargs = None
+            reparam.args_kwargs = None  # type: ignore[attr-defined]
 
         if new_msg["value"] is not None:
             # Validate while the original msg["fn"] is known.
@@ -121,17 +143,17 @@ class ReparamMessenger(Messenger):
         msg["is_observed"] = new_msg["is_observed"]
 
 
-class ReparamHandler(object):
+class ReparamHandler(Generic[P, T]):
     """
     Reparameterization poutine.
     """
 
-    def __init__(self, msngr, fn):
+    def __init__(self, msngr, fn: Callable[P, T]) -> None:
         self.msngr = msngr
         self.fn = fn
         super().__init__()
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T:
         # This saves args,kwargs for optional use by reparameterizers.
         self.msngr._args_kwargs = args, kwargs
         try:

@@ -2,10 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from contextlib import contextmanager
+from typing import Iterator, Optional
 
-from .broadcast_messenger import BroadcastMessenger
-from .messenger import block_messengers
-from .subsample_messenger import SubsampleMessenger
+import torch
+
+from pyro.poutine.broadcast_messenger import BroadcastMessenger
+from pyro.poutine.messenger import Messenger, block_messengers
+from pyro.poutine.runtime import Message
+from pyro.poutine.subsample_messenger import SubsampleMessenger
 
 
 class PlateMessenger(SubsampleMessenger):
@@ -14,11 +18,11 @@ class PlateMessenger(SubsampleMessenger):
     combines shape inference, independence annotation, and subsampling
     """
 
-    def _process_message(self, msg):
+    def _process_message(self, msg: Message) -> None:
         super()._process_message(msg)
-        return BroadcastMessenger._pyro_sample(msg)
+        BroadcastMessenger._pyro_sample(msg)
 
-    def __enter__(self):
+    def __enter__(self) -> Optional[torch.Tensor]:  # type: ignore[override]
         super().__enter__()
         if self._vectorized and self._indices is not None:
             return self.indices
@@ -26,7 +30,9 @@ class PlateMessenger(SubsampleMessenger):
 
 
 @contextmanager
-def block_plate(name=None, dim=None, *, strict=True):
+def block_plate(
+    name: Optional[str] = None, dim: Optional[int] = None, *, strict: bool = True
+) -> Iterator[None]:
     """
     EXPERIMENTAL Context manager to temporarily block a single enclosing plate.
 
@@ -63,13 +69,14 @@ def block_plate(name=None, dim=None, *, strict=True):
         assert isinstance(dim, int)
         assert dim < 0
 
-    def predicate(messenger):
+    def predicate(messenger: Messenger) -> bool:
         if not isinstance(messenger, PlateMessenger):
             return False
         if name is not None:
             return messenger.name == name
         if dim is not None:
             return messenger.dim == dim
+        raise AssertionError
 
     with block_messengers(predicate) as matches:
         if strict and len(matches) != 1:

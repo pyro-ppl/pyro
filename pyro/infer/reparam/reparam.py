@@ -6,29 +6,20 @@ from abc import ABC
 from typing import Callable, Optional
 
 import torch
-
-try:
-    from typing import TypedDict
-except ImportError:
-
-    def TypedDict(*args, **kwargs):
-        return dict
+from typing_extensions import TypedDict
 
 
-ReparamMessage = TypedDict(
-    "ReparamMessage",
-    name=str,
-    fn=Callable,
-    value=Optional[torch.Tensor],
-    is_observed=Optional[bool],
-)
+class ReparamMessage(TypedDict):
+    name: str
+    fn: Callable
+    value: Optional[torch.Tensor]
+    is_observed: Optional[bool]
 
-ReparamResult = TypedDict(
-    "ReparamResult",
-    fn=Callable,
-    value=Optional[torch.Tensor],
-    is_observed=Optional[bool],
-)
+
+class ReparamResult(TypedDict):
+    fn: Callable
+    value: Optional[torch.Tensor]
+    is_observed: bool
 
 
 class Reparam(ABC):

@@ -8,6 +8,7 @@ from typing import (
     TYPE_CHECKING,
     Callable,
     Dict,
+    Generic,
     List,
     Optional,
     Set,
@@ -64,14 +65,14 @@ class InferDict(TypedDict, total=False):
     _markov_depth: int
 
 
-class Message(TypedDict, total=False):
+class Message(TypedDict, Generic[P, T], total=False):
     type: str
     name: Optional[str]
-    fn: Union[Callable, TorchDistributionMixin]
+    fn: Callable[P, T]
     is_observed: bool
     args: Tuple
     kwargs: Dict
-    value: Optional[torch.Tensor]
+    value: Optional[T]
     scale: Union[torch.Tensor, float]
     mask: Union[bool, torch.Tensor, None]
     cond_indep_stack: Tuple[CondIndepStackFrame, ...]
@@ -308,14 +309,12 @@ def am_i_wrapped() -> bool:
 @overload
 def effectful(
     fn: None = ..., type: Optional[str] = ...
-) -> Callable[[Callable[P, T]], Callable[..., Union[T, torch.Tensor, None]]]:
+) -> Callable[[Callable[P, T]], Callable[..., T]]:
     ...
 
 
 @overload
-def effectful(
-    fn: Callable[P, T] = ..., type: Optional[str] = ...
-) -> Callable[..., Union[T, torch.Tensor, None]]:
+def effectful(fn: Callable[P, T] = ..., type: Optional[str] = ...) -> Callable[..., T]:
     ...
 
 
@@ -342,15 +341,15 @@ def effectful(
         *args: P.args,
         name: Optional[str] = None,
         infer: Optional[InferDict] = None,
-        obs: Optional[torch.Tensor] = None,
+        obs: Optional[T] = None,
         **kwargs: P.kwargs,
-    ) -> Union[T, torch.Tensor, None]:
+    ) -> T:
         is_observed = obs is not None
 
         if not am_i_wrapped():
             return fn(*args, **kwargs)
         else:
-            msg = Message(
+            msg = Message[P, T](
                 type=type,
                 name=name,
                 fn=fn,
@@ -368,6 +367,7 @@ def effectful(
             )
             # apply the stack and return its return value
             apply_stack(msg)
+            assert msg["value"] is not None
             return msg["value"]
 
     _fn._is_effectful = True  # type: ignore[attr-defined]
