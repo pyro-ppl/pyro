@@ -2,14 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from contextlib import contextmanager
-from typing import Iterator, Optional
-
-import torch
+from typing import TYPE_CHECKING, Iterator, Optional
 
 from pyro.poutine.broadcast_messenger import BroadcastMessenger
 from pyro.poutine.messenger import Messenger, block_messengers
-from pyro.poutine.runtime import Message
 from pyro.poutine.subsample_messenger import SubsampleMessenger
+
+if TYPE_CHECKING:
+    import torch
+
+    from pyro.poutine.runtime import Message
 
 
 class PlateMessenger(SubsampleMessenger):
@@ -18,11 +20,11 @@ class PlateMessenger(SubsampleMessenger):
     combines shape inference, independence annotation, and subsampling
     """
 
-    def _process_message(self, msg: Message) -> None:
+    def _process_message(self, msg: "Message") -> None:
         super()._process_message(msg)
         BroadcastMessenger._pyro_sample(msg)
 
-    def __enter__(self) -> Optional[torch.Tensor]:  # type: ignore[override]
+    def __enter__(self) -> Optional["torch.Tensor"]:  # type: ignore[override]
         super().__enter__()
         if self._vectorized and self._indices is not None:
             return self.indices
@@ -76,7 +78,7 @@ def block_plate(
             return messenger.name == name
         if dim is not None:
             return messenger.dim == dim
-        raise AssertionError
+        raise ValueError("Unreachable")
 
     with block_messengers(predicate) as matches:
         if strict and len(matches) != 1:
