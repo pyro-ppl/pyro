@@ -24,8 +24,8 @@ from pyro.params.param_store import (  # noqa: F401
     ParamStoreDict,
 )
 
-P = ParamSpec("P")
-T = TypeVar("T")
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
 
 if TYPE_CHECKING:
     from pyro.distributions.score_parts import ScoreParts
@@ -63,14 +63,14 @@ class InferDict(TypedDict, total=False):
     _markov_depth: int
 
 
-class Message(TypedDict, Generic[P, T], total=False):
+class Message(TypedDict, Generic[_P, _T], total=False):
     type: str
     name: Optional[str]
-    fn: Callable[P, T]
+    fn: Callable[_P, _T]
     is_observed: bool
     args: Tuple
     kwargs: Dict
-    value: Optional[T]
+    value: Optional[_T]
     scale: Union[torch.Tensor, float]
     mask: Union[bool, torch.Tensor, None]
     cond_indep_stack: Tuple["CondIndepStackFrame", ...]
@@ -307,17 +307,19 @@ def am_i_wrapped() -> bool:
 @overload
 def effectful(
     fn: None = ..., type: Optional[str] = ...
-) -> Callable[[Callable[P, T]], Callable[..., T]]:
+) -> Callable[[Callable[_P, _T]], Callable[..., _T]]:
     ...
 
 
 @overload
-def effectful(fn: Callable[P, T] = ..., type: Optional[str] = ...) -> Callable[..., T]:
+def effectful(
+    fn: Callable[_P, _T] = ..., type: Optional[str] = ...
+) -> Callable[..., _T]:
     ...
 
 
 def effectful(
-    fn: Optional[Callable[P, T]] = None, type: Optional[str] = None
+    fn: Optional[Callable[_P, _T]] = None, type: Optional[str] = None
 ) -> Callable:
     """
     :param fn: function or callable that performs an effectful computation
@@ -336,18 +338,18 @@ def effectful(
 
     @functools.wraps(fn)
     def _fn(
-        *args: P.args,
+        *args: _P.args,
         name: Optional[str] = None,
         infer: Optional[InferDict] = None,
-        obs: Optional[T] = None,
-        **kwargs: P.kwargs,
-    ) -> T:
+        obs: Optional[_T] = None,
+        **kwargs: _P.kwargs,
+    ) -> _T:
         is_observed = obs is not None
 
         if not am_i_wrapped():
             return fn(*args, **kwargs)
         else:
-            msg = Message[P, T](
+            msg = Message[_P, _T](
                 type=type,
                 name=name,
                 fn=fn,

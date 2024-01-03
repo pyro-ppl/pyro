@@ -18,8 +18,8 @@ from typing_extensions import ParamSpec, Self
 
 from pyro.poutine.runtime import _PYRO_STACK, Message
 
-P = ParamSpec("P")
-T = TypeVar("T")
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
 
 
 def _context_wrap(
@@ -85,7 +85,7 @@ class Messenger:
     Most inference operations are implemented in subclasses of this.
     """
 
-    def __call__(self, fn: Callable[P, T]) -> Callable[P, T]:
+    def __call__(self, fn: Callable[_P, _T]) -> Callable[_P, _T]:
         if not callable(fn):
             raise ValueError(
                 f"{fn!r} is not callable, did you mean to pass it as a keyword arg?"
@@ -127,8 +127,8 @@ class Messenger:
 
     def __exit__(
         self,
-        exc_type: Optional[Type[Exception]],
-        exc_value: Optional[Exception],
+        exc_type: Optional[Type[BaseException]],
+        exc_value: Optional[BaseException],
         traceback: Optional[TracebackType],
     ) -> None:
         """

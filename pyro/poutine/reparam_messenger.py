@@ -23,8 +23,8 @@ from pyro.poutine.runtime import Message, effectful
 if TYPE_CHECKING:
     from pyro.infer.reparam.reparam import Reparam
 
-P = ParamSpec("P")
-T = TypeVar("T")
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
 
 
 @effectful(type="get_init_messengers")
@@ -66,7 +66,7 @@ class ReparamMessenger(Messenger):
         self.config = config
         self._args_kwargs = None
 
-    def __call__(self, fn: Callable[P, T]) -> Callable[P, T]:
+    def __call__(self, fn: Callable[_P, _T]) -> Callable[_P, _T]:
         return ReparamHandler(self, fn)
 
     def _pyro_sample(self, msg: Message) -> None:
@@ -143,17 +143,17 @@ class ReparamMessenger(Messenger):
         msg["is_observed"] = new_msg["is_observed"]
 
 
-class ReparamHandler(Generic[P, T]):
+class ReparamHandler(Generic[_P, _T]):
     """
     Reparameterization poutine.
     """
 
-    def __init__(self, msngr, fn: Callable[P, T]) -> None:
+    def __init__(self, msngr, fn: Callable[_P, _T]) -> None:
         self.msngr = msngr
         self.fn = fn
         super().__init__()
 
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T:
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T:
         # This saves args,kwargs for optional use by reparameterizers.
         self.msngr._args_kwargs = args, kwargs
         try:
