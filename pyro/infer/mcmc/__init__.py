@@ -5,6 +5,7 @@ from pyro.infer.mcmc.adaptation import ArrowheadMassMatrix, BlockMassMatrix
 from pyro.infer.mcmc.api import MCMC, StreamingMCMC
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.nuts import NUTS
+from pyro.infer.mcmc.rwkernel import RandomWalkKernel
 
 __all__ = [
     "ArrowheadMassMatrix",
@@ -12,5 +13,6 @@ __all__ = [
     "HMC",
     "MCMC",
     "NUTS",
+    "RandomWalkKernel",
     "StreamingMCMC",
 ]
