@@ -1,3 +1,5 @@
+import math
+
 from collections import OrderedDict
 
 import torch
@@ -21,6 +23,9 @@ class RandomWalkKernel(MCMCKernel):
     space of the model.
 
     :param model: Python callable containing Pyro primitives.
+    :param init_step_size:
+    :param float target_accept_prob: Increasing this value will lead to a smaller
+        step size, hence the sampling will be slower and more robust. Default to 0.8.
 
     Example:
 
@@ -42,11 +47,19 @@ class RandomWalkKernel(MCMCKernel):
         tensor([ 0.9819,  1.9258,  2.9737])
     """
 
-    def __init__(self, model, step_size=0.3):
+    def __init__(self, model, init_step_size=0.1, target_accept_prob=0.234):
         self.model = model
-        self.step_size = step_size
+        self.init_step_size = init_step_size
+        self.target_accept_prob = target_accept_prob
+
+        if not isinstance(init_step_size, float) or init_step_size <= 0.0:
+            raise ValueError("init_step_size must be a positive float.")
+
+        if not isinstance(target_accept_prob, float) or target_accept_prob <= 0.0 or target_accept_prob >= 1.0:
+            raise ValueError("target_accept_prob must be a float in the interval (0, 1).")
 
         self._t = 0
+        self._log_step_size = math.log(init_step_size)
         self._accept_cnt = 0
         self._mean_accept_prob = 0.0
 
@@ -58,7 +71,10 @@ class RandomWalkKernel(MCMCKernel):
         self._energy_last = self.potential_fn(self._initial_params)
 
     def sample(self, params):
-        new_params = {k: v + self.step_size * torch.randn(v.shape, dtype=v.dtype, device=v.device) for k, v in params.items()}
+        step_size = math.exp(self._log_step_size)
+        if self._t <= self._warmup_steps and self._t % 50 == 0:
+            print("[t={}]  step: {:.4f}".format(self._t, step_size))
+        new_params = {k: v + step_size * torch.randn(v.shape, dtype=v.dtype, device=v.device) for k, v in params.items()}
         energy_proposal = self.potential_fn(new_params)
         delta_energy = energy_proposal - self._energy_last
 
@@ -72,6 +88,10 @@ class RandomWalkKernel(MCMCKernel):
             accepted = True
             params = new_params
             self._energy_last = energy_proposal
+
+        if self._t <= self._warmup_steps:
+            adaptation_speed = 0.1 / math.sqrt(1 + self._t)
+            self._log_step_size += adaptation_speed * (accept_prob.item() - self.target_accept_prob)
 
         self._t += 1
 
@@ -108,17 +128,11 @@ class RandomWalkKernel(MCMCKernel):
 
 kernel = RandomWalkKernel(normal_normal_model)
 
-initial_params, _, transforms, _ = initialize_model(
-    normal_normal_model, model_args=(),
-)
-
 mcmc = MCMC(
         kernel=kernel,
         num_samples=10000,
-        warmup_steps=1000,
-        initial_params=initial_params,
+        warmup_steps=500,
         num_chains=1,
-        transforms=transforms,
     )
 
 mcmc.run()
