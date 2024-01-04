@@ -1,6 +1,14 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+"""
+This file contains helpers to use `Zuko <https://zuko.readthedocs.io/>`_-based
+normalizing flows within Pyro piplines.
+
+Accompanying tutorials can be found at `tutorial/svi_flow_guide.ipynb` and
+`tutorial/vae_flow_prior.ipynb`.
+"""
+
 import torch
 from torch import Size, Tensor
 
@@ -8,7 +16,18 @@ import pyro
 
 
 class Zuko2Pyro(pyro.distributions.TorchDistribution):
-    r"""Wraps a Zuko (or PyTorch) distribution as a Pyro distribution."""
+    r"""Wraps a Zuko distribution as a Pyro distribution.
+
+    :param dist: A distribution instance.
+    :type dist: torch.distributions.Distribution
+
+    Example:
+        >>> flow = zuko.flows.MAF(features=5)
+        >>> dist = Zuko2Pyro(flow())
+        >>> dist((2, 3)).shape
+        torch.Size([2, 3, 5])
+        >>> x = pyro.sample("x", dist)
+    """
 
     def __init__(self, dist: torch.distributions.Distribution):
         self.dist = dist
