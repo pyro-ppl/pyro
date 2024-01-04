@@ -32,7 +32,9 @@ def test_beta_bernoulli():
     alpha_post = alpha + data_sum
     beta_post = beta + num_data - data_sum
     expected_mean = alpha_post / (alpha_post + beta_post)
-    expected_var = expected_mean.pow(2) * beta_post / (alpha_post * (1 + alpha_post + beta_post))
+    expected_var = (
+        expected_mean.pow(2) * beta_post / (alpha_post * (1 + alpha_post + beta_post))
+    )
 
     assert_equal(samples["p_latent"].mean(0), expected_mean, prec=0.03)
     assert_equal(samples["p_latent"].var(0), expected_var, prec=0.005)
