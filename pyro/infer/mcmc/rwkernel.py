@@ -5,11 +5,9 @@ from collections import OrderedDict
 import torch
 
 import pyro
-import pyro.poutine as poutine
 import pyro.distributions as dist
 from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
-from pyro.infer.mcmc.util import initialize_model, select_samples
-from pyro.infer.mcmc.api import MCMC
+from pyro.infer.mcmc.util import initialize_model
 
 
 def normal_normal_model():
@@ -79,7 +77,8 @@ class RandomWalkKernel(MCMCKernel):
 
     def sample(self, params):
         step_size = math.exp(self._log_step_size)
-        new_params = {k: v + step_size * torch.randn(v.shape, dtype=v.dtype, device=v.device) for k, v in params.items()}
+        new_params = {k: v + step_size * torch.randn(v.shape, dtype=v.dtype, device=v.device)
+                      for k, v in params.items()}
         energy_proposal = self.potential_fn(new_params)
         delta_energy = energy_proposal - self._energy_last
 
@@ -95,7 +94,7 @@ class RandomWalkKernel(MCMCKernel):
             self._energy_last = energy_proposal
 
         if self._t <= self._warmup_steps:
-            adaptation_speed = 0.1 / math.sqrt(1 + self._t)
+            adaptation_speed = max(0.001, 0.1 / math.sqrt(1 + self._t))
             self._log_step_size += adaptation_speed * (accept_prob - self.target_accept_prob)
 
         self._t += 1
@@ -131,18 +130,3 @@ class RandomWalkKernel(MCMCKernel):
         return {
             "acceptance rate": self._accept_cnt / (self._t - self._warmup_steps),
         }
-
-
-kernel = RandomWalkKernel(normal_normal_model)
-
-mcmc = MCMC(
-        kernel=kernel,
-        num_samples=5000,
-        warmup_steps=2000,
-    )
-
-mcmc.run()
-
-samples = mcmc.get_samples()
-y = samples['y']
-print("y: ", y.mean(), " +- ", y.std())
