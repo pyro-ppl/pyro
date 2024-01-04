@@ -36,8 +36,8 @@ class RandomWalkKernel(MCMCKernel):
         ...     y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         ...     return y
         >>>
-        >>> hmc_kernel = RandomWalkKernel(model, step_size=0.2)
-        >>> mcmc = MCMC(hmc_kernel, num_samples=500, warmup_steps=500)
+        >>> hmc_kernel = RandomWalkKernel(model, init_step_size=0.2)
+        >>> mcmc = MCMC(hmc_kernel, num_samples=200, warmup_steps=100)
         >>> mcmc.run(data)
         >>> mcmc.get_samples()['beta'].mean(0)  # doctest: +SKIP
         tensor([ 0.9819,  1.9258,  2.9737])
