@@ -19,13 +19,14 @@ def normal_normal_model():
 
 class RandomWalkKernel(MCMCKernel):
     r"""
-    Simple gradient-free kernel that utilizes an isotropic random walk in the unconstrained
-    space of the model.
+    Simple gradient-free kernel that utilizes an isotropic gaussian random walk in the unconstrained
+    latent space of the model. The step size that controls the variance of the kernel is adapted during
+    warm-up with a simple adaptation scheme that targets a user-provided acceptance probability.
 
     :param model: Python callable containing Pyro primitives.
-    :param init_step_size:
-    :param float target_accept_prob: Increasing this value will lead to a smaller
-        step size, hence the sampling will be slower and more robust. Default to 0.8.
+    :param float init_step_size: A positive float that controls the initial step size. Defaults to 0.1.
+    :param float target_accept_prob: The target acceptance probability used during adaptation of
+        the step size. Defaults to 0.234.
 
     Example:
 
@@ -40,28 +41,34 @@ class RandomWalkKernel(MCMCKernel):
         ...     y = pyro.sample('y', dist.Bernoulli(logits=(coefs * data).sum(-1)), obs=labels)
         ...     return y
         >>>
-        >>> hmc_kernel = RandomWalkKernel(model, step_size=0.01)
-        >>> mcmc = MCMC(hmc_kernel, num_samples=500, warmup_steps=100)
+        >>> hmc_kernel = RandomWalkKernel(model, step_size=0.2)
+        >>> mcmc = MCMC(hmc_kernel, num_samples=500, warmup_steps=500)
         >>> mcmc.run(data)
         >>> mcmc.get_samples()['beta'].mean(0)  # doctest: +SKIP
         tensor([ 0.9819,  1.9258,  2.9737])
     """
 
-    def __init__(self, model, init_step_size=0.1, target_accept_prob=0.234):
-        self.model = model
-        self.init_step_size = init_step_size
-        self.target_accept_prob = target_accept_prob
-
+    def __init__(
+        self,
+        model,
+        init_step_size: float = 0.1,
+        target_accept_prob: float = 0.234
+    ):
         if not isinstance(init_step_size, float) or init_step_size <= 0.0:
             raise ValueError("init_step_size must be a positive float.")
 
         if not isinstance(target_accept_prob, float) or target_accept_prob <= 0.0 or target_accept_prob >= 1.0:
             raise ValueError("target_accept_prob must be a float in the interval (0, 1).")
 
+        self.model = model
+        self.init_step_size = init_step_size
+        self.target_accept_prob = target_accept_prob
+
         self._t = 0
         self._log_step_size = math.log(init_step_size)
         self._accept_cnt = 0
         self._mean_accept_prob = 0.0
+        super().__init__()
 
     def setup(self, warmup_steps, *args, **kwargs):
         self._warmup_steps = warmup_steps
@@ -72,13 +79,11 @@ class RandomWalkKernel(MCMCKernel):
 
     def sample(self, params):
         step_size = math.exp(self._log_step_size)
-        if self._t <= self._warmup_steps and self._t % 50 == 0:
-            print("[t={}]  step: {:.4f}".format(self._t, step_size))
         new_params = {k: v + step_size * torch.randn(v.shape, dtype=v.dtype, device=v.device) for k, v in params.items()}
         energy_proposal = self.potential_fn(new_params)
         delta_energy = energy_proposal - self._energy_last
 
-        accept_prob = (-delta_energy).exp().clamp(max=1.0)
+        accept_prob = (-delta_energy).exp().clamp(max=1.0).item()
         rand = pyro.sample(
             "rand_t={}".format(self._t),
             dist.Uniform(0.0, 1.0),
@@ -91,7 +96,7 @@ class RandomWalkKernel(MCMCKernel):
 
         if self._t <= self._warmup_steps:
             adaptation_speed = 0.1 / math.sqrt(1 + self._t)
-            self._log_step_size += adaptation_speed * (accept_prob.item() - self.target_accept_prob)
+            self._log_step_size += adaptation_speed * (accept_prob - self.target_accept_prob)
 
         self._t += 1
 
@@ -102,7 +107,7 @@ class RandomWalkKernel(MCMCKernel):
         else:
             n = self._t
 
-        self._mean_accept_prob += (accept_prob.item() - self._mean_accept_prob) / n
+        self._mean_accept_prob += (accept_prob - self._mean_accept_prob) / n
 
         return params.copy()
 
@@ -117,6 +122,7 @@ class RandomWalkKernel(MCMCKernel):
     def logging(self):
         return OrderedDict(
             [
+                ("step size", "{:.2e}".format(math.exp(self._log_step_size))),
                 ("acc. prob", "{:.3f}".format(self._mean_accept_prob)),
             ]
         )
@@ -126,13 +132,13 @@ class RandomWalkKernel(MCMCKernel):
             "acceptance rate": self._accept_cnt / (self._t - self._warmup_steps),
         }
 
+
 kernel = RandomWalkKernel(normal_normal_model)
 
 mcmc = MCMC(
         kernel=kernel,
-        num_samples=10000,
-        warmup_steps=500,
-        num_chains=1,
+        num_samples=5000,
+        warmup_steps=2000,
     )
 
 mcmc.run()
