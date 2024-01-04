@@ -1,14 +1,13 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
 import torch
 
 import pyro
 import pyro.distributions as dist
 from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc.rwkernel import RandomWalkKernel
-from tests.common import assert_close, assert_equal
+from tests.common import assert_equal
 
 
 def test_beta_bernoulli():

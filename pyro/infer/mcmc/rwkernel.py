@@ -10,11 +10,6 @@ from pyro.infer.mcmc.mcmc_kernel import MCMCKernel
 from pyro.infer.mcmc.util import initialize_model
 
 
-def normal_normal_model():
-    y = pyro.sample("y", dist.Normal(0.0, torch.tensor([1.0])))
-    pyro.sample("obs", dist.Normal(y, 1.0), obs=torch.tensor([0.0]))
-
-
 class RandomWalkKernel(MCMCKernel):
     r"""
     Simple gradient-free kernel that utilizes an isotropic gaussian random walk in the unconstrained
