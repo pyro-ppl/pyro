@@ -11,6 +11,7 @@ from pyro.infer.importance import Importance
 from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.nuts import NUTS
+from pyro.infer.mcmc.rwkernel import RandomWalkKernel
 from pyro.infer.predictive import Predictive
 from pyro.infer.renyi_elbo import RenyiELBO
 from pyro.infer.rws import ReweightedWakeSleep
@@ -45,6 +46,7 @@ __all__ = [
     "MCMC",
     "NUTS",
     "Predictive",
+    "RandomWalkKernel",
     "RBFSteinKernel",
     "RenyiELBO",
     "ReweightedWakeSleep",

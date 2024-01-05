@@ -37,6 +37,14 @@ NUTS
     :undoc-members:
     :show-inheritance:
 
+RandomWalkKernel
+----------------
+
+.. autoclass:: pyro.infer.mcmc.RandomWalkKernel
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 BlockMassMatrix
 ---------------
 
