@@ -1,13 +1,12 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import annotations
-
 import functools
 from typing import (
     TYPE_CHECKING,
     Callable,
     Dict,
+    Generic,
     List,
     Optional,
     Set,
@@ -25,8 +24,8 @@ from pyro.params.param_store import (  # noqa: F401
     ParamStoreDict,
 )
 
-P = ParamSpec("P")
-T = TypeVar("T")
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
 
 if TYPE_CHECKING:
     from pyro.distributions.score_parts import ScoreParts
@@ -35,7 +34,7 @@ if TYPE_CHECKING:
     from pyro.poutine.messenger import Messenger
 
 # the global pyro stack
-_PYRO_STACK: List[Messenger] = []
+_PYRO_STACK: List["Messenger"] = []
 
 # the global ParamStore
 _PYRO_PARAM_STORE = ParamStoreDict()
@@ -51,7 +50,7 @@ class InferDict(TypedDict, total=False):
     is_observed: bool
     num_samples: int
     obs: Optional[torch.Tensor]
-    prior: TorchDistributionMixin
+    prior: "TorchDistributionMixin"
     tmc: Literal["diagonal", "mixture"]
     was_observed: bool
     _deterministic: bool
@@ -64,26 +63,26 @@ class InferDict(TypedDict, total=False):
     _markov_depth: int
 
 
-class Message(TypedDict, total=False):
+class Message(TypedDict, Generic[_P, _T], total=False):
     type: str
     name: Optional[str]
-    fn: Union[Callable, TorchDistributionMixin]
+    fn: Callable[_P, _T]
     is_observed: bool
     args: Tuple
     kwargs: Dict
-    value: Optional[torch.Tensor]
+    value: Optional[_T]
     scale: Union[torch.Tensor, float]
     mask: Union[bool, torch.Tensor, None]
-    cond_indep_stack: Tuple[CondIndepStackFrame, ...]
+    cond_indep_stack: Tuple["CondIndepStackFrame", ...]
     done: bool
     stop: bool
-    continuation: Optional[Callable[[Message], None]]
+    continuation: Optional[Callable[["Message"], None]]
     infer: Optional[InferDict]
     obs: Optional[torch.Tensor]
     log_prob: torch.Tensor
     log_prob_sum: torch.Tensor
     unscaled_log_prob: torch.Tensor
-    score_parts: ScoreParts
+    score_parts: "ScoreParts"
     packed: "Message"
     _intervener_id: Optional[str]
 
@@ -308,19 +307,19 @@ def am_i_wrapped() -> bool:
 @overload
 def effectful(
     fn: None = ..., type: Optional[str] = ...
-) -> Callable[[Callable[P, T]], Callable[..., Union[T, torch.Tensor, None]]]:
+) -> Callable[[Callable[_P, _T]], Callable[..., Optional[_T]]]:
     ...
 
 
 @overload
 def effectful(
-    fn: Callable[P, T] = ..., type: Optional[str] = ...
-) -> Callable[..., Union[T, torch.Tensor, None]]:
+    fn: Callable[_P, _T] = ..., type: Optional[str] = ...
+) -> Callable[..., Optional[_T]]:
     ...
 
 
 def effectful(
-    fn: Optional[Callable[P, T]] = None, type: Optional[str] = None
+    fn: Optional[Callable[_P, _T]] = None, type: Optional[str] = None
 ) -> Callable:
     """
     :param fn: function or callable that performs an effectful computation
@@ -339,18 +338,18 @@ def effectful(
 
     @functools.wraps(fn)
     def _fn(
-        *args: P.args,
+        *args: _P.args,
         name: Optional[str] = None,
         infer: Optional[InferDict] = None,
-        obs: Optional[torch.Tensor] = None,
-        **kwargs: P.kwargs,
-    ) -> Union[T, torch.Tensor, None]:
+        obs: Optional[_T] = None,
+        **kwargs: _P.kwargs,
+    ) -> Optional[_T]:
         is_observed = obs is not None
 
         if not am_i_wrapped():
             return fn(*args, **kwargs)
         else:
-            msg = Message(
+            msg = Message[_P, _T](
                 type=type,
                 name=name,
                 fn=fn,
@@ -424,7 +423,7 @@ def get_mask() -> Union[bool, torch.Tensor, None]:
     return _inspect()["mask"]
 
 
-def get_plates() -> Tuple[CondIndepStackFrame, ...]:
+def get_plates() -> Tuple["CondIndepStackFrame", ...]:
     """
     Records the effects of enclosing ``pyro.plate`` contexts.
 

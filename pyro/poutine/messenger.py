@@ -4,13 +4,22 @@
 from contextlib import contextmanager
 from functools import partial
 from types import TracebackType
-from typing import Any, Callable, Iterator, List, Optional, Type, TypeVar, cast
+from typing import (
+    Any,
+    Callable,
+    Iterator,
+    List,
+    Optional,
+    Type,
+    TypeVar,
+)
 
-from typing_extensions import Self
+from typing_extensions import ParamSpec, Self
 
-from .runtime import _PYRO_STACK, Message
+from pyro.poutine.runtime import _PYRO_STACK, Message
 
-_F = TypeVar("_F", bound=Callable)
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
 
 
 def _context_wrap(
@@ -76,13 +85,13 @@ class Messenger:
     Most inference operations are implemented in subclasses of this.
     """
 
-    def __call__(self, fn: _F) -> _F:
+    def __call__(self, fn: Callable[_P, _T]) -> Callable[_P, _T]:
         if not callable(fn):
             raise ValueError(
                 f"{fn!r} is not callable, did you mean to pass it as a keyword arg?"
             )
         wraps = _bound_partial(partial(_context_wrap, self, fn))
-        return cast(_F, wraps)
+        return wraps
 
     def __enter__(self) -> Self:
         """
@@ -118,8 +127,8 @@ class Messenger:
 
     def __exit__(
         self,
-        exc_type: Optional[Type[Exception]],
-        exc_value: Optional[Exception],
+        exc_type: Optional[Type[BaseException]],
+        exc_value: Optional[BaseException],
         traceback: Optional[TracebackType],
     ) -> None:
         """

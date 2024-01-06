@@ -3,6 +3,7 @@
 
 import warnings
 from collections import OrderedDict
+from typing import Callable
 
 import torch
 from torch.distributions.kl import kl_divergence, register_kl
@@ -15,7 +16,7 @@ from .score_parts import ScoreParts
 from .util import broadcast_shape, scale_and_mask
 
 
-class TorchDistributionMixin(Distribution):
+class TorchDistributionMixin(Distribution, Callable):
     """
     Mixin to provide Pyro compatibility for PyTorch distributions.
 
