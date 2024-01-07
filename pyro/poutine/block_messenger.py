@@ -148,7 +148,7 @@ class BlockMessenger(Messenger):
         expose: Optional[List[str]] = None,
         hide_types: Optional[List[str]] = None,
         expose_types: Optional[List[str]] = None,
-    ):
+    ) -> None:
         super().__init__()
         if not (hide_fn is None or expose_fn is None):
             raise ValueError("Only specify one of hide_fn or expose_fn")

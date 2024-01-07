@@ -119,7 +119,7 @@ class LiftMessenger(Messenger):
             msg["args"] = msg["args"][1:]
         else:
             # otherwise leave as is
-            return None
+            return None  # type: ignore[unreachable]
         msg["type"] = "sample"
         if name in self._samples_cache:
             # Multiple pyro.param statements with the same

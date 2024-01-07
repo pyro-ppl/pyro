@@ -47,7 +47,6 @@ class _Subsample(Distribution):
         with ignore_jit_warnings(["torch.Tensor results are registered as constants"]):
             self.device = device or torch.Tensor().device
 
-    @ignore_jit_warnings(["Converting a tensor to a Python boolean"])
     def sample(self, sample_shape: torch.Size = torch.Size()) -> torch.Tensor:
         """
         :returns: a random subsample of `range(size)`
@@ -165,12 +164,6 @@ class SubsampleMessenger(IndepMessenger):
             full_size=self.size,  # used for param initialization
         )
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
-        if isinstance(self.size, torch.Tensor) or isinstance(
-            self.subsample_size, torch.Tensor
-        ):
-            if not isinstance(msg["scale"], torch.Tensor):
-                with ignore_jit_warnings():
-                    msg["scale"] = torch.tensor(msg["scale"])
         msg["scale"] = msg["scale"] * self.size / self.subsample_size
 
     def _postprocess_message(self, msg: Message) -> None:
