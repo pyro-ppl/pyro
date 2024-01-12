@@ -28,7 +28,7 @@ def test_ZukoToPyro(multivariate: bool, rsample_and_log_prob: bool):
 
     if rsample_and_log_prob:
         def dummy(self, shape):
-            x = self.rsample(x)
+            x = self.rsample(shape)
             return x, self.log_prob(x)
 
         dist.rsample_and_log_prob = dummy
