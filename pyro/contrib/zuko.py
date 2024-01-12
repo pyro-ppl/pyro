@@ -15,8 +15,12 @@ from torch import Size, Tensor
 import pyro
 
 
-class Zuko2Pyro(pyro.distributions.TorchDistribution):
+class ZukoToPyro(pyro.distributions.TorchDistribution):
     r"""Wraps a Zuko distribution as a Pyro distribution.
+
+    If ``dist`` has an ``rsample_and_log_prob`` method, like Zuko's flows, it will be
+    used when sampling instead of ``rsample``. The returned log density will be cached
+    for later scoring.
 
     :param dist: A distribution instance.
     :type dist: torch.distributions.Distribution
@@ -31,9 +35,9 @@ class Zuko2Pyro(pyro.distributions.TorchDistribution):
         x = dist.sample((2, 3))
         log_p = dist.log_prob(x)
 
-        # Zuko2Pyro(flow()) is a pyro.distributions.Distribution
+        # ZukoToPyro(flow()) is a pyro.distributions.Distribution
 
-        dist = Zuko2Pyro(flow())
+        dist = ZukoToPyro(flow())
         x = dist((2, 3))
         log_p = dist.log_prob(x)
 
@@ -74,4 +78,4 @@ class Zuko2Pyro(pyro.distributions.TorchDistribution):
             return self.dist.log_prob(x)
 
     def expand(self, *args, **kwargs):
-        return Zuko2Pyro(self.dist.expand(*args, **kwargs))
+        return ZukoToPyro(self.dist.expand(*args, **kwargs))
