@@ -32,7 +32,7 @@ def test_ZukoToPyro(multivariate: bool, rsample_and_log_prob: bool):
             x = self.rsample(shape)
             return x, self.log_prob(x)
 
-        dist.rsample_and_log_prob = dummy
+        dist.rsample_and_log_prob = dummy.__get__(dist)
 
     # Sample
     x1 = pyro.sample("x1", ZukoToPyro(dist))
