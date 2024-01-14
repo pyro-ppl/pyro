@@ -97,6 +97,7 @@ List of Tutorials
    jit
    svi_horovod
    svi_lightning
+   svi_flow_guide
 
 .. toctree::
    :maxdepth: 1
@@ -106,7 +107,8 @@ List of Tutorials
    vae
    ss-vae
    cvae
-   normalizing_flows_i
+   normalizing_flows_intro
+   vae_flow_prior
    dmm
    air
    cevae
