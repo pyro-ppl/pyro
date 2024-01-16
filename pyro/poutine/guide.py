@@ -2,16 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC, abstractmethod
-from typing import Callable, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple, Union
 
 import torch
 
 import pyro.distributions as dist
 from pyro.distributions.torch_distribution import TorchDistributionMixin
-from pyro.poutine.runtime import Message
 from pyro.poutine.trace_messenger import TraceMessenger
 from pyro.poutine.trace_struct import Trace
 from pyro.poutine.util import prune_subsample_sites, site_is_subsample
+
+if TYPE_CHECKING:
+    from pyro.poutine.runtime import Message
 
 
 class GuideMessenger(TraceMessenger, ABC):
@@ -60,7 +62,7 @@ class GuideMessenger(TraceMessenger, ABC):
                 samples[name] = site["value"]
         return samples
 
-    def _pyro_sample(self, msg: Message) -> None:
+    def _pyro_sample(self, msg: "Message") -> None:
         if msg["is_observed"] or site_is_subsample(msg):
             return
         assert isinstance(msg["name"], str)
@@ -75,7 +77,7 @@ class GuideMessenger(TraceMessenger, ABC):
             posterior = posterior.expand(prior.batch_shape)
         msg["fn"] = posterior
 
-    def _pyro_post_sample(self, msg: Message) -> None:
+    def _pyro_post_sample(self, msg: "Message") -> None:
         # Manually apply outer plates.
         assert msg["infer"] is not None
         prior = msg["infer"].get("prior")
@@ -143,7 +145,7 @@ class GuideMessenger(TraceMessenger, ABC):
         """
         guide_trace = prune_subsample_sites(self.trace)
         model_trace = model_trace = guide_trace.copy()
-        for name, guide_site in guide_trace.nodes.items():
+        for name, guide_site in list(guide_trace.nodes.items()):
             if guide_site["type"] != "sample" or guide_site["is_observed"]:
                 del guide_trace.nodes[name]
                 continue

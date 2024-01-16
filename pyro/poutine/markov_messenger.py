@@ -3,12 +3,14 @@
 
 from collections import Counter
 from contextlib import ExitStack
-from typing import Iterable, Iterator, List, Optional, Set
+from typing import TYPE_CHECKING, Iterable, Iterator, List, Optional, Set
 
 from typing_extensions import Self
 
 from pyro.poutine.reentrant_messenger import ReentrantMessenger
-from pyro.poutine.runtime import Message
+
+if TYPE_CHECKING:
+    from pyro.poutine.runtime import Message
 
 
 class MarkovMessenger(ReentrantMessenger):
@@ -79,7 +81,7 @@ class MarkovMessenger(ReentrantMessenger):
         self._pos -= 1
         return super().__exit__(*args, **kwargs)
 
-    def _pyro_sample(self, msg: Message) -> None:
+    def _pyro_sample(self, msg: "Message") -> None:
         if msg["done"] or type(msg["fn"]).__name__ == "_Subsample":
             return
 

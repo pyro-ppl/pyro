@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
-from collections import Counter
 from typing import (
     TYPE_CHECKING,
     Callable,
@@ -29,6 +28,8 @@ _P = ParamSpec("_P")
 _T = TypeVar("_T")
 
 if TYPE_CHECKING:
+    from collections import Counter
+
     from pyro.distributions.score_parts import ScoreParts
     from pyro.distributions.torch_distribution import TorchDistributionMixin
     from pyro.poutine.indep_messenger import CondIndepStackFrame
@@ -58,7 +59,7 @@ class InferDict(TypedDict, total=False):
     _dim_to_symbol: Dict[int, str]
     _do_not_trace: bool
     _enumerate_symbol: str
-    _markov_scope: Counter
+    _markov_scope: "Counter"
     _enumerate_dim: int
     _dim_to_id: Dict[int, int]
     _markov_depth: int

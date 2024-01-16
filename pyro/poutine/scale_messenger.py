@@ -1,13 +1,15 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Union
+from typing import TYPE_CHECKING, Union
 
 import torch
 
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.runtime import Message
 from pyro.poutine.util import is_validation_enabled
+
+if TYPE_CHECKING:
+    from pyro.poutine.runtime import Message
 
 
 class ScaleMessenger(Messenger):
@@ -47,5 +49,5 @@ class ScaleMessenger(Messenger):
         super().__init__()
         self.scale = scale
 
-    def _process_message(self, msg: Message) -> None:
+    def _process_message(self, msg: "Message") -> None:
         msg["scale"] = self.scale * msg["scale"]

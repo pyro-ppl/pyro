@@ -1,13 +1,15 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 
 import torch
 
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.runtime import Message
-from pyro.poutine.trace_struct import Trace
+
+if TYPE_CHECKING:
+    from pyro.poutine.runtime import Message
+    from pyro.poutine.trace_struct import Trace
 
 
 class ReplayMessenger(Messenger):
@@ -40,7 +42,7 @@ class ReplayMessenger(Messenger):
 
     def __init__(
         self,
-        trace: Optional[Trace] = None,
+        trace: Optional["Trace"] = None,
         params: Optional[Dict[str, torch.Tensor]] = None,
     ) -> None:
         """
@@ -55,7 +57,7 @@ class ReplayMessenger(Messenger):
         self.trace = trace
         self.params = params
 
-    def _pyro_sample(self, msg: Message) -> None:
+    def _pyro_sample(self, msg: "Message") -> None:
         """
         :param msg: current message at a trace site.
 
@@ -78,7 +80,7 @@ class ReplayMessenger(Messenger):
             msg["value"] = guide_msg["value"]
             msg["infer"] = guide_msg["infer"]
 
-    def _pyro_param(self, msg: Message) -> None:
+    def _pyro_param(self, msg: "Message") -> None:
         name = msg["name"]
         if self.params is not None and name in self.params:
             assert hasattr(

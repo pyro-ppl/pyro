@@ -3,7 +3,7 @@
 
 from typing import TYPE_CHECKING, List, Optional
 
-from .. import settings
+from pyro import settings
 
 if TYPE_CHECKING:
     from pyro.distributions.distribution import Distribution

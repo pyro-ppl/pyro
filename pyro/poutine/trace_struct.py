@@ -4,6 +4,7 @@
 import sys
 from collections import OrderedDict
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -18,18 +19,21 @@ from typing import (
 )
 
 import opt_einsum
-import torch
 
-from pyro.distributions.distribution import Distribution
 from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.util import scale_and_mask
 from pyro.ops.packed import pack
-from pyro.poutine.runtime import Message
 from pyro.poutine.util import is_validation_enabled
 from pyro.util import warn_if_inf, warn_if_nan
 
+if TYPE_CHECKING:
+    import torch
 
-def allow_all_sites(name: str, site: Message) -> bool:
+    from pyro.distributions.distribution import Distribution
+    from pyro.poutine.runtime import Message
+
+
+def allow_all_sites(name: str, site: "Message") -> bool:
     return True
 
 
@@ -95,7 +99,7 @@ class Trace:
             graph_type
         )
         self.graph_type = graph_type
-        self.nodes: OrderedDict[str, Message] = OrderedDict()
+        self.nodes: OrderedDict[str, "Message"] = OrderedDict()
         self._succ: OrderedDict[str, Set[str]] = OrderedDict()
         self._pred: OrderedDict[str, Set[str]] = OrderedDict()
 
@@ -198,8 +202,8 @@ class Trace:
 
     def log_prob_sum(
         self,
-        site_filter: Callable[[str, Message], bool] = allow_all_sites,
-    ) -> Union[torch.Tensor, float]:
+        site_filter: Callable[[str, "Message"], bool] = allow_all_sites,
+    ) -> Union["torch.Tensor", float]:
         """
         Compute the site-wise log probabilities of the trace.
         Each ``log_prob`` has shape equal to the corresponding ``batch_shape``.
@@ -212,7 +216,8 @@ class Trace:
         result = 0.0
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
-                assert isinstance(site["fn"], Distribution)
+                if TYPE_CHECKING:
+                    assert isinstance(site["fn"], Distribution)
                 if "log_prob_sum" in site:
                     log_p = site["log_prob_sum"]
                 else:
@@ -242,7 +247,7 @@ class Trace:
 
     def compute_log_prob(
         self,
-        site_filter: Callable[[str, Message], bool] = allow_all_sites,
+        site_filter: Callable[[str, "Message"], bool] = allow_all_sites,
     ) -> None:
         """
         Compute the site-wise log probabilities of the trace.
@@ -252,7 +257,8 @@ class Trace:
         """
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
-                assert isinstance(site["fn"], Distribution)
+                if TYPE_CHECKING:
+                    assert isinstance(site["fn"], Distribution)
                 if "log_prob" not in site:
                     try:
                         log_p = site["fn"].log_prob(
@@ -290,7 +296,8 @@ class Trace:
         """
         for name, site in self.nodes.items():
             if site["type"] == "sample" and "score_parts" not in site:
-                assert isinstance(site["fn"], Distribution)
+                if TYPE_CHECKING:
+                    assert isinstance(site["fn"], Distribution)
                 # Note that ScoreParts overloads the multiplication operator
                 # to correctly scale each of its three parts.
                 try:
@@ -380,7 +387,7 @@ class Trace:
         """
         return list(set(self.stochastic_nodes) - set(self.reparameterized_nodes))
 
-    def iter_stochastic_nodes(self) -> Iterator[Tuple[str, Message]]:
+    def iter_stochastic_nodes(self) -> Iterator[Tuple[str, "Message"]]:
         """
         :return: an iterator over stochastic nodes in the trace.
         """
@@ -479,7 +486,8 @@ class Trace:
         rows.append(["Param Sites:"])
         for name, site in self.nodes.items():
             if site["type"] == "param":
-                assert isinstance(site["value"], torch.Tensor)
+                if TYPE_CHECKING:
+                    assert isinstance(site["value"], torch.Tensor)
                 rows.append([name, None] + [str(size) for size in site["value"].shape])
             if name == last_site:
                 break

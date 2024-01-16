@@ -1,8 +1,12 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import TYPE_CHECKING
+
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.runtime import Message
+
+if TYPE_CHECKING:
+    from pyro.poutine.runtime import Message
 
 
 class UnconditionMessenger(Messenger):
@@ -14,7 +18,7 @@ class UnconditionMessenger(Messenger):
     def __init__(self) -> None:
         super().__init__()
 
-    def _pyro_sample(self, msg: Message) -> None:
+    def _pyro_sample(self, msg: "Message") -> None:
         """
         :param msg: current message at a trace site.
 

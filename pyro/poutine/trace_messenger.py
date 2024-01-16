@@ -2,14 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import sys
-from typing import Any, Callable, Literal, Optional
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional
 
 from typing_extensions import Self
 
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.runtime import Message
 from pyro.poutine.trace_struct import Trace
 from pyro.poutine.util import site_is_subsample
+
+if TYPE_CHECKING:
+    from pyro.poutine.runtime import Message
 
 
 def identify_dense_edges(trace: Trace) -> None:
@@ -134,7 +136,7 @@ class TraceMessenger(Messenger):
         self.trace = tr
         super()._reset()
 
-    def _pyro_post_sample(self, msg: Message) -> None:
+    def _pyro_post_sample(self, msg: "Message") -> None:
         if self.param_only:
             return
         assert msg["name"] is not None
@@ -145,7 +147,7 @@ class TraceMessenger(Messenger):
             return
         self.trace.add_node(msg["name"], **msg.copy())
 
-    def _pyro_post_param(self, msg: Message) -> None:
+    def _pyro_post_param(self, msg: "Message") -> None:
         assert msg["name"] is not None
         self.trace.add_node(msg["name"], **msg.copy())
 

@@ -10,7 +10,7 @@ from typing_extensions import Self
 import pyro
 from pyro.distributions.distribution import COERCIONS
 from pyro.ops.linalg import ignore_torch_deprecation_warnings
-from pyro.poutine.runtime import _PYRO_STACK, Message
+from pyro.poutine.runtime import _PYRO_STACK
 from pyro.poutine.trace_messenger import TraceMessenger
 from pyro.poutine.util import site_is_subsample
 
@@ -29,6 +29,8 @@ except ImportError:
 
 if TYPE_CHECKING:
     from funsor.distribution import Distribution
+
+    from pyro.poutine.runtime import Message
 
 
 @singledispatch
@@ -93,14 +95,14 @@ class CollapseMessenger(TraceMessenger):
         self._block = False
         super().__init__(*args, **kwargs)
 
-    def _process_message(self, msg: Message) -> None:
+    def _process_message(self, msg: "Message") -> None:
         if self._block:
             return
         if site_is_subsample(msg):
             return
         super()._process_message(msg)
 
-    def _pyro_sample(self, msg: Message) -> None:
+    def _pyro_sample(self, msg: "Message") -> None:
         # Eagerly convert fn and value to Funsor.
         dim_to_name = {f.dim: f.name for f in msg["cond_indep_stack"]}
         dim_to_name.update(self.preserved_plates)
@@ -116,14 +118,14 @@ class CollapseMessenger(TraceMessenger):
         msg["done"] = True
         msg["stop"] = True
 
-    def _pyro_post_sample(self, msg: Message) -> None:
+    def _pyro_post_sample(self, msg: "Message") -> None:
         if self._block:
             return
         if site_is_subsample(msg):
             return
         super()._pyro_post_sample(msg)
 
-    def _pyro_barrier(self, msg: Message) -> None:
+    def _pyro_barrier(self, msg: "Message") -> None:
         # Get log_prob and record factor.
         name, log_prob, log_joint, sampled_vars = self._get_log_prob()
         self._block = True

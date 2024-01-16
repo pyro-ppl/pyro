@@ -2,15 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-from typing import Callable, Dict, Set, Union
+from typing import TYPE_CHECKING, Callable, Dict, Set, Union
 
 from typing_extensions import Self
 
 from pyro import params
 from pyro.distributions.distribution import Distribution
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.runtime import Message
 from pyro.poutine.util import is_validation_enabled
+
+if TYPE_CHECKING:
+    from pyro.poutine.runtime import Message
 
 
 class LiftMessenger(Messenger):
@@ -55,7 +57,7 @@ class LiftMessenger(Messenger):
         """
         super().__init__()
         self.prior = prior
-        self._samples_cache: Dict[str, Message] = {}
+        self._samples_cache: Dict[str, "Message"] = {}
 
     def __enter__(self) -> Self:
         self._samples_cache = {}
@@ -77,10 +79,10 @@ class LiftMessenger(Messenger):
                 )
         return super().__exit__(*args, **kwargs)
 
-    def _pyro_sample(self, msg: Message) -> None:
+    def _pyro_sample(self, msg: "Message") -> None:
         return None
 
-    def _pyro_param(self, msg: Message) -> None:
+    def _pyro_param(self, msg: "Message") -> None:
         """
         Overrides the `pyro.param` call with samples sampled from the
         distribution specified in the prior. The prior can be a
