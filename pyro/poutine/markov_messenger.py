@@ -53,16 +53,16 @@ class MarkovMessenger(ReentrantMessenger):
             raise NotImplementedError(
                 "vectorized markov not yet implemented, try setting name to None"
             )
-        self._iterable: Optional[Iterable] = None
+        self._iterable: Optional[Iterable[int]] = None
         self._pos = -1
         self._stack: List[Set[str]] = []
         super().__init__()
 
-    def generator(self, iterable: Iterable) -> Self:
+    def generator(self, iterable: Iterable[int]) -> Self:
         self._iterable = iterable
         return self
 
-    def __iter__(self) -> Iterator:
+    def __iter__(self) -> Iterator[int]:
         with ExitStack() as stack:
             assert self._iterable is not None
             for value in self._iterable:

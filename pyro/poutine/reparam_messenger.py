@@ -16,12 +16,13 @@ from typing import (
 import torch
 from typing_extensions import ParamSpec
 
-from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.runtime import Message, effectful
+from pyro.poutine.runtime import effectful
 
 if TYPE_CHECKING:
+    from pyro.distributions.torch_distribution import TorchDistributionMixin
     from pyro.infer.reparam.reparam import Reparam
+    from pyro.poutine.runtime import Message
 
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
@@ -59,7 +60,7 @@ class ReparamMessenger(Messenger):
 
     def __init__(
         self,
-        config: Union[Dict[str, "Reparam"], Callable[[Message], Optional["Reparam"]]],
+        config: Union[Dict[str, "Reparam"], Callable[["Message"], Optional["Reparam"]]],
     ) -> None:
         super().__init__()
         assert isinstance(config, dict) or callable(config)
@@ -69,11 +70,12 @@ class ReparamMessenger(Messenger):
     def __call__(self, fn: Callable[_P, _T]) -> Callable[_P, _T]:
         return ReparamHandler(self, fn)
 
-    def _pyro_sample(self, msg: Message) -> None:
+    def _pyro_sample(self, msg: "Message") -> None:
         if type(msg["fn"]).__name__ == "_Subsample":
             return
         assert msg["name"] is not None
-        assert isinstance(msg["fn"], TorchDistributionMixin)
+        if TYPE_CHECKING:
+            assert isinstance(msg["fn"], TorchDistributionMixin)
         if isinstance(self.config, dict):
             reparam = self.config.get(msg["name"])
         else:
