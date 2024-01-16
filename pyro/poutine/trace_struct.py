@@ -478,8 +478,8 @@ class Trace:
 
         rows.append(["Param Sites:"])
         for name, site in self.nodes.items():
-            assert isinstance(site["value"], torch.Tensor)
             if site["type"] == "param":
+                assert isinstance(site["value"], torch.Tensor)
                 rows.append([name, None] + [str(size) for size in site["value"].shape])
             if name == last_site:
                 break
