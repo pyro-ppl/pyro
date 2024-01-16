@@ -162,7 +162,7 @@ class TraceHandler:
     We can also use this for visualization.
     """
 
-    def __init__(self, msngr: TraceMessenger, fn: Callable):
+    def __init__(self, msngr: TraceMessenger, fn: Callable) -> None:
         self.fn = fn
         self.msngr = msngr
 

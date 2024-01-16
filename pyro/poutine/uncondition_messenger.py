@@ -11,7 +11,7 @@ class UnconditionMessenger(Messenger):
     distribution, ignoring observations.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     def _pyro_sample(self, msg: Message) -> None:

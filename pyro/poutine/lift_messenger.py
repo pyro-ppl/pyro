@@ -118,8 +118,7 @@ class LiftMessenger(Messenger):
             msg["fn"] = self.prior
             msg["args"] = msg["args"][1:]
         else:
-            # otherwise leave as is
-            return None  # type: ignore[unreachable]
+            raise TypeError("unreachable")
         msg["type"] = "sample"
         if name in self._samples_cache:
             # Multiple pyro.param statements with the same

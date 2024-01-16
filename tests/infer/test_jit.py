@@ -28,6 +28,7 @@ from pyro.infer import (
     infer_discrete,
 )
 from pyro.optim import Adam
+from pyro.poutine.indep_messenger import CondIndepStackFrame
 from pyro.util import ignore_jit_warnings
 from tests.common import assert_close, assert_equal
 
@@ -582,6 +583,25 @@ def test_infer_discrete(temperature, length):
         assert state.shape == jit_state.shape
         if temperature == 0:
             assert_equal(state, jit_state)
+
+
+@pytest.mark.parametrize(
+    "x,y",
+    [
+        (
+            CondIndepStackFrame("a", -1, torch.tensor(2000), 2),
+            CondIndepStackFrame("a", -1, 2000, 2),
+        ),
+        (
+            CondIndepStackFrame("a", -1, 1, 2),
+            CondIndepStackFrame("a", -1, torch.tensor(1), 2),
+        ),
+    ],
+)
+def test_cond_indep_equality(x, y):
+    assert x == y
+    assert not x != y
+    assert hash(x) == hash(y)
 
 
 def test_jit_arange_workaround():

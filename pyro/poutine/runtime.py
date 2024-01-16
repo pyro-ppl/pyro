@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
+from collections import Counter
 from typing import (
     TYPE_CHECKING,
     Callable,
@@ -57,7 +58,7 @@ class InferDict(TypedDict, total=False):
     _dim_to_symbol: Dict[int, str]
     _do_not_trace: bool
     _enumerate_symbol: str
-    _markov_scope: Optional[Dict[str, int]]
+    _markov_scope: Counter
     _enumerate_dim: int
     _dim_to_id: Dict[int, int]
     _markov_depth: int

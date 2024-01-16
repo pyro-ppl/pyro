@@ -1,36 +1,43 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import TYPE_CHECKING, List, Optional
+
 from .. import settings
+
+if TYPE_CHECKING:
+    from pyro.distributions.distribution import Distribution
+    from pyro.poutine.runtime import Message
+    from pyro.poutine.trace_struct import Trace
 
 _VALIDATION_ENABLED = __debug__
 settings.register("validate_poutine", __name__, "_VALIDATION_ENABLED")
 
 
-def enable_validation(is_validate):
+def enable_validation(is_validate: bool) -> None:
     global _VALIDATION_ENABLED
     _VALIDATION_ENABLED = is_validate
 
 
-def is_validation_enabled():
+def is_validation_enabled() -> bool:
     return _VALIDATION_ENABLED
 
 
-def site_is_subsample(site):
+def site_is_subsample(site: "Message") -> bool:
     """
     Determines whether a trace site originated from a subsample statement inside an `plate`.
     """
     return site["type"] == "sample" and type(site["fn"]).__name__ == "_Subsample"
 
 
-def site_is_factor(site):
+def site_is_factor(site: "Message") -> bool:
     """
     Determines whether a trace site originated from a factor statement.
     """
     return site["type"] == "sample" and type(site["fn"]).__name__ == "Unit"
 
 
-def prune_subsample_sites(trace):
+def prune_subsample_sites(trace: "Trace") -> "Trace":
     """
     Copies and removes all subsample sites from a trace.
     """
@@ -41,7 +48,9 @@ def prune_subsample_sites(trace):
     return trace
 
 
-def enum_extend(trace, msg, num_samples=None):
+def enum_extend(
+    trace: "Trace", msg: "Message", num_samples: Optional[int] = None
+) -> List["Trace"]:
     """
     :param trace: a partial trace
     :param msg: the message at a Pyro primitive site
@@ -57,18 +66,23 @@ def enum_extend(trace, msg, num_samples=None):
         num_samples = -1
 
     extended_traces = []
+    assert msg["name"] is not None
+    if TYPE_CHECKING:
+        assert isinstance(msg["fn"], Distribution)
     for i, s in enumerate(msg["fn"].enumerate_support(*msg["args"], **msg["kwargs"])):
         if i > num_samples and num_samples >= 0:
             break
         msg_copy = msg.copy()
-        msg_copy.update(value=s)
+        msg_copy.update(value=s)  # type: ignore[call-arg]
         tr_cp = trace.copy()
         tr_cp.add_node(msg["name"], **msg_copy)
         extended_traces.append(tr_cp)
     return extended_traces
 
 
-def mc_extend(trace, msg, num_samples=None):
+def mc_extend(
+    trace: "Trace", msg: "Message", num_samples: Optional[int] = None
+) -> List["Trace"]:
     """
     :param trace: a partial trace
     :param msg: the message at a Pyro primitive site
@@ -88,12 +102,13 @@ def mc_extend(trace, msg, num_samples=None):
         msg_copy = msg.copy()
         msg_copy["value"] = msg_copy["fn"](*msg_copy["args"], **msg_copy["kwargs"])
         tr_cp = trace.copy()
+        assert msg_copy["name"] is not None
         tr_cp.add_node(msg_copy["name"], **msg_copy)
         extended_traces.append(tr_cp)
     return extended_traces
 
 
-def discrete_escape(trace, msg):
+def discrete_escape(trace: "Trace", msg: "Message") -> bool:
     """
     :param trace: a partial trace
     :param msg: the message at a Pyro primitive site
@@ -105,14 +120,15 @@ def discrete_escape(trace, msg):
     Subroutine for integrating out discrete variables for variance reduction.
     """
     return (
-        (msg["type"] == "sample")
-        and (not msg["is_observed"])
-        and (msg["name"] not in trace)
-        and (getattr(msg["fn"], "has_enumerate_support", False))
+        msg["type"] == "sample"
+        and not msg["is_observed"]
+        and msg["name"] is not None
+        and msg["name"] not in trace
+        and getattr(msg["fn"], "has_enumerate_support", False)
     )
 
 
-def all_escape(trace, msg):
+def all_escape(trace: "Trace", msg: "Message") -> bool:
     """
     :param trace: a partial trace
     :param msg: the message at a Pyro primitive site
@@ -124,7 +140,8 @@ def all_escape(trace, msg):
     Subroutine for approximately integrating out variables for variance reduction.
     """
     return (
-        (msg["type"] == "sample")
-        and (not msg["is_observed"])
-        and (msg["name"] not in trace)
+        msg["type"] == "sample"
+        and not msg["is_observed"]
+        and msg["name"] is not None
+        and msg["name"] not in trace
     )

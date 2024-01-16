@@ -1,6 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import numbers
 from typing import Iterator, NamedTuple, Optional, Tuple
 
 import torch
@@ -8,6 +9,7 @@ from typing_extensions import Self
 
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.runtime import _DIM_ALLOCATOR, Message
+from pyro.util import ignore_jit_warnings
 
 
 class CondIndepStackFrame(NamedTuple):
@@ -22,7 +24,11 @@ class CondIndepStackFrame(NamedTuple):
         return self.dim is not None
 
     def _key(self) -> Tuple[str, Optional[int], int, int]:
-        return self.name, self.dim, self.size, self.counter
+        with ignore_jit_warnings(["Converting a tensor to a Python number"]):
+            size = (
+                self.size.item() if isinstance(self.size, torch.Tensor) else self.size  # type: ignore[attr-defined, unreachable]
+            )
+            return self.name, self.dim, size, self.counter
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, CondIndepStackFrame):
@@ -65,7 +71,7 @@ class IndepMessenger(Messenger):
         size: int,
         dim: Optional[int] = None,
         device: Optional[str] = None,
-    ):
+    ) -> None:
         if not torch._C._get_tracing_state() and size == 0:
             raise ZeroDivisionError("size cannot be zero")
 
@@ -111,10 +117,11 @@ class IndepMessenger(Messenger):
 
         self._vectorized = False
         self.dim = None
-        for i in self.indices:
-            self.next_context()
-            with self:
-                yield i
+        with ignore_jit_warnings([("Iterating over a tensor", RuntimeWarning)]):
+            for i in self.indices:
+                self.next_context()
+                with self:
+                    yield i if isinstance(i, numbers.Number) else i.item()
 
     def _reset(self) -> None:
         if self._vectorized:

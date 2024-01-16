@@ -2,9 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections import Counter
-from contextlib import ExitStack  # python 3
+from contextlib import ExitStack
+from typing import Iterable, Iterator, List, Optional, Set
 
-from .reentrant_messenger import ReentrantMessenger
+from typing_extensions import Self
+
+from pyro.poutine.reentrant_messenger import ReentrantMessenger
+from pyro.poutine.runtime import Message
 
 
 class MarkovMessenger(ReentrantMessenger):
@@ -27,7 +31,13 @@ class MarkovMessenger(ReentrantMessenger):
         Interface stub, behavior not yet implemented.
     """
 
-    def __init__(self, history=1, keep=False, dim=None, name=None):
+    def __init__(
+        self,
+        history: int = 1,
+        keep: bool = False,
+        dim: Optional[int] = None,
+        name: Optional[str] = None,
+    ) -> None:
         assert history >= 0
         self.history = history
         self.keep = keep
@@ -41,34 +51,35 @@ class MarkovMessenger(ReentrantMessenger):
             raise NotImplementedError(
                 "vectorized markov not yet implemented, try setting name to None"
             )
-        self._iterable = None
+        self._iterable: Optional[Iterable] = None
         self._pos = -1
-        self._stack = []
+        self._stack: List[Set[str]] = []
         super().__init__()
 
-    def generator(self, iterable):
+    def generator(self, iterable: Iterable) -> Self:
         self._iterable = iterable
         return self
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator:
         with ExitStack() as stack:
+            assert self._iterable is not None
             for value in self._iterable:
                 stack.enter_context(self)
                 yield value
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         self._pos += 1
         if len(self._stack) <= self._pos:
             self._stack.append(set())
         return super().__enter__()
 
-    def __exit__(self, *args, **kwargs):
+    def __exit__(self, *args, **kwargs) -> None:
         if not self.keep:
             self._stack.pop()
         self._pos -= 1
         return super().__exit__(*args, **kwargs)
 
-    def _pyro_sample(self, msg):
+    def _pyro_sample(self, msg: Message) -> None:
         if msg["done"] or type(msg["fn"]).__name__ == "_Subsample":
             return
 
@@ -76,6 +87,8 @@ class MarkovMessenger(ReentrantMessenger):
         # go out of scope when any one of their markov contexts exits.
         # This accounting can be done by users of these fields,
         # e.g. EnumMessenger.
+        assert msg["name"] is not None
+        assert msg["infer"] is not None
         infer = msg["infer"]
         scope = infer.setdefault(
             "_markov_scope", Counter()

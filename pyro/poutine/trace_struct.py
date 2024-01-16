@@ -465,17 +465,20 @@ class Trace:
                     )
                 ).with_traceback(traceback) from e
 
-    def format_shapes(self, title="Trace Shapes:", last_site=None):
+    def format_shapes(
+        self, title: str = "Trace Shapes:", last_site: Optional[str] = None
+    ) -> str:
         """
         Returns a string showing a table of the shapes of all sites in the
         trace.
         """
         if not self.nodes:
             return title
-        rows = [[title]]
+        rows: List[List[Optional[str]]] = [[title]]
 
         rows.append(["Param Sites:"])
         for name, site in self.nodes.items():
+            assert isinstance(site["value"], torch.Tensor)
             if site["type"] == "param":
                 rows.append([name, None] + [str(size) for size in site["value"].shape])
             if name == last_site:
@@ -520,7 +523,7 @@ class Trace:
         return _format_table(rows)
 
 
-def _format_table(rows):
+def _format_table(rows: List[List[Optional[str]]]) -> str:
     """
     Formats a right justified table using None as column separator.
     """
@@ -538,8 +541,9 @@ def _format_table(rows):
             column_widths[j] = max(column_widths[j], widths[j])
 
     # justify columns
-    for i, row in enumerate(rows):
-        cols = [[], [], []]
+    justified_rows: List[List[str]] = []
+    for row in rows:
+        cols: List[List[str]] = [[], [], []]
         j = 0
         for cell in row:
             if cell is None:
@@ -552,16 +556,16 @@ def _format_table(rows):
             else col + [""] * (width - len(col))
             for width, col, direction in zip(column_widths, cols, "rrl")
         ]
-        rows[i] = sum(cols, [])
+        justified_rows.append(sum(cols, []))
 
     # compute cell widths
-    cell_widths = [0] * len(rows[0])
-    for row in rows:
-        for j, cell in enumerate(row):
+    cell_widths = [0] * len(justified_rows[0])
+    for justified_row in justified_rows:
+        for j, cell in enumerate(justified_row):
             cell_widths[j] = max(cell_widths[j], len(cell))
 
     # justify cells
     return "\n".join(
-        " ".join(cell.rjust(width) for cell, width in zip(row, cell_widths))
-        for row in rows
+        " ".join(cell.rjust(width) for cell, width in zip(justified_row, cell_widths))
+        for justified_row in justified_rows
     )

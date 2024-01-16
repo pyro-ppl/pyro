@@ -143,11 +143,12 @@ class GuideMessenger(TraceMessenger, ABC):
         """
         guide_trace = prune_subsample_sites(self.trace)
         model_trace = model_trace = guide_trace.copy()
-        for name, guide_site in list(guide_trace.nodes.items()):
+        for name, guide_site in guide_trace.nodes.items():
             if guide_site["type"] != "sample" or guide_site["is_observed"]:
                 del guide_trace.nodes[name]
                 continue
             model_site = model_trace.nodes[name].copy()
+            assert guide_site["infer"] is not None
             model_site["fn"] = guide_site["infer"]["prior"]
             model_trace.nodes[name] = model_site
         return model_trace, guide_trace
