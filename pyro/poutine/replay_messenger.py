@@ -3,11 +3,11 @@
 
 from typing import TYPE_CHECKING, Dict, Optional
 
-import torch
-
 from pyro.poutine.messenger import Messenger
 
 if TYPE_CHECKING:
+    import torch
+
     from pyro.poutine.runtime import Message
     from pyro.poutine.trace_struct import Trace
 
@@ -43,7 +43,7 @@ class ReplayMessenger(Messenger):
     def __init__(
         self,
         trace: Optional["Trace"] = None,
-        params: Optional[Dict[str, torch.Tensor]] = None,
+        params: Optional[Dict[str, "torch.Tensor"]] = None,
     ) -> None:
         """
         :param trace: a trace whose values should be reused
