@@ -1,7 +1,6 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from collections import Counter
 from typing import Any, Dict, List, Optional
 
 import torch
@@ -178,16 +177,14 @@ class EnumMessenger(Messenger):
         assert isinstance(msg["name"], str)
         assert msg["infer"] is not None
         # Compute upstream dims in scope; these are unsafe to use for this site's target_dim.
-        scope = msg["infer"].setdefault(
-            "_markov_scope", Counter()
-        )  # site name -> markov depth
+        scope = msg["infer"].get("_markov_scope")  # site name -> markov depth
         param_dims = _ENUM_ALLOCATOR.dim_to_id.copy()  # enum dim -> unique id
-        for name, depth in scope.items():
-            if (
-                self._markov_depths[name] == depth
-            ):  # hide sites whose markov context has exited
-                param_dims.update(self._value_dims[name])
-        if scope:
+        if scope is not None:
+            for name, depth in scope.items():
+                if (
+                    self._markov_depths[name] == depth
+                ):  # hide sites whose markov context has exited
+                    param_dims.update(self._value_dims[name])
             self._markov_depths[msg["name"]] = msg["infer"]["_markov_depth"]
         self._param_dims[msg["name"]] = param_dims
         if msg["is_observed"] or msg["infer"].get("enumerate") != "parallel":
