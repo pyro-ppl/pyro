@@ -1,12 +1,14 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.runtime import Message
 from pyro.util import ignore_jit_warnings
+
+if TYPE_CHECKING:
+    from pyro.poutine.runtime import Message
 
 
 class BroadcastMessenger(Messenger):
@@ -41,7 +43,7 @@ class BroadcastMessenger(Messenger):
 
     @staticmethod
     @ignore_jit_warnings(["Converting a tensor to a Python boolean"])
-    def _pyro_sample(msg: Message) -> None:
+    def _pyro_sample(msg: "Message") -> None:
         """
         :param msg: current message at a trace site.
         """

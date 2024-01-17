@@ -165,10 +165,10 @@ class SubsampleMessenger(IndepMessenger):
             full_size=self.size,  # used for param initialization
         )
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
-        if isinstance(self.size, torch.Tensor) or isinstance(
-            self.subsample_size, torch.Tensor
+        if isinstance(self.size, torch.Tensor) or isinstance(  # type: ignore[unreachable]
+            self.subsample_size, torch.Tensor  # type: ignore[unreachable]
         ):
-            if not isinstance(msg["scale"], torch.Tensor):
+            if not isinstance(msg["scale"], torch.Tensor):  # type: ignore[unreachable]
                 with ignore_jit_warnings():
                     msg["scale"] = torch.tensor(msg["scale"])
         msg["scale"] = msg["scale"] * self.size / self.subsample_size

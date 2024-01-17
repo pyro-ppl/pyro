@@ -4,6 +4,7 @@
 import sys
 from collections import OrderedDict
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
@@ -18,18 +19,21 @@ from typing import (
 )
 
 import opt_einsum
-import torch
 
-from pyro.distributions.distribution import Distribution
 from pyro.distributions.score_parts import ScoreParts
 from pyro.distributions.util import scale_and_mask
 from pyro.ops.packed import pack
-from pyro.poutine.runtime import Message
 from pyro.poutine.util import is_validation_enabled
 from pyro.util import warn_if_inf, warn_if_nan
 
+if TYPE_CHECKING:
+    import torch
 
-def allow_all_sites(name: str, site: Message) -> bool:
+    from pyro.distributions.distribution import Distribution
+    from pyro.poutine.runtime import Message
+
+
+def allow_all_sites(name: str, site: "Message") -> bool:
     return True
 
 
@@ -95,7 +99,7 @@ class Trace:
             graph_type
         )
         self.graph_type = graph_type
-        self.nodes: OrderedDict[str, Message] = OrderedDict()
+        self.nodes: OrderedDict[str, "Message"] = OrderedDict()
         self._succ: OrderedDict[str, Set[str]] = OrderedDict()
         self._pred: OrderedDict[str, Set[str]] = OrderedDict()
 
@@ -198,8 +202,8 @@ class Trace:
 
     def log_prob_sum(
         self,
-        site_filter: Callable[[str, Message], bool] = allow_all_sites,
-    ) -> Union[torch.Tensor, float]:
+        site_filter: Callable[[str, "Message"], bool] = allow_all_sites,
+    ) -> Union["torch.Tensor", float]:
         """
         Compute the site-wise log probabilities of the trace.
         Each ``log_prob`` has shape equal to the corresponding ``batch_shape``.
@@ -212,7 +216,8 @@ class Trace:
         result = 0.0
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
-                assert isinstance(site["fn"], Distribution)
+                if TYPE_CHECKING:
+                    assert isinstance(site["fn"], Distribution)
                 if "log_prob_sum" in site:
                     log_p = site["log_prob_sum"]
                 else:
@@ -242,7 +247,7 @@ class Trace:
 
     def compute_log_prob(
         self,
-        site_filter: Callable[[str, Message], bool] = allow_all_sites,
+        site_filter: Callable[[str, "Message"], bool] = allow_all_sites,
     ) -> None:
         """
         Compute the site-wise log probabilities of the trace.
@@ -252,7 +257,8 @@ class Trace:
         """
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
-                assert isinstance(site["fn"], Distribution)
+                if TYPE_CHECKING:
+                    assert isinstance(site["fn"], Distribution)
                 if "log_prob" not in site:
                     try:
                         log_p = site["fn"].log_prob(
@@ -290,7 +296,8 @@ class Trace:
         """
         for name, site in self.nodes.items():
             if site["type"] == "sample" and "score_parts" not in site:
-                assert isinstance(site["fn"], Distribution)
+                if TYPE_CHECKING:
+                    assert isinstance(site["fn"], Distribution)
                 # Note that ScoreParts overloads the multiplication operator
                 # to correctly scale each of its three parts.
                 try:
@@ -380,7 +387,7 @@ class Trace:
         """
         return list(set(self.stochastic_nodes) - set(self.reparameterized_nodes))
 
-    def iter_stochastic_nodes(self) -> Iterator[Tuple[str, Message]]:
+    def iter_stochastic_nodes(self) -> Iterator[Tuple[str, "Message"]]:
         """
         :return: an iterator over stochastic nodes in the trace.
         """
@@ -465,18 +472,22 @@ class Trace:
                     )
                 ).with_traceback(traceback) from e
 
-    def format_shapes(self, title="Trace Shapes:", last_site=None):
+    def format_shapes(
+        self, title: str = "Trace Shapes:", last_site: Optional[str] = None
+    ) -> str:
         """
         Returns a string showing a table of the shapes of all sites in the
         trace.
         """
         if not self.nodes:
             return title
-        rows = [[title]]
+        rows: List[List[Optional[str]]] = [[title]]
 
         rows.append(["Param Sites:"])
         for name, site in self.nodes.items():
             if site["type"] == "param":
+                if TYPE_CHECKING:
+                    assert isinstance(site["value"], torch.Tensor)
                 rows.append([name, None] + [str(size) for size in site["value"].shape])
             if name == last_site:
                 break
@@ -520,7 +531,7 @@ class Trace:
         return _format_table(rows)
 
 
-def _format_table(rows):
+def _format_table(rows: List[List[Optional[str]]]) -> str:
     """
     Formats a right justified table using None as column separator.
     """
@@ -538,8 +549,9 @@ def _format_table(rows):
             column_widths[j] = max(column_widths[j], widths[j])
 
     # justify columns
-    for i, row in enumerate(rows):
-        cols = [[], [], []]
+    justified_rows: List[List[str]] = []
+    for row in rows:
+        cols: List[List[str]] = [[], [], []]
         j = 0
         for cell in row:
             if cell is None:
@@ -552,16 +564,16 @@ def _format_table(rows):
             else col + [""] * (width - len(col))
             for width, col, direction in zip(column_widths, cols, "rrl")
         ]
-        rows[i] = sum(cols, [])
+        justified_rows.append(sum(cols, []))
 
     # compute cell widths
-    cell_widths = [0] * len(rows[0])
-    for row in rows:
-        for j, cell in enumerate(row):
+    cell_widths = [0] * len(justified_rows[0])
+    for justified_row in justified_rows:
+        for j, cell in enumerate(justified_row):
             cell_widths[j] = max(cell_widths[j], len(cell))
 
     # justify cells
     return "\n".join(
-        " ".join(cell.rjust(width) for cell, width in zip(row, cell_widths))
-        for row in rows
+        " ".join(cell.rjust(width) for cell, width in zip(justified_row, cell_widths))
+        for justified_row in justified_rows
     )

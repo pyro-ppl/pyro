@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import torch
 from torch.distributions.utils import lazy_property
@@ -111,7 +111,7 @@ class Gaussian:
         precision = self.precision[..., perm][..., perm, :]
         return Gaussian(self.log_normalizer, info_vec, precision)
 
-    def __add__(self, other: "Gaussian") -> "Gaussian":
+    def __add__(self, other: Union["Gaussian", int, float, torch.Tensor]) -> "Gaussian":
         """
         Adds two Gaussians in log-density space.
         """
@@ -126,7 +126,7 @@ class Gaussian:
             return Gaussian(self.log_normalizer + other, self.info_vec, self.precision)
         raise ValueError("Unsupported type: {}".format(type(other)))
 
-    def __sub__(self, other: "Gaussian") -> "Gaussian":
+    def __sub__(self, other: Union["Gaussian", int, float, torch.Tensor]) -> "Gaussian":
         if isinstance(other, (int, float, torch.Tensor)):
             return Gaussian(self.log_normalizer - other, self.info_vec, self.precision)
         raise ValueError("Unsupported type: {}".format(type(other)))

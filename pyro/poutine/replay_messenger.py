@@ -1,7 +1,15 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from .messenger import Messenger
+from typing import TYPE_CHECKING, Dict, Optional
+
+from pyro.poutine.messenger import Messenger
+
+if TYPE_CHECKING:
+    import torch
+
+    from pyro.poutine.runtime import Message
+    from pyro.poutine.trace_struct import Trace
 
 
 class ReplayMessenger(Messenger):
@@ -32,7 +40,11 @@ class ReplayMessenger(Messenger):
     :returns: a stochastic function decorated with a :class:`~pyro.poutine.replay_messenger.ReplayMessenger`
     """
 
-    def __init__(self, trace=None, params=None):
+    def __init__(
+        self,
+        trace: Optional["Trace"] = None,
+        params: Optional[Dict[str, "torch.Tensor"]] = None,
+    ) -> None:
         """
         :param trace: a trace whose values should be reused
 
@@ -45,7 +57,7 @@ class ReplayMessenger(Messenger):
         self.trace = trace
         self.params = params
 
-    def _pyro_sample(self, msg):
+    def _pyro_sample(self, msg: "Message") -> None:
         """
         :param msg: current message at a trace site.
 
@@ -56,6 +68,7 @@ class ReplayMessenger(Messenger):
         At a sample site that does not appear in self.trace,
         reverts to default Messenger._pyro_sample behavior with no additional side effects.
         """
+        assert msg["name"] is not None
         name = msg["name"]
         if self.trace is not None and name in self.trace:
             guide_msg = self.trace.nodes[name]
@@ -66,9 +79,8 @@ class ReplayMessenger(Messenger):
             msg["done"] = True
             msg["value"] = guide_msg["value"]
             msg["infer"] = guide_msg["infer"]
-        return None
 
-    def _pyro_param(self, msg):
+    def _pyro_param(self, msg: "Message") -> None:
         name = msg["name"]
         if self.params is not None and name in self.params:
             assert hasattr(
@@ -76,4 +88,3 @@ class ReplayMessenger(Messenger):
             ), "param {} must be constrained value".format(name)
             msg["done"] = True
             msg["value"] = self.params[name]
-        return None

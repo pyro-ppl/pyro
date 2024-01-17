@@ -1,13 +1,15 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Dict, Union
+from typing import TYPE_CHECKING, Dict, Union
 
 import torch
 
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.runtime import Message
 from pyro.poutine.trace_struct import Trace
+
+if TYPE_CHECKING:
+    from pyro.poutine.runtime import Message
 
 
 class ConditionMessenger(Messenger):
@@ -46,7 +48,7 @@ class ConditionMessenger(Messenger):
         super().__init__()
         self.data = data
 
-    def _pyro_sample(self, msg: Message) -> None:
+    def _pyro_sample(self, msg: "Message") -> None:
         """
         :param msg: current message at a trace site.
         :returns: a sample from the stochastic function at the site.

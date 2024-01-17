@@ -2,15 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-from typing import Dict, Set
+from typing import TYPE_CHECKING, Dict, Set
 
-import torch
 from typing_extensions import Self
 
 from pyro import params
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.runtime import Message
 from pyro.poutine.util import is_validation_enabled
+
+if TYPE_CHECKING:
+    import torch
+
+    from pyro.poutine.runtime import Message
 
 
 class SubstituteMessenger(Messenger):
@@ -32,14 +35,14 @@ class SubstituteMessenger(Messenger):
     :returns: ``fn`` decorated with a :class:`~pyro.poutine.substitute_messenger.SubstituteMessenger`
     """
 
-    def __init__(self, data: Dict[str, torch.Tensor]) -> None:
+    def __init__(self, data: Dict[str, "torch.Tensor"]) -> None:
         """
         :param data: values for the parameters.
         Constructor
         """
         super().__init__()
         self.data = data
-        self._data_cache: Dict[str, Message] = {}
+        self._data_cache: Dict[str, "Message"] = {}
 
     def __enter__(self) -> Self:
         self._data_cache = {}
@@ -61,10 +64,10 @@ class SubstituteMessenger(Messenger):
                 )
         return super().__exit__(*args, **kwargs)
 
-    def _pyro_sample(self, msg: Message) -> None:
+    def _pyro_sample(self, msg: "Message") -> None:
         return None
 
-    def _pyro_param(self, msg: Message) -> None:
+    def _pyro_param(self, msg: "Message") -> None:
         """
         Overrides the `pyro.param` with substituted values.
         If the param name does not match the name the keys in `data`,

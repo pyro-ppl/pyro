@@ -51,6 +51,9 @@ in just a few lines of code::
 
 import collections
 import functools
+from typing import Callable, Iterable, Optional, TypeVar, Union, overload
+
+from typing_extensions import ParamSpec
 
 from pyro.poutine import util
 
@@ -73,6 +76,9 @@ from .seed_messenger import SeedMessenger
 from .substitute_messenger import SubstituteMessenger
 from .trace_messenger import TraceMessenger
 from .uncondition_messenger import UnconditionMessenger
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
 
 ############################################
 # Begin primitive operations
@@ -276,7 +282,46 @@ def queue(
     return wrapper(fn) if fn is not None else wrapper
 
 
-def markov(fn=None, history=1, keep=False, dim=None, name=None):
+@overload
+def markov(
+    fn: None = ...,
+    history: int = 1,
+    keep: bool = False,
+    dim: Optional[int] = None,
+    name: Optional[str] = None,
+) -> MarkovMessenger:
+    ...
+
+
+@overload
+def markov(
+    fn: Iterable[int] = ...,
+    history: int = 1,
+    keep: bool = False,
+    dim: Optional[int] = None,
+    name: Optional[str] = None,
+) -> MarkovMessenger:
+    ...
+
+
+@overload
+def markov(
+    fn: Callable[_P, _T] = ...,
+    history: int = 1,
+    keep: bool = False,
+    dim: Optional[int] = None,
+    name: Optional[str] = None,
+) -> Callable[_P, _T]:
+    ...
+
+
+def markov(
+    fn: Optional[Union[Iterable[int], Callable]] = None,
+    history: int = 1,
+    keep: bool = False,
+    dim: Optional[int] = None,
+    name: Optional[str] = None,
+) -> Union[MarkovMessenger, Callable]:
     """
     Markov dependency declaration.
 

@@ -2,16 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC, abstractmethod
-from typing import Callable, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple, Union
 
 import torch
 
 import pyro.distributions as dist
-from pyro.distributions.torch_distribution import TorchDistributionMixin
-from pyro.poutine.runtime import Message
 from pyro.poutine.trace_messenger import TraceMessenger
 from pyro.poutine.trace_struct import Trace
 from pyro.poutine.util import prune_subsample_sites, site_is_subsample
+
+if TYPE_CHECKING:
+    from pyro.distributions.torch_distribution import TorchDistributionMixin
+    from pyro.poutine.runtime import Message
 
 
 class GuideMessenger(TraceMessenger, ABC):
@@ -60,12 +62,13 @@ class GuideMessenger(TraceMessenger, ABC):
                 samples[name] = site["value"]
         return samples
 
-    def _pyro_sample(self, msg: Message) -> None:
+    def _pyro_sample(self, msg: "Message") -> None:
         if msg["is_observed"] or site_is_subsample(msg):
             return
-        assert isinstance(msg["name"], str)
-        assert isinstance(msg["fn"], TorchDistributionMixin)
-        assert msg["infer"] is not None
+        if TYPE_CHECKING:
+            assert isinstance(msg["name"], str)
+            assert isinstance(msg["fn"], TorchDistributionMixin)
+            assert msg["infer"] is not None
         prior = msg["fn"]
         msg["infer"]["prior"] = prior
         posterior = self.get_posterior(msg["name"], prior)
@@ -75,20 +78,21 @@ class GuideMessenger(TraceMessenger, ABC):
             posterior = posterior.expand(prior.batch_shape)
         msg["fn"] = posterior
 
-    def _pyro_post_sample(self, msg: Message) -> None:
+    def _pyro_post_sample(self, msg: "Message") -> None:
         # Manually apply outer plates.
         assert msg["infer"] is not None
         prior = msg["infer"].get("prior")
         if prior is not None:
-            assert isinstance(msg["fn"], TorchDistributionMixin)
+            if TYPE_CHECKING:
+                assert isinstance(msg["fn"], TorchDistributionMixin)
             if prior.batch_shape != msg["fn"].batch_shape:
                 msg["infer"]["prior"] = prior.expand(msg["fn"].batch_shape)
         return super()._pyro_post_sample(msg)
 
     @abstractmethod
     def get_posterior(
-        self, name: str, prior: TorchDistributionMixin
-    ) -> Union[TorchDistributionMixin, torch.Tensor]:
+        self, name: str, prior: "TorchDistributionMixin"
+    ) -> Union["TorchDistributionMixin", torch.Tensor]:
         """
         Abstract method to compute a posterior distribution or sample a
         posterior value given a prior distribution conditioned on upstream
@@ -148,6 +152,7 @@ class GuideMessenger(TraceMessenger, ABC):
                 del guide_trace.nodes[name]
                 continue
             model_site = model_trace.nodes[name].copy()
+            assert guide_site["infer"] is not None
             model_site["fn"] = guide_site["infer"]["prior"]
             model_trace.nodes[name] = model_site
         return model_trace, guide_trace

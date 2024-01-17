@@ -26,7 +26,7 @@ class CondIndepStackFrame(NamedTuple):
     def _key(self) -> Tuple[str, Optional[int], int, int]:
         with ignore_jit_warnings(["Converting a tensor to a Python number"]):
             size = (
-                self.size.item() if isinstance(self.size, torch.Tensor) else self.size  # type: ignore[attr-defined]
+                self.size.item() if isinstance(self.size, torch.Tensor) else self.size  # type: ignore[attr-defined, unreachable]
             )
             return self.name, self.dim, size, self.counter
 
@@ -71,7 +71,7 @@ class IndepMessenger(Messenger):
         size: int,
         dim: Optional[int] = None,
         device: Optional[str] = None,
-    ):
+    ) -> None:
         if not torch._C._get_tracing_state() and size == 0:
             raise ZeroDivisionError("size cannot be zero")
 
