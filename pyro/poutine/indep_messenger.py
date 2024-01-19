@@ -24,11 +24,11 @@ class CondIndepStackFrame(NamedTuple):
         return self.dim is not None
 
     def _key(self) -> Tuple[str, Optional[int], int, int]:
+        size = self.size
         with ignore_jit_warnings(["Converting a tensor to a Python number"]):
-            size = (
-                self.size.item() if isinstance(self.size, torch.Tensor) else self.size  # type: ignore[attr-defined, unreachable]
-            )
-            return self.name, self.dim, size, self.counter
+            if isinstance(size, torch.Tensor):  # type: ignore[unreachable]
+                size = size.item()  # type: ignore[unreachable]
+        return self.name, self.dim, size, self.counter
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, CondIndepStackFrame):
