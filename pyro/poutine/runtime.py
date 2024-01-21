@@ -351,7 +351,7 @@ def effectful(
         if not am_i_wrapped():
             return fn(*args, **kwargs)
         else:
-            msg = Message[_P, _T](
+            msg = Message(
                 type=type,
                 name=name,
                 fn=fn,
