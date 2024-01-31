@@ -118,7 +118,7 @@ def _masked_observe(
                 f"broadcastable to batch_shape = {tuple(batch_shape)}"
             ) from e
         raise
-    return deterministic(name, value)
+    return deterministic(name, value, event_dim=fn.event_dim)
 
 
 def sample(
