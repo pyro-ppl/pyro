@@ -1,7 +1,6 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import torch.distributions
 from torch.distributions import constraints
 from torch.distributions.transforms import PowerTransform
 
@@ -47,9 +46,3 @@ class InverseGamma(TransformedDistribution):
     @property
     def rate(self):
         return self.base_dist.rate
-
-
-# Work around sphinx autodoc error in case two InverseGamma's are defined:
-# "duplicate object description of pyro.distributions.InverseGamma"
-if "InverseGamma" in dir(torch.distributions):
-    del InverseGamma.__doc__
