@@ -375,9 +375,9 @@ class AutoGaussianDense(AutoGaussian):
                 u_stop = u_start + u_index.size(-1)
                 v_start = local_offsets[v]
                 v_stop = v_start + v_index.size(-1)
-                index2[
-                    ..., u_start:u_stop, v_start:v_stop
-                ] = self._dense_size * u_index.unsqueeze(-1) + v_index.unsqueeze(-2)
+                index2[..., u_start:u_stop, v_start:v_stop] = (
+                    self._dense_size * u_index.unsqueeze(-1) + v_index.unsqueeze(-2)
+                )
 
             self._dense_scatter[d] = index1.reshape(-1), index2.reshape(-1)
 

@@ -680,9 +680,11 @@ class SuperspreadingSEIRModel(CompartmentalModel):
             coal_rate = R * (1.0 + 1.0 / k) / (tau_i * state["I"] + 1e-8)
             pyro.factor(
                 "coalescent_{}".format(t),
-                self.coal_likelihood(coal_rate, t)
-                if t_is_observed
-                else torch.tensor(0.0),
+                (
+                    self.coal_likelihood(coal_rate, t)
+                    if t_is_observed
+                    else torch.tensor(0.0)
+                ),
             )
 
         # Update compartements with flows.

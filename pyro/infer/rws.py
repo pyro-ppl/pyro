@@ -203,9 +203,12 @@ class ReweightedWakeSleep(ELBO):
         phi_loss = (
             sleep_phi_loss
             if self.insomnia == 0
-            else wake_phi_loss
-            if self.insomnia == 1
-            else self.insomnia * wake_phi_loss + (1.0 - self.insomnia) * sleep_phi_loss
+            else (
+                wake_phi_loss
+                if self.insomnia == 1
+                else self.insomnia * wake_phi_loss
+                + (1.0 - self.insomnia) * sleep_phi_loss
+            )
         )
 
         return wake_theta_loss, phi_loss

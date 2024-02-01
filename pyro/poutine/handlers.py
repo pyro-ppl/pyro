@@ -126,88 +126,71 @@ def block(
     expose=None,
     hide_types=None,
     expose_types=None,
-):
-    ...
+): ...
 
 
 @_make_handler(BroadcastMessenger)
-def broadcast(fn=None):
-    ...
+def broadcast(fn=None): ...
 
 
 @_make_handler(CollapseMessenger)
-def collapse(fn=None, *args, **kwargs):
-    ...
+def collapse(fn=None, *args, **kwargs): ...
 
 
 @_make_handler(ConditionMessenger)
-def condition(fn, data):
-    ...
+def condition(fn, data): ...
 
 
 @_make_handler(DoMessenger)
-def do(fn, data):
-    ...
+def do(fn, data): ...
 
 
 @_make_handler(EnumMessenger)
-def enum(fn=None, first_available_dim=None):
-    ...
+def enum(fn=None, first_available_dim=None): ...
 
 
 @_make_handler(EscapeMessenger)
-def escape(fn, escape_fn):
-    ...
+def escape(fn, escape_fn): ...
 
 
 @_make_handler(InferConfigMessenger)
-def infer_config(fn, config_fn):
-    ...
+def infer_config(fn, config_fn): ...
 
 
 @_make_handler(LiftMessenger)
-def lift(fn, prior):
-    ...
+def lift(fn, prior): ...
 
 
 @_make_handler(MaskMessenger)
-def mask(fn, mask):
-    ...
+def mask(fn, mask): ...
 
 
 @_make_handler(ReparamMessenger)
-def reparam(fn, config):
-    ...
+def reparam(fn, config): ...
 
 
 @_make_handler(ReplayMessenger)
-def replay(fn=None, trace=None, params=None):
-    ...
+def replay(fn=None, trace=None, params=None): ...
 
 
 @_make_handler(ScaleMessenger)
-def scale(fn, scale):
-    ...
+def scale(fn, scale): ...
 
 
 @_make_handler(SeedMessenger)
-def seed(fn, rng_seed):
-    ...
+def seed(fn, rng_seed): ...
 
 
 @_make_handler(TraceMessenger)
-def trace(fn=None, graph_type=None, param_only=None):
-    ...
+def trace(fn=None, graph_type=None, param_only=None): ...
 
 
 @_make_handler(UnconditionMessenger)
-def uncondition(fn=None):
-    ...
+def uncondition(fn=None): ...
 
 
 @_make_handler(SubstituteMessenger)
-def substitute(fn, data):
-    ...
+def substitute(fn, data): ...
 
 
 #########################################
@@ -289,8 +272,7 @@ def markov(
     keep: bool = False,
     dim: Optional[int] = None,
     name: Optional[str] = None,
-) -> MarkovMessenger:
-    ...
+) -> MarkovMessenger: ...
 
 
 @overload
@@ -300,8 +282,7 @@ def markov(
     keep: bool = False,
     dim: Optional[int] = None,
     name: Optional[str] = None,
-) -> MarkovMessenger:
-    ...
+) -> MarkovMessenger: ...
 
 
 @overload
@@ -311,8 +292,7 @@ def markov(
     keep: bool = False,
     dim: Optional[int] = None,
     name: Optional[str] = None,
-) -> Callable[_P, _T]:
-    ...
+) -> Callable[_P, _T]: ...
 
 
 def markov(

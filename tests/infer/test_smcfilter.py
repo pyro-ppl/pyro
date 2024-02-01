@@ -267,8 +267,6 @@ def test_gaussian_filter():
         smc.step(datum)
         expected = hmm.filter(data[: 1 + t])
         actual = smc.get_empirical()["z"]
-        assert_close(
-            actual.variance**0.5, expected.variance**0.5, atol=0.1, rtol=0.5
-        )
+        assert_close(actual.variance**0.5, expected.variance**0.5, atol=0.1, rtol=0.5)
         sigma = actual.variance.max().item() ** 0.5
         assert_close(actual.mean, expected.mean, atol=3 * sigma)

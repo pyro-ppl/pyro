@@ -16,6 +16,7 @@ class ELUTransform(Transform):
     r"""
     Bijective transform via the mapping :math:`y = \text{ELU}(x)`.
     """
+
     domain = constraints.real
     codomain = constraints.positive
     bijective = True
@@ -52,6 +53,7 @@ class LeakyReLUTransform(Transform):
     r"""
     Bijective transform via the mapping :math:`y = \text{LeakyReLU}(x)`.
     """
+
     domain = constraints.real
     codomain = constraints.real
     bijective = True

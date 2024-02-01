@@ -493,9 +493,9 @@ def module(
                 mod_name = _name
             if _name in target_state_dict.keys():
                 if not is_param:
-                    deep_getattr(nn_module, mod_name)._parameters[
-                        param_name
-                    ] = target_state_dict[_name]
+                    deep_getattr(nn_module, mod_name)._parameters[param_name] = (
+                        target_state_dict[_name]
+                    )
                 else:
                     nn_module._parameters[mod_name] = target_state_dict[_name]  # type: ignore[assignment]
 

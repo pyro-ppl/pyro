@@ -77,6 +77,7 @@ class OneOneMatching(TorchDistribution):
     :param int bp_iters: Optional number of belief propagation iterations. If
         unspecified or ``None`` expensive exact algorithms will be used.
     """
+
     arg_constraints = {"logits": constraints.real}
     has_enumerate_support = True
 

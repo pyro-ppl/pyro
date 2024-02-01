@@ -60,15 +60,15 @@ class ParamStoreDict:
         """
         initialize ParamStore data structures
         """
-        self._params: Dict[
-            str, torch.Tensor
-        ] = {}  # dictionary from param name to param
-        self._param_to_name: Dict[
-            torch.Tensor, str
-        ] = {}  # dictionary from unconstrained param to param name
-        self._constraints: Dict[
-            str, constraints.Constraint
-        ] = {}  # dictionary from param name to constraint object
+        self._params: Dict[str, torch.Tensor] = (
+            {}
+        )  # dictionary from param name to param
+        self._param_to_name: Dict[torch.Tensor, str] = (
+            {}
+        )  # dictionary from unconstrained param to param name
+        self._constraints: Dict[str, constraints.Constraint] = (
+            {}
+        )  # dictionary from param name to constraint object
 
     def clear(self) -> None:
         """

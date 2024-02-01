@@ -18,6 +18,7 @@ class InverseGamma(TransformedDistribution):
     :param torch.Tensor concentration: the concentration parameter (i.e. alpha).
     :param torch.Tensor rate: the rate parameter (i.e. beta).
     """
+
     arg_constraints = {
         "concentration": constraints.positive,
         "rate": constraints.positive,
