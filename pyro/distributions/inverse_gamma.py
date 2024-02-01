@@ -52,4 +52,4 @@ class InverseGamma(TransformedDistribution):
 # Work around sphinx autodoc error in case two InverseGamma's are defined:
 # "duplicate object description of pyro.distributions.InverseGamma"
 if "InverseGamma" in dir(torch.distributions):
-    InverseGamma.__doc__ += "\n:noindex:\n"
+    del InverseGamma.__doc__
