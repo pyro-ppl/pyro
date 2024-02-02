@@ -10,7 +10,8 @@ from pyro.util import optional
 from tests.common import assert_equal
 
 
-@pytest.mark.parametrize("n_samples,dim_size", [(1000, 1), (1000, 7), (2, 1)])
+@pytest.mark.filterwarnings("ignore:.*degrees of freedom is <= 0")
+@pytest.mark.parametrize("n_samples,dim_size", [(1000, 1), (1000, 7), (1, 1)])
 @pytest.mark.init(rng_seed=7)
 def test_welford_diagonal(n_samples, dim_size):
     w = WelfordCovariance(diagonal=True)
