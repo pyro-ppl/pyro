@@ -1003,6 +1003,7 @@ class LinearHMM(HiddenMarkovModel):
         This is required when sampling from homogeneous HMMs whose parameters
         are not expanded along the time axis.
     """
+
     arg_constraints = {}
     support = constraints.independent(constraints.real, 2)
     has_rsample = True

@@ -69,6 +69,7 @@ class BlockAutoregressive(TransformModule):
     [arXiv:1904.04676]
 
     """
+
     domain = constraints.real_vector
     codomain = constraints.real_vector
     bijective = True

@@ -154,15 +154,15 @@ class EnumMessenger(Messenger):
     def __enter__(self) -> Self:
         if self.first_available_dim is not None:
             _ENUM_ALLOCATOR.set_first_available_dim(self.first_available_dim)
-        self._markov_depths: Dict[
-            str, int
-        ] = {}  # site name -> depth (nonnegative integer)
-        self._param_dims: Dict[
-            str, Dict[int, int]
-        ] = {}  # site name -> (enum dim -> unique id)
-        self._value_dims: Dict[
-            str, Dict[int, int]
-        ] = {}  # site name -> (enum dim -> unique id)
+        self._markov_depths: Dict[str, int] = (
+            {}
+        )  # site name -> depth (nonnegative integer)
+        self._param_dims: Dict[str, Dict[int, int]] = (
+            {}
+        )  # site name -> (enum dim -> unique id)
+        self._value_dims: Dict[str, Dict[int, int]] = (
+            {}
+        )  # site name -> (enum dim -> unique id)
         return super().__enter__()
 
     @ignore_jit_warnings()

@@ -55,6 +55,7 @@ class HiddenLayer(TorchDistribution):
     "Variational dropout and the local reparameterization trick."
     Advances in Neural Information Processing Systems. 2015.
     """
+
     has_rsample = True
 
     def __init__(

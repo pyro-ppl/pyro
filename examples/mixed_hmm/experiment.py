@@ -143,16 +143,12 @@ def run_expt(args):
         re_str = "g" + (
             "n"
             if args["group"] is None
-            else "d"
-            if args["group"] == "discrete"
-            else "c"
+            else "d" if args["group"] == "discrete" else "c"
         )
         re_str += "i" + (
             "n"
             if args["individual"] is None
-            else "d"
-            if args["individual"] == "discrete"
-            else "c"
+            else "d" if args["individual"] == "discrete" else "c"
         )
         results_filename = "expt_{}_{}_{}.json".format(
             dataset, re_str, str(uuid.uuid4().hex)[0:5]

@@ -66,6 +66,7 @@ class LogNormalNegativeBinomial(TorchDistribution):
     :param int num_quad_points: Number of quadrature points used to compute the (approximate) `log_prob`.
         Defaults to 8.
     """
+
     arg_constraints = {
         "total_count": constraints.greater_than_eq(0),
         "logits": constraints.real,

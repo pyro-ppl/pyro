@@ -144,6 +144,7 @@ class Stable(TorchDistribution):
     :param str coords: Either "S0" (default) to use Nolan's continuous S0
         parametrization, or "S" to use the discontinuous parameterization.
     """
+
     has_rsample = True
     arg_constraints = {
         "stability": constraints.interval(0, 2),  # half-open (0, 2]

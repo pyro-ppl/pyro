@@ -737,9 +737,11 @@ def main(args):
         elbo = Elbo(max_plate_nesting=1 if model is model_0 else 2)
         tmc_model = handlers.infer_config(
             model,
-            lambda msg: {"num_samples": args.tmc_num_samples, "expand": False}
-            if msg["infer"].get("enumerate", None) == "parallel"
-            else {},
+            lambda msg: (
+                {"num_samples": args.tmc_num_samples, "expand": False}
+                if msg["infer"].get("enumerate", None) == "parallel"
+                else {}
+            ),
         )  # noqa: E501
         svi = infer.SVI(tmc_model, guide, optimizer, elbo)
     else:
