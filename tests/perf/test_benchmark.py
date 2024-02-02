@@ -20,7 +20,7 @@ from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.nuts import NUTS
 
-pytestmark = pytest.mark.stage("unit")
+pytestmark = pytest.mark.stage("benchmark")
 
 Model = namedtuple("TestModel", ["model", "model_args", "model_id"])
 
