@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import sys
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional
+from typing import TYPE_CHECKING, Callable, Generic, Literal, Optional, TypeVar
 
-from typing_extensions import Self
+from typing_extensions import ParamSpec, Self
 
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.trace_struct import Trace
@@ -12,6 +12,9 @@ from pyro.poutine.util import site_is_subsample
 
 if TYPE_CHECKING:
     from pyro.poutine.runtime import Message
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
 
 
 def identify_dense_edges(trace: Trace) -> None:
@@ -107,7 +110,7 @@ class TraceMessenger(Messenger):
             identify_dense_edges(self.trace)
         return super().__exit__(*args, **kwargs)
 
-    def __call__(self, fn: Callable) -> "TraceHandler":  # type: ignore[override]
+    def __call__(self, fn: Callable[_P, _T]) -> Callable[_P, _T]:
         """
         TODO docs
         """
@@ -152,7 +155,7 @@ class TraceMessenger(Messenger):
         self.trace.add_node(msg["name"], **msg.copy())
 
 
-class TraceHandler:
+class TraceHandler(Generic[_P, _T]):
     """
     Execution trace poutine.
 
@@ -164,11 +167,11 @@ class TraceHandler:
     We can also use this for visualization.
     """
 
-    def __init__(self, msngr: TraceMessenger, fn: Callable) -> None:
+    def __init__(self, msngr: TraceMessenger, fn: Callable[_P, _T]) -> None:
         self.fn = fn
         self.msngr = msngr
 
-    def __call__(self, *args, **kwargs) -> Any:
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T:
         """
         Runs the stochastic function stored in this poutine,
         with additional side effects.

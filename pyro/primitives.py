@@ -94,14 +94,14 @@ def _masked_observe(
     name: str,
     fn: TorchDistributionMixin,
     obs: Optional[torch.Tensor],
-    obs_mask: torch.Tensor,
+    obs_mask: torch.BoolTensor,
     *args,
     **kwargs,
 ) -> torch.Tensor:
     # Split into two auxiliary sample sites.
     with poutine.mask(mask=obs_mask):
         observed = sample(f"{name}_observed", fn, *args, **kwargs, obs=obs)
-    with poutine.mask(mask=~obs_mask):
+    with poutine.mask(mask=~obs_mask):  # type: ignore[call-overload]
         unobserved = sample(f"{name}_unobserved", fn, *args, **kwargs)
 
     # Interleave observed and unobserved events.
@@ -126,7 +126,7 @@ def sample(
     fn: TorchDistributionMixin,
     *args,
     obs: Optional[torch.Tensor] = None,
-    obs_mask: Optional[torch.Tensor] = None,
+    obs_mask: Optional[torch.BoolTensor] = None,
     infer: Optional[InferDict] = None,
     **kwargs,
 ) -> torch.Tensor:
