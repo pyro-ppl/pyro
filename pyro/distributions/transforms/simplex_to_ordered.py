@@ -3,16 +3,9 @@
 
 import torch
 from torch.distributions.transforms import Transform
+from torch.special import expit, logit
 
 from .. import constraints
-
-
-def expit(x):
-    return 1.0 / (1 + torch.exp(-x))
-
-
-def logit(x):
-    return torch.log(x / (1.0 - x))
 
 
 # This class is a port of https://num.pyro.ai/en/stable/_modules/numpyro/distributions/transforms.html#SimplexToOrderedTransform
@@ -57,16 +50,13 @@ class SimplexToOrderedTransform(Transform):
         x = s[..., 1:] - s[..., :-1]
         return x
 
-    def log_abs_det_jacobian(self, x, y, intermediates=None):
+    def log_abs_det_jacobian(self, x, y):
         # |dp/dc| = |dx/dy| = prod(ds/dy) = prod(expit'(y))
         # we know log derivative of expit(y) is `-softplus(y) - softplus(-y)`
         J_logdet = (
             torch.nn.functional.softplus(y) + torch.nn.functional.softplus(-y)
         ).sum(-1)
         return J_logdet
-
-    def tree_flatten(self):
-        return (self.anchor_point,), (("anchor_point",), dict())
 
     def __eq__(self, other):
         if not isinstance(other, SimplexToOrderedTransform):
