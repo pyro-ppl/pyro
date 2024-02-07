@@ -48,6 +48,7 @@ class GroupedNormalNormal(TorchDistribution):
     :param torch.LongTensor group_idx: Tensor of indices of shape `(num_data,)` linking each observation to one
         of the `num_groups` groups that are specified in `prior_loc` and `prior_scale`.
     """
+
     arg_constraints = {
         "prior_loc": constraints.real,
         "prior_scale": constraints.positive,

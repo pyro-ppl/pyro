@@ -158,12 +158,14 @@ __doc__ += "\n".join(
     {}
     """.format(
             _name,
-            "alias of :class:`torch.distributions.constraints.{}`".format(_name)
-            if globals()[_name].__module__.startswith("torch")
-            else ".. autoclass:: {}".format(
-                _name
-                if type(globals()[_name]) is type
-                else type(globals()[_name]).__name__
+            (
+                "alias of :class:`torch.distributions.constraints.{}`".format(_name)
+                if globals()[_name].__module__.startswith("torch")
+                else ".. autoclass:: {}".format(
+                    _name
+                    if type(globals()[_name]) is type
+                    else type(globals()[_name]).__name__
+                )
             ),
         )
         for _name in sorted(__all__)

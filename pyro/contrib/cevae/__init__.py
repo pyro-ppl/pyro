@@ -271,7 +271,7 @@ class PreWhitener(nn.Module):
         super().__init__()
         with torch.no_grad():
             loc = data.mean(0)
-            scale = data.std(0)
+            scale = data.std(0, unbiased=False)
             scale[~(scale > 0)] = 1.0
             self.register_buffer("loc", loc)
             self.register_buffer("inv_scale", scale.reciprocal())

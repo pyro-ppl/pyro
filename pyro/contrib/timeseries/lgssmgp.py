@@ -109,9 +109,9 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         covar[: self.full_gp_state_dim, : self.full_gp_state_dim] = block_diag_embed(
             self.kernel.stationary_covariance()
         )
-        covar[
-            self.full_gp_state_dim :, self.full_gp_state_dim :
-        ] = self.init_noise_scale_sq.diag_embed()
+        covar[self.full_gp_state_dim :, self.full_gp_state_dim :] = (
+            self.init_noise_scale_sq.diag_embed()
+        )
         return MultivariateNormal(loc, covar)
 
     def _get_obs_dist(self):
@@ -134,23 +134,23 @@ class GenericLGSSMWithGPNoiseModel(TimeSeriesModel):
         trans_covar = self.z_trans_matrix.new_zeros(
             self.full_state_dim, self.full_state_dim
         )
-        trans_covar[
-            : self.full_gp_state_dim, : self.full_gp_state_dim
-        ] = block_diag_embed(gp_process_covar)
-        trans_covar[
-            self.full_gp_state_dim :, self.full_gp_state_dim :
-        ] = self.trans_noise_scale_sq.diag_embed()
+        trans_covar[: self.full_gp_state_dim, : self.full_gp_state_dim] = (
+            block_diag_embed(gp_process_covar)
+        )
+        trans_covar[self.full_gp_state_dim :, self.full_gp_state_dim :] = (
+            self.trans_noise_scale_sq.diag_embed()
+        )
         trans_dist = MultivariateNormal(
             trans_covar.new_zeros(self.full_state_dim), trans_covar
         )
 
         full_trans_mat = trans_covar.new_zeros(self.full_state_dim, self.full_state_dim)
-        full_trans_mat[
-            : self.full_gp_state_dim, : self.full_gp_state_dim
-        ] = block_diag_embed(gp_trans_matrix)
-        full_trans_mat[
-            self.full_gp_state_dim :, self.full_gp_state_dim :
-        ] = self.z_trans_matrix
+        full_trans_mat[: self.full_gp_state_dim, : self.full_gp_state_dim] = (
+            block_diag_embed(gp_trans_matrix)
+        )
+        full_trans_mat[self.full_gp_state_dim :, self.full_gp_state_dim :] = (
+            self.z_trans_matrix
+        )
 
         return dist.GaussianHMM(
             self._get_init_dist(),

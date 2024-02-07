@@ -559,9 +559,11 @@ def _format_table(rows: List[List[Optional[str]]]) -> str:
             else:
                 cols[j].append(cell)
         cols = [
-            [""] * (width - len(col)) + col
-            if direction == "r"
-            else col + [""] * (width - len(col))
+            (
+                [""] * (width - len(col)) + col
+                if direction == "r"
+                else col + [""] * (width - len(col))
+            )
             for width, col, direction in zip(column_widths, cols, "rrl")
         ]
         justified_rows.append(sum(cols, []))

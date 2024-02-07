@@ -43,6 +43,7 @@ class Permute(Transform):
     :type dim: int
 
     """
+
     bijective = True
     volume_preserving = True
 

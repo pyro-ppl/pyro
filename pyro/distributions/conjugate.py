@@ -47,6 +47,7 @@ class BetaBinomial(TorchDistribution):
     :param total_count: Number of Bernoulli trials.
     :type total_count: float or torch.Tensor
     """
+
     arg_constraints = {
         "concentration1": constraints.positive,
         "concentration0": constraints.positive,
@@ -150,6 +151,7 @@ class DirichletMultinomial(TorchDistribution):
     :param bool is_sparse: Whether to assume value is mostly zero when computing
         :meth:`log_prob`, which can speed up computation when data is sparse.
     """
+
     arg_constraints = {
         "concentration": constraints.independent(constraints.positive, 1),
         "total_count": constraints.nonnegative_integer,

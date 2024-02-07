@@ -18,9 +18,11 @@ from .traceenum_elbo import terms_from_trace
 @copy_docs_from(_OrigTrace_ELBO)
 class Trace_ELBO(ELBO):
     def differentiable_loss(self, model, guide, *args, **kwargs):
-        with enum(), plate(
-            size=self.num_particles
-        ) if self.num_particles > 1 else contextlib.ExitStack():
+        with enum(), (
+            plate(size=self.num_particles)
+            if self.num_particles > 1
+            else contextlib.ExitStack()
+        ):
             guide_tr = trace(config_enumerate(default="flat")(guide)).get_trace(
                 *args, **kwargs
             )

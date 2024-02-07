@@ -3,7 +3,7 @@
 
 
 from functools import reduce, singledispatch
-from typing import TYPE_CHECKING, FrozenSet, Tuple
+from typing import TYPE_CHECKING, Any, FrozenSet, Tuple
 
 from typing_extensions import Self
 
@@ -85,7 +85,7 @@ class CollapseMessenger(TraceMessenger):
 
     _coerce = None
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         if CollapseMessenger._coerce is None:
             import funsor
             from funsor.distribution import CoerceDistributionToFunsor

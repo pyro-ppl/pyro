@@ -23,18 +23,15 @@ from .trace_messenger import TraceMessenger
 
 
 @_make_handler(EnumMessenger, __name__)
-def enum(fn=None, first_available_dim=None):
-    ...
+def enum(fn=None, first_available_dim=None): ...
 
 
 @_make_handler(MarkovMessenger, __name__)
-def markov(fn=None, history=1, keep=False):
-    ...
+def markov(fn=None, history=1, keep=False): ...
 
 
 @_make_handler(NamedMessenger, __name__)
-def named(fn=None, first_available_dim=None):
-    ...
+def named(fn=None, first_available_dim=None): ...
 
 
 @_make_handler(PlateMessenger, __name__)
@@ -47,20 +44,16 @@ def plate(
     dim=None,
     use_cuda=None,
     device=None,
-):
-    ...
+): ...
 
 
 @_make_handler(ReplayMessenger, __name__)
-def replay(fn=None, trace=None, params=None):
-    ...
+def replay(fn=None, trace=None, params=None): ...
 
 
 @_make_handler(TraceMessenger, __name__)
-def trace(fn=None, graph_type=None, param_only=None, pack_online=True):
-    ...
+def trace(fn=None, graph_type=None, param_only=None, pack_online=True): ...
 
 
 @_make_handler(VectorizedMarkovMessenger, __name__)
-def vectorized_markov(fn=None, name=None, size=None, dim=None, history=1):
-    ...
+def vectorized_markov(fn=None, name=None, size=None, dim=None, history=1): ...

@@ -199,9 +199,7 @@ class SoftAsymmetricLaplace(TorchDistribution):
         total = left + right
         p = left / total
         q = right / total
-        return (
-            p * left**2 + q * right**2 + p * q * total**2 + self.soft_scale**2
-        )
+        return p * left**2 + q * right**2 + p * q * total**2 + self.soft_scale**2
 
 
 def _logerfc(x):

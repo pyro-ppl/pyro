@@ -154,8 +154,7 @@ class AutonameMessenger(ReentrantMessenger):
 
 
 @_make_handler(AutonameMessenger, __name__)
-def autoname(fn=None, name=None):
-    ...
+def autoname(fn=None, name=None): ...
 
 
 @singledispatch
