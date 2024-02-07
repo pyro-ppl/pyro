@@ -112,10 +112,15 @@ class TransformTests(TestCase):
             assert diag_sum == float(input_dim)
             assert lower_sum == float(0.0)
 
-    def _test_inverse(self, shape, transform):
+    def _test_inverse(self, shape, transform, base_dist_type="normal"):
         # Test g^{-1}(g(x)) = x
         # NOTE: Calling _call and _inverse directly bypasses caching
-        base_dist = dist.Normal(torch.zeros(shape), torch.ones(shape))
+        if base_dist_type == "dirichlet":
+            base_dist = dist.Dirichlet(torch.ones(shape) * 10.0)
+        elif base_dist_type == "normal":
+            base_dist = dist.Normal(torch.zeros(shape), torch.ones(shape))
+        else:
+            raise ValueError(f"Unknown base distribution type: {base_dist_type}")
         x_true = base_dist.sample(torch.Size([10]))
         y = transform._call(x_true)
         x_calculated = transform._inverse(y)
@@ -132,8 +137,13 @@ class TransformTests(TestCase):
             J_2 = transform.log_abs_det_jacobian(x_calculated, y)
             assert (J_1 - J_2).abs().max().item() < self.delta
 
-    def _test_shape(self, base_shape, transform):
-        base_dist = dist.Normal(torch.zeros(base_shape), torch.ones(base_shape))
+    def _test_shape(self, base_shape, transform, base_dist_type="normal"):
+        if base_dist_type == "dirichlet":
+            base_dist = dist.Dirichlet(torch.ones(base_shape) * 10.0)
+        elif base_dist_type == "normal":
+            base_dist = dist.Normal(torch.zeros(base_shape), torch.ones(base_shape))
+        else:
+            raise ValueError(f"Unknown base distribution type: {base_dist_type}")
         sample = dist.TransformedDistribution(base_dist, [transform]).sample()
         assert sample.shape == base_shape
 
@@ -148,7 +158,9 @@ class TransformTests(TestCase):
         assert transform.inverse_shape(output_event_shape) == input_event_shape
         assert transform.inverse_shape(output_shape) == base_shape
 
-    def _test_autodiff(self, input_dim, transform, inverse=False):
+    def _test_autodiff(
+        self, input_dim, transform, inverse=False, base_dist_type="normal"
+    ):
         """
         This method essentially tests whether autodiff will not throw any errors
         when you're doing maximum-likelihood learning with the transform. Many
@@ -159,7 +171,12 @@ class TransformTests(TestCase):
         if inverse:
             transform = transform.inv
 
-        base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+        if base_dist_type == "dirichlet":
+            base_dist = dist.Dirichlet(torch.ones(input_dim) * 10.0)
+        elif base_dist_type == "normal":
+            base_dist = dist.Normal(torch.zeros(input_dim), torch.ones(input_dim))
+        else:
+            raise ValueError(f"Unknown base distribution type: {base_dist_type}")
         flow_dist = dist.TransformedDistribution(base_dist, [transform])
         optimizer = torch.optim.Adam(temp_transform.parameters())
         x = torch.rand(1, input_dim)
@@ -177,6 +194,7 @@ class TransformTests(TestCase):
         inverse=True,
         autodiff=True,
         event_dim=1,
+        base_dist_type="normal",
     ):
         for event_shape in [(2,), (5,)]:
             if event_dim > 1:
@@ -186,11 +204,15 @@ class TransformTests(TestCase):
             )
 
             if inverse:
-                self._test_inverse(event_shape, transform)
+                self._test_inverse(
+                    event_shape, transform, base_dist_type=base_dist_type
+                )
             if shape:
                 for shape in [(3,), (3, 4), (3, 4, 5)]:
                     base_shape = shape + event_shape
-                    self._test_shape(base_shape, transform)
+                    self._test_shape(
+                        base_shape, transform, base_dist_type=base_dist_type
+                    )
             if jacobian and transform.bijective:
                 if event_dim > 1:
                     transform = Flatten(transform, event_shape)
@@ -198,7 +220,10 @@ class TransformTests(TestCase):
             if isinstance(transform, dist.TransformModule) and autodiff:
                 # If the function doesn't have an explicit inverse, then use the forward op for autodiff
                 self._test_autodiff(
-                    reduce(operator.mul, event_shape, 1), transform, inverse=not inverse
+                    reduce(operator.mul, event_shape, 1),
+                    transform,
+                    inverse=not inverse,
+                    base_dist_type=base_dist_type,
                 )
 
     def _test_conditional(
@@ -375,6 +400,19 @@ class TransformTests(TestCase):
 
     def test_radial(self):
         self._test(T.radial, inverse=False)
+
+    def test_simplex_to_ordered(self):
+        self._test(
+            lambda event_shape: T.SimplexToOrderedTransform(),
+            shape=False,
+            autodiff=False,
+            base_dist_type="dirichlet",
+        )
+        # Unique shape behavior:
+        assert T.SimplexToOrderedTransform().forward_shape((4, 3, 3)) == (4, 3, 2)
+        assert T.SimplexToOrderedTransform().forward_shape((2,)) == (1,)
+        assert T.SimplexToOrderedTransform().inverse_shape((2,)) == (3,)
+        assert T.SimplexToOrderedTransform().inverse_shape((4, 3, 3)) == (4, 3, 4)
 
     def test_spline(self):
         for order in ["linear", "quadratic"]:
