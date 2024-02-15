@@ -22,7 +22,7 @@ and look carefully through the series :ref:`practical-pyro-and-pytorch`,
 especially the :doc:`first Bayesian regression tutorial <bayesian_regression>`.
 This tutorial goes step-by-step through solving a simple Bayesian machine learning problem with Pyro,
 grounding the concepts from the introductory tutorials in runnable code.
-Users interested in integrating with existing PyTorch training and serving infrastructure or serving predictions from a trained model in C++ should also read :doc:`the PyroModule tutorial <modules>`
+Users interested in integrating with existing PyTorch training and serving infrastructure should also read :doc:`the PyroModule tutorial <modules>`
 and look at the :doc:`SVI with PyTorch <svi_torch>` and :doc:`SVI with Lightning <svi_lightning>` examples.
 
 Most users who reach this point will also find our :doc:`guide to tensor shapes in Pyro <tensor_shapes>` essential reading.
