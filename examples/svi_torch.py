@@ -8,8 +8,8 @@
 # learning rate schedules, dataloaders, or other advanced training techniques,
 # or just to simplify integration with other elements of the PyTorch ecosystem.
 
-from typing import Callable
 import argparse
+from typing import Callable
 
 import torch
 
