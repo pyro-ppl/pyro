@@ -780,25 +780,49 @@ def test_functorch_pyroparam(use_local_params):
     class ParamModule(PyroModule):
         def __init__(self):
             super().__init__()
-            self.a1 = PyroParam(torch.tensor(0.345))
             self.a2 = PyroParam(torch.tensor(0.678), constraints.positive)
+
+        @PyroParam(constraint=constraints.real)
+        def a1(self):
+            return torch.tensor(0.456)
 
     class Model(PyroModule):
         def __init__(self):
             super().__init__()
             self.param_module = ParamModule()
-            self.b = PyroParam(torch.tensor(1.234), constraints.positive)
+            self.b1 = PyroParam(torch.tensor(0.123), constraints.positive)
+            self.b3 = torch.nn.Parameter(torch.tensor(0.789))
+
+        @PyroParam(constraint=constraints.positive)
+        def b2(self):
+            return torch.tensor(1.234)
 
         def forward(self, x, y):
-            return ((self.param_module.a1 + self.param_module.a2) * x + self.b - y) ** 2
+            return (
+                (self.param_module.a1 + self.param_module.a2) * x
+                + self.b1
+                + self.b2
+                + self.b3
+                - y
+            ) ** 2
 
     with pyro.settings.context(module_local_params=use_local_params):
         model = Model()
         x, y = torch.tensor(1.3), torch.tensor(0.2)
 
-        model(x, y)
+        with pyro.poutine.trace() as tr:
+            model(x, y)
 
         params = dict(model.named_parameters())
+
+        # Check that all parameters appear in the trace for SVI compatibility
+        assert len(params) == len(
+            {
+                name: node
+                for name, node in tr.trace.nodes.items()
+                if node["type"] == "param"
+            }
+        )
 
         grad_model = torch.func.grad(
             lambda p, x, y: torch.func.functional_call(model, p, (x, y))

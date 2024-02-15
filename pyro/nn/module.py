@@ -543,8 +543,15 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         if isinstance(result, torch.nn.Parameter) and not name.endswith(
             "_unconstrained"
         ):
-            if self._pyro_context.active:
+            if self._pyro_context.active and not _is_module_local_param_enabled():
                 pyro.param(self._pyro_get_fullname(name), result)
+            elif self._pyro_context.active and _is_module_local_param_enabled():
+                # fake param statement to ensure any handlers of pyro.param are applied,
+                # even though we don't use the contents of the local parameter store
+                fullname = self._pyro_get_fullname(name)
+                pyro.poutine.runtime.effectful(type="param")(lambda *_, **__: result)(
+                    fullname, result, name=fullname
+                )
 
         if isinstance(result, torch.nn.Module):
             if isinstance(result, PyroModule):
@@ -578,7 +585,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 pass
             constrained_value, constraint, event_dim = value
             self._pyro_params[name] = constraint, event_dim
-            if self._pyro_context.active:
+            if self._pyro_context.active and not _is_module_local_param_enabled():
                 fullname = self._pyro_get_fullname(name)
                 pyro.param(
                     fullname,
@@ -593,6 +600,21 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                     unconstrained_value = torch.nn.Parameter(unconstrained_value)
                     _PYRO_PARAM_STORE._params[fullname] = unconstrained_value
                     _PYRO_PARAM_STORE._param_to_name[unconstrained_value] = fullname
+            elif self._pyro_context.active and _is_module_local_param_enabled():
+                # fake param statement to ensure any handlers of pyro.param are applied,
+                # even though we don't use the contents of the local parameter store
+                fullname = self._pyro_get_fullname(name)
+                constrained_value = detach_provenance(
+                    pyro.poutine.runtime.effectful(type="param")(
+                        lambda *_, **__: constrained_value
+                    )(
+                        fullname,
+                        constraint=constraint,
+                        event_dim=event_dim,
+                        name=fullname,
+                    )
+                )
+                unconstrained_value = _unconstrain(constrained_value, constraint)
             else:  # Cannot determine supermodule and hence cannot compute fullname.
                 unconstrained_value = _unconstrain(constrained_value, constraint)
             super().__setattr__(name + "_unconstrained", unconstrained_value)
@@ -604,7 +626,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 delattr(self, name)
             except AttributeError:
                 pass
-            if self._pyro_context.active:
+            if self._pyro_context.active and not _is_module_local_param_enabled():
                 fullname = self._pyro_get_fullname(name)
                 value = pyro.param(fullname, value)
                 if not isinstance(value, torch.nn.Parameter):
@@ -612,6 +634,15 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                     value = torch.nn.Parameter(detach_provenance(value))
                     _PYRO_PARAM_STORE._params[fullname] = value
                     _PYRO_PARAM_STORE._param_to_name[value] = fullname
+            elif self._pyro_context.active and _is_module_local_param_enabled():
+                # fake param statement to ensure any handlers of pyro.param are applied,
+                # even though we don't use the contents of the local parameter store
+                fullname = self._pyro_get_fullname(name)
+                value = detach_provenance(
+                    pyro.poutine.runtime.effectful(type="param")(
+                        lambda *_, **__: value
+                    )(fullname, value, constraint=constraints.real, name=fullname)
+                )
             super().__setattr__(name, value)
             return
 
