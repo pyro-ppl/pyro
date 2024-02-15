@@ -768,7 +768,6 @@ def test_bayesian_gru():
 
 
 def test_functorch_pyroparam():
-
     class ParamModule(PyroModule):
         def __init__(self):
             super().__init__()
@@ -797,9 +796,7 @@ def test_functorch_pyroparam():
         )
         grad_params_func = grad_model(params, x, y)
 
-        gs = torch.autograd.grad(
-            model(x, y), tuple(params.values())
-        )
+        gs = torch.autograd.grad(model(x, y), tuple(params.values()))
         grad_params_autograd = dict(zip(params.keys(), gs))
 
         assert len(grad_params_autograd) == len(grad_params_func) != 0
