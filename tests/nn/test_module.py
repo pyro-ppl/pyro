@@ -768,7 +768,6 @@ def test_bayesian_gru():
 
 
 def test_functorch_pyroparam():
-
     pyro.settings.set(module_local_params=True)
 
     class ParamModule(PyroModule):
@@ -792,14 +791,24 @@ def test_functorch_pyroparam():
 
     params = dict(model.named_parameters())
 
-    grad_model = torch.func.grad(lambda p, x, y: torch.func.functional_call(model, p, (x, y)))
+    grad_model = torch.func.grad(
+        lambda p, x, y: torch.func.functional_call(model, p, (x, y))
+    )
     grad_params_func = grad_model(params, torch.tensor(1.3), torch.tensor(0.2))
 
-    gs = torch.autograd.grad(model(torch.tensor(1.3), torch.tensor(0.2)), tuple(params.values()))
+    gs = torch.autograd.grad(
+        model(torch.tensor(1.3), torch.tensor(0.2)), tuple(params.values())
+    )
     grad_params_autograd = dict(zip(params.keys(), gs))
 
     assert len(grad_params_autograd) == len(grad_params_func) != 0
-    assert set(grad_params_autograd.keys()) == set(grad_params_func.keys()) == set(params.keys())
+    assert (
+        set(grad_params_autograd.keys())
+        == set(grad_params_func.keys())
+        == set(params.keys())
+    )
     for k in grad_params_autograd.keys():
-        assert not torch.allclose(grad_params_func[k], torch.zeros_like(grad_params_func[k])), k
+        assert not torch.allclose(
+            grad_params_func[k], torch.zeros_like(grad_params_func[k])
+        ), k
         assert torch.allclose(grad_params_autograd[k], grad_params_func[k]), k
