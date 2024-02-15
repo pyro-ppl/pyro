@@ -110,6 +110,7 @@ CPU_EXAMPLES = [
     "sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide custom",
     "sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide auto",
     "sparse_gamma_def.py --num-epochs=2 --eval-particles=2 --eval-frequency=1 --guide easy",
+    "svi_torch.py --num-epochs=2 --size=400",
     "svi_horovod.py --num-epochs=2 --size=400 --no-horovod",
     pytest.param(
         "svi_lightning.py --max_epochs=2 --size=400 --accelerator cpu --devices 1",
@@ -181,6 +182,7 @@ CUDA_EXAMPLES = [
     "sir_hmc.py -t=2 -w=2 -n=4 -d=2 -m=1 --enum --cuda",
     "sir_hmc.py -t=2 -w=2 -n=4 -d=2 -p=10000 --sequential --cuda",
     "sir_hmc.py -t=2 -w=2 -n=4 -d=100 -p=10000 --cuda",
+    "svi_torch.py --num-epochs=2 --size=400 --cuda",
     "svi_horovod.py --num-epochs=2 --size=400 --cuda --no-horovod",
     pytest.param(
         "svi_lightning.py --max_epochs=2 --size=400 --accelerator gpu --devices 1",
