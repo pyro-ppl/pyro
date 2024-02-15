@@ -15,7 +15,7 @@ from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
 from pyro.nn.module import PyroModule, PyroParam, PyroSample, clear, to_pyro_module_
 from pyro.optim import Adam
-from tests.common import assert_equal
+from tests.common import assert_equal, xfail_param
 
 
 def test_svi_smoke():
@@ -767,7 +767,16 @@ def test_bayesian_gru():
     assert not torch.allclose(output2, output)
 
 
-def test_functorch_pyroparam():
+@pytest.mark.parametrize(
+    "use_local_params",
+    [
+        True,
+        xfail_param(
+            False, reason="torch.func not compatible with global parameter store"
+        ),
+    ],
+)
+def test_functorch_pyroparam(use_local_params):
     class ParamModule(PyroModule):
         def __init__(self):
             super().__init__()
@@ -783,7 +792,7 @@ def test_functorch_pyroparam():
         def forward(self, x, y):
             return ((self.param_module.a1 + self.param_module.a2) * x + self.b - y) ** 2
 
-    with pyro.settings.context(module_local_params=True):
+    with pyro.settings.context(module_local_params=use_local_params):
         model = Model()
         x, y = torch.tensor(1.3), torch.tensor(0.2)
 
