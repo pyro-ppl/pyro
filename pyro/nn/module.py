@@ -474,7 +474,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             if name in _pyro_params:
                 constraint, event_dim = _pyro_params[name]
                 unconstrained_value = getattr(self, name + "_unconstrained")
-                if self._pyro_context.active:
+                if self._pyro_context.active and not _is_module_local_param_enabled():
                     fullname = self._pyro_get_fullname(name)
                     if fullname in _PYRO_PARAM_STORE:
                         if (
@@ -503,6 +503,15 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                         _PYRO_PARAM_STORE._params[fullname] = unconstrained_value
                         _PYRO_PARAM_STORE._param_to_name[unconstrained_value] = fullname
                     return pyro.param(fullname, event_dim=event_dim)
+                elif self._pyro_context.active and _is_module_local_param_enabled():
+                    # fake param statement to ensure any handlers of pyro.param are applied,
+                    # even though we don't use the contents of the local parameter store
+                    fullname = self._pyro_get_fullname(name)
+                    constrained_value = transform_to(constraint)(unconstrained_value)
+                    constrained_value.unconstrained = weakref.ref(unconstrained_value)
+                    return pyro.poutine.runtime.effectful(type="param")(
+                        lambda *_, **__: constrained_value
+                    )(fullname, event_dim=event_dim, name=fullname)
                 else:  # Cannot determine supermodule and hence cannot compute fullname.
                     constrained_value = transform_to(constraint)(unconstrained_value)
                     constrained_value.unconstrained = weakref.ref(unconstrained_value)
