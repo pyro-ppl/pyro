@@ -102,10 +102,10 @@ if __name__ == "__main__":
         description="Using vanilla PyTorch to perform optimization in SVI"
     )
     parser.add_argument("--size", default=10000, type=int)
-    parser.add_argument("--batch_size", default=100, type=int)
-    parser.add_argument("--learning_rate", default=0.01, type=float)
+    parser.add_argument("--batch-size", default=100, type=int)
+    parser.add_argument("--learning-rate", default=0.01, type=float)
     parser.add_argument("--seed", default=20200723, type=int)
-    parser.add_argument("--num_epochs", default=10, type=int)
+    parser.add_argument("--num-epochs", default=10, type=int)
     parser.add_argument("--cuda", action="store_true", default=False)
     args = parser.parse_args()
     main(args)
