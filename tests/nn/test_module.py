@@ -792,6 +792,7 @@ def test_functorch_pyroparam(use_local_params):
             self.param_module = ParamModule()
             self.b1 = PyroParam(torch.tensor(0.123), constraints.positive)
             self.b3 = torch.nn.Parameter(torch.tensor(0.789))
+            self.c = torch.nn.Linear(1, 1)
 
         @PyroParam(constraint=constraints.positive)
         def b2(self):
@@ -803,7 +804,7 @@ def test_functorch_pyroparam(use_local_params):
                 + self.b1
                 + self.b2
                 + self.b3
-                - y
+                - self.c(y.unsqueeze(-1)).squeeze(-1)
             ) ** 2
 
     with pyro.settings.context(module_local_params=use_local_params):

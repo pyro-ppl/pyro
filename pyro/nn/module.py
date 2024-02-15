@@ -21,6 +21,7 @@ import torch
 from torch.distributions import constraints, transform_to
 
 import pyro
+import pyro.params.param_store
 from pyro.ops.provenance import detach_provenance
 from pyro.poutine.runtime import _PYRO_PARAM_STORE
 
@@ -562,8 +563,19 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                     )
             else:
                 # Regular nn.Modules trigger pyro.module statements.
-                if self._pyro_context.active:
+                if self._pyro_context.active and not _is_module_local_param_enabled():
                     pyro.module(self._pyro_get_fullname(name), result)
+                elif self._pyro_context.active and _is_module_local_param_enabled():
+                    # fake module statement to ensure any handlers of pyro.module are applied,
+                    # even though we don't use the contents of the local parameter store
+                    fullname_module = self._pyro_get_fullname(name)
+                    for param_name, param_value in result.named_parameters():
+                        fullname_param = pyro.params.param_store.param_with_module_name(
+                            fullname_module, param_name
+                        )
+                        pyro.poutine.runtime.effectful(type="param")(
+                            lambda *_, **__: param_value
+                        )(fullname_param, param_value, name=fullname_param)
 
         return result
 
