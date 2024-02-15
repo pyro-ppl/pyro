@@ -58,6 +58,8 @@ def main(args):
     with torch.no_grad():
         covariates = torch.randn(args.size)
         data = Model(args.size)(covariates)
+        covariates = covariates.to(device=torch.device("cuda" if args.cuda else "cpu"))
+        data = data.to(device=torch.device("cuda" if args.cuda else "cpu"))
 
     # Create a model and a guide, both as (Pyro)Modules.
     model: torch.nn.Module = Model(args.size)
