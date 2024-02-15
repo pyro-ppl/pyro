@@ -786,18 +786,19 @@ def test_functorch_pyroparam():
 
     with pyro.settings.context(module_local_params=True):
         model = Model()
+        x, y = torch.tensor(1.3), torch.tensor(0.2)
 
-        model(torch.tensor(1.3), torch.tensor(0.2))
+        model(x, y)
 
         params = dict(model.named_parameters())
 
         grad_model = torch.func.grad(
             lambda p, x, y: torch.func.functional_call(model, p, (x, y))
         )
-        grad_params_func = grad_model(params, torch.tensor(1.3), torch.tensor(0.2))
+        grad_params_func = grad_model(params, x, y)
 
         gs = torch.autograd.grad(
-            model(torch.tensor(1.3), torch.tensor(0.2)), tuple(params.values())
+            model(x, y), tuple(params.values())
         )
         grad_params_autograd = dict(zip(params.keys(), gs))
 
