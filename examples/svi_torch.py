@@ -69,6 +69,7 @@ def main(args):
     # and exposes all of their torch.nn.Parameters and pyro.nn.PyroParam parameters.
     elbo: Callable[[torch.nn.Module, torch.nn.Module], torch.nn.Module] = Trace_ELBO()
     loss_fn: torch.nn.Module = elbo(model, guide)
+    loss_fn.to(device=torch.device("cuda" if args.cuda else "cpu"))
 
     # Create a dataloader.
     dataset = torch.utils.data.TensorDataset(covariates, data)
@@ -84,7 +85,7 @@ def main(args):
     optimizer = torch.optim.Adam(loss_fn.parameters(), lr=args.learning_rate)
 
     # Run stochastic variational inference using PyTorch optimizers from torch.optim
-    for epoch in range(args.max_epochs):
+    for epoch in range(args.num_epochs):
         for batch in dataloader:
             optimizer.zero_grad()
             loss = loss_fn(*batch)
@@ -102,7 +103,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", default=100, type=int)
     parser.add_argument("--learning_rate", default=0.01, type=float)
     parser.add_argument("--seed", default=20200723, type=int)
-    # pl.Trainer arguments.
-    parser.add_argument("--max_epochs", default=10, type=int)
+    parser.add_argument("--num_epochs", default=10, type=int)
+    parser.add_argument("--cuda", action="store_true", default=False)
     args = parser.parse_args()
     main(args)
