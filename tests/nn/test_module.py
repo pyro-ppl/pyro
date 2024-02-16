@@ -15,7 +15,7 @@ from pyro import poutine
 from pyro.infer import SVI, Trace_ELBO
 from pyro.nn.module import PyroModule, PyroParam, PyroSample, clear, to_pyro_module_
 from pyro.optim import Adam
-from tests.common import assert_equal
+from tests.common import assert_equal, xfail_param
 
 
 def test_svi_smoke():
@@ -765,3 +765,82 @@ def test_bayesian_gru():
     assert output.shape == (seq_len, batch_size, hidden_size)
     output2, _ = gru(input_)
     assert not torch.allclose(output2, output)
+
+
+@pytest.mark.parametrize(
+    "use_local_params",
+    [
+        True,
+        xfail_param(
+            False, reason="torch.func not compatible with global parameter store"
+        ),
+    ],
+)
+def test_functorch_pyroparam(use_local_params):
+    class ParamModule(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.a2 = PyroParam(torch.tensor(0.678), constraints.positive)
+
+        @PyroParam(constraint=constraints.real)
+        def a1(self):
+            return torch.tensor(0.456)
+
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.param_module = ParamModule()
+            self.b1 = PyroParam(torch.tensor(0.123), constraints.positive)
+            self.b3 = torch.nn.Parameter(torch.tensor(0.789))
+            self.c = torch.nn.Linear(1, 1)
+
+        @PyroParam(constraint=constraints.positive)
+        def b2(self):
+            return torch.tensor(1.234)
+
+        def forward(self, x, y):
+            return (
+                (self.param_module.a1 + self.param_module.a2) * x
+                + self.b1
+                + self.b2
+                + self.b3
+                - self.c(y.unsqueeze(-1)).squeeze(-1)
+            ) ** 2
+
+    with pyro.settings.context(module_local_params=use_local_params):
+        model = Model()
+        x, y = torch.tensor(1.3), torch.tensor(0.2)
+
+        with pyro.poutine.trace() as tr:
+            model(x, y)
+
+        params = dict(model.named_parameters())
+
+        # Check that all parameters appear in the trace for SVI compatibility
+        assert len(params) == len(
+            {
+                name: node
+                for name, node in tr.trace.nodes.items()
+                if node["type"] == "param"
+            }
+        )
+
+        grad_model = torch.func.grad(
+            lambda p, x, y: torch.func.functional_call(model, p, (x, y))
+        )
+        grad_params_func = grad_model(params, x, y)
+
+        gs = torch.autograd.grad(model(x, y), tuple(params.values()))
+        grad_params_autograd = dict(zip(params.keys(), gs))
+
+        assert len(grad_params_autograd) == len(grad_params_func) != 0
+        assert (
+            set(grad_params_autograd.keys())
+            == set(grad_params_func.keys())
+            == set(params.keys())
+        )
+        for k in grad_params_autograd.keys():
+            assert not torch.allclose(
+                grad_params_func[k], torch.zeros_like(grad_params_func[k])
+            ), k
+            assert torch.allclose(grad_params_autograd[k], grad_params_func[k]), k
