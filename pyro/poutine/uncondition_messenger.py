@@ -1,7 +1,12 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from .messenger import Messenger
+from typing import TYPE_CHECKING
+
+from pyro.poutine.messenger import Messenger
+
+if TYPE_CHECKING:
+    from pyro.poutine.runtime import Message
 
 
 class UnconditionMessenger(Messenger):
@@ -10,10 +15,10 @@ class UnconditionMessenger(Messenger):
     distribution, ignoring observations.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
-    def _pyro_sample(self, msg):
+    def _pyro_sample(self, msg: "Message") -> None:
         """
         :param msg: current message at a trace site.
 
@@ -22,8 +27,8 @@ class UnconditionMessenger(Messenger):
         """
         if msg["is_observed"]:
             msg["is_observed"] = False
+            assert msg["infer"] is not None
             msg["infer"]["was_observed"] = True
             msg["infer"]["obs"] = msg["value"]
             msg["value"] = None
             msg["done"] = False
-        return None

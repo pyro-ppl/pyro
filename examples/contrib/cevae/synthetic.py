@@ -45,7 +45,7 @@ def generate_data(args):
 
 def main(args):
     if args.cuda:
-        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        torch.set_default_device("cuda")
 
     # Generate synthetic data.
     pyro.set_rng_seed(args.seed)
@@ -86,7 +86,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.6")
+    assert pyro.__version__.startswith("1.9.0")
     parser = argparse.ArgumentParser(
         description="Causal Effect Variational Autoencoder"
     )

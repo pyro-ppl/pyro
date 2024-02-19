@@ -536,6 +536,13 @@ PositivePowerTransform
     :undoc-members:
     :show-inheritance:
 
+SimplexToOrderedTransform
+-------------------------
+.. autoclass:: pyro.distributions.transforms.SimplexToOrderedTransform
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 SoftplusLowerCholeskyTransform
 ------------------------------
 .. autoclass:: pyro.distributions.transforms.SoftplusLowerCholeskyTransform

@@ -31,7 +31,7 @@ from pyro.distributions import Gamma, Normal, Poisson
 from pyro.infer import SVI, TraceMeanField_ELBO
 from pyro.infer.autoguide import AutoDiagonalNormal, init_to_feasible
 
-torch.set_default_tensor_type("torch.FloatTensor")
+torch.set_default_dtype(torch.float32)
 pyro.util.set_rng_seed(0)
 
 
@@ -269,7 +269,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.6")
+    assert pyro.__version__.startswith("1.9.0")
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument(

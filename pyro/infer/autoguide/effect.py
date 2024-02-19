@@ -68,7 +68,7 @@ class AutoMessenger(GuideMessenger, PyroModule, metaclass=AutoMessengerMeta):
         Adjusts plates for generating initial values of parameters.
         """
         for f in get_plates():
-            full_size = getattr(f, "full_size", f.size)
+            full_size = f.full_size or f.size
             dim = f.dim - event_dim
             if f in self._outer_plates or f.name in self.amortized_plates:
                 if -value.dim() <= dim:

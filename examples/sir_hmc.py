@@ -633,7 +633,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.6")
+    assert pyro.__version__.startswith("1.9.0")
     parser = argparse.ArgumentParser(description="SIR epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=10, type=int)
     parser.add_argument("-m", "--min-observations", default=3, type=int)
@@ -663,12 +663,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.double:
-        if args.cuda:
-            torch.set_default_tensor_type(torch.cuda.DoubleTensor)
-        else:
-            torch.set_default_tensor_type(torch.DoubleTensor)
-    elif args.cuda:
-        torch.set_default_tensor_type(torch.cuda.FloatTensor)
+        torch.set_default_dtype(torch.float64)
+    if args.cuda:
+        torch.set_default_device("cuda")
 
     main(args)
 

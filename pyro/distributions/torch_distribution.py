@@ -3,6 +3,7 @@
 
 import warnings
 from collections import OrderedDict
+from typing import Callable
 
 import torch
 from torch.distributions.kl import kl_divergence, register_kl
@@ -15,7 +16,7 @@ from .score_parts import ScoreParts
 from .util import broadcast_shape, scale_and_mask
 
 
-class TorchDistributionMixin(Distribution):
+class TorchDistributionMixin(Distribution, Callable):
     """
     Mixin to provide Pyro compatibility for PyTorch distributions.
 
@@ -27,7 +28,7 @@ class TorchDistributionMixin(Distribution):
     from :class:`TorchDistributionMixin`.
     """
 
-    def __call__(self, sample_shape=torch.Size()):
+    def __call__(self, sample_shape: torch.Size = torch.Size()) -> torch.Tensor:
         """
         Samples a random value.
 
@@ -51,7 +52,23 @@ class TorchDistributionMixin(Distribution):
         )
 
     @property
-    def event_dim(self):
+    def batch_shape(self) -> torch.Size:
+        """
+        :return: The shape over which parameters are batched.
+        :rtype: torch.Size
+        """
+        raise NotImplementedError
+
+    @property
+    def event_shape(self) -> torch.Size:
+        """
+        :return: The shape of a single sample from the distribution (without batching).
+        :rtype: torch.Size
+        """
+        raise NotImplementedError
+
+    @property
+    def event_dim(self) -> int:
         """
         :return: Number of dimensions of individual events.
         :rtype: int
@@ -102,7 +119,7 @@ class TorchDistributionMixin(Distribution):
         event_shape = torch.Size()
         return batch_shape, event_shape
 
-    def expand(self, batch_shape, _instance=None):
+    def expand(self, batch_shape, _instance=None) -> "ExpandedDistribution":
         """
         Returns a new :class:`ExpandedDistribution` instance with batch
         dimensions expanded to `batch_shape`.

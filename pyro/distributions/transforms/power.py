@@ -17,6 +17,7 @@ class PositivePowerTransform(Transform):
 
     .. warning:: The Jacobian is typically zero or infinite at the origin.
     """
+
     domain = constraints.real
     codomain = constraints.real
     bijective = True

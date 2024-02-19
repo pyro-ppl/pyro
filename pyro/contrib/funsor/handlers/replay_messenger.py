@@ -14,9 +14,9 @@ class ReplayMessenger(OrigReplayMessenger):
 
     def _pyro_sample(self, msg):
         name = msg["name"]
-        msg[
-            "replay_active"
-        ] = True  # indicate replaying so importance weights can be scaled
+        msg["replay_active"] = (
+            True  # indicate replaying so importance weights can be scaled
+        )
         if self.trace is None:
             return
 

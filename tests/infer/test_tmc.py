@@ -139,10 +139,13 @@ def test_tmc_normals_chain_iwae(
     guide = (
         factorized_guide
         if guide_type == "factorized"
-        else nonfactorized_guide
-        if guide_type == "nonfactorized"
-        else poutine.block(
-            model, hide_fn=lambda msg: msg["type"] == "sample" and msg["is_observed"]
+        else (
+            nonfactorized_guide
+            if guide_type == "nonfactorized"
+            else poutine.block(
+                model,
+                hide_fn=lambda msg: msg["type"] == "sample" and msg["is_observed"],
+            )
         )
     )
     flat_num_samples = num_samples ** min(depth, 2)  # don't use too many, expensive
@@ -255,9 +258,9 @@ def test_tmc_normals_chain_gradient(
     guide = (
         factorized_guide
         if guide_type == "factorized"
-        else nonfactorized_guide
-        if guide_type == "nonfactorized"
-        else lambda *args: None
+        else (
+            nonfactorized_guide if guide_type == "nonfactorized" else lambda *args: None
+        )
     )
     tmc_guide = config_enumerate(
         guide,

@@ -6,18 +6,23 @@ import warnings
 from collections import OrderedDict
 from contextlib import ExitStack, contextmanager
 from inspect import isclass
+from typing import Callable, Iterator, Optional, Sequence, Union
 
 import torch
+from torch.distributions import constraints
 
 import pyro.distributions as dist
 import pyro.infer as infer
 import pyro.poutine as poutine
-from pyro.distributions import constraints
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.params import param_with_module_name
+from pyro.params.param_store import ParamStoreDict
 from pyro.poutine.plate_messenger import PlateMessenger
 from pyro.poutine.runtime import (
     _MODULE_NAMESPACE_DIVIDER,
     _PYRO_PARAM_STORE,
+    InferDict,
+    Message,
     am_i_wrapped,
     apply_stack,
     effectful,
@@ -26,14 +31,14 @@ from pyro.poutine.subsample_messenger import SubsampleMessenger
 from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
 
 
-def get_param_store():
+def get_param_store() -> ParamStoreDict:
     """
     Returns the global :class:`~pyro.params.param_store.ParamStoreDict`.
     """
     return _PYRO_PARAM_STORE
 
 
-def clear_param_store():
+def clear_param_store() -> None:
     """
     Clears the global :class:`~pyro.params.param_store.ParamStoreDict`.
 
@@ -42,13 +47,18 @@ def clear_param_store():
     models), and before each unit test (to avoid leaking parameters across
     tests).
     """
-    return _PYRO_PARAM_STORE.clear()
+    _PYRO_PARAM_STORE.clear()
 
 
 _param = effectful(_PYRO_PARAM_STORE.get_param, type="param")
 
 
-def param(name, init_tensor=None, constraint=constraints.real, event_dim=None):
+def param(
+    name: str,
+    init_tensor: Union[torch.Tensor, Callable[[], torch.Tensor], None] = None,
+    constraint: constraints.Constraint = constraints.real,
+    event_dim: Optional[int] = None,
+) -> torch.Tensor:
     """
     Saves the variable as a parameter in the param store.
     To interact with the param store or write to disk,
@@ -75,14 +85,23 @@ def param(name, init_tensor=None, constraint=constraints.real, event_dim=None):
     """
     # Note effectful(-) requires the double passing of name below.
     args = (name,) if init_tensor is None else (name, init_tensor)
-    return _param(*args, constraint=constraint, event_dim=event_dim, name=name)
+    value = _param(*args, constraint=constraint, event_dim=event_dim, name=name)
+    assert value is not None  # type narrowing guaranteed by _param
+    return value
 
 
-def _masked_observe(name, fn, obs, obs_mask, *args, **kwargs):
+def _masked_observe(
+    name: str,
+    fn: TorchDistributionMixin,
+    obs: Optional[torch.Tensor],
+    obs_mask: torch.BoolTensor,
+    *args,
+    **kwargs,
+) -> torch.Tensor:
     # Split into two auxiliary sample sites.
     with poutine.mask(mask=obs_mask):
         observed = sample(f"{name}_observed", fn, *args, **kwargs, obs=obs)
-    with poutine.mask(mask=~obs_mask):
+    with poutine.mask(mask=~obs_mask):  # type: ignore[call-overload]
         unobserved = sample(f"{name}_unobserved", fn, *args, **kwargs)
 
     # Interleave observed and unobserved events.
@@ -99,10 +118,18 @@ def _masked_observe(name, fn, obs, obs_mask, *args, **kwargs):
                 f"broadcastable to batch_shape = {tuple(batch_shape)}"
             ) from e
         raise
-    return deterministic(name, value)
+    return deterministic(name, value, event_dim=fn.event_dim)
 
 
-def sample(name, fn, *args, **kwargs):
+def sample(
+    name: str,
+    fn: TorchDistributionMixin,
+    *args,
+    obs: Optional[torch.Tensor] = None,
+    obs_mask: Optional[torch.BoolTensor] = None,
+    infer: Optional[InferDict] = None,
+    **kwargs,
+) -> torch.Tensor:
     """
     Calls the stochastic function ``fn`` with additional side-effects depending
     on ``name`` and the enclosing context (e.g. an inference algorithm).  See
@@ -123,15 +150,14 @@ def sample(name, fn, *args, **kwargs):
     :returns: sample
     """
     # Transform obs_mask into multiple sample statements.
-    obs = kwargs.pop("obs", None)
-    obs_mask = kwargs.pop("obs_mask", None)
     if obs_mask is not None:
         return _masked_observe(name, fn, obs, obs_mask, *args, **kwargs)
 
     # Check if stack is empty.
     # if stack empty, default behavior (defined here)
-    infer = kwargs.pop("infer", {}).copy()
+    infer = {} if infer is None else infer.copy()
     is_observed = infer.pop("is_observed", obs is not None)
+    assert isinstance(is_observed, bool)
     if not am_i_wrapped():
         if obs is not None and not infer.get("_deterministic"):
             warnings.warn(
@@ -143,28 +169,31 @@ def sample(name, fn, *args, **kwargs):
     # if stack not empty, apply everything in the stack?
     else:
         # initialize data structure to pass up/down the stack
-        msg = {
-            "type": "sample",
-            "name": name,
-            "fn": fn,
-            "is_observed": is_observed,
-            "args": args,
-            "kwargs": kwargs,
-            "value": obs,
-            "infer": infer,
-            "scale": 1.0,
-            "mask": None,
-            "cond_indep_stack": (),
-            "done": False,
-            "stop": False,
-            "continuation": None,
-        }
+        msg = Message(
+            type="sample",
+            name=name,
+            fn=fn,
+            is_observed=is_observed,
+            args=args,
+            kwargs=kwargs,
+            value=obs,
+            infer=infer,
+            scale=1.0,
+            mask=None,
+            cond_indep_stack=(),
+            done=False,
+            stop=False,
+            continuation=None,
+        )
         # apply the stack and return its return value
         apply_stack(msg)
+        assert msg["value"] is not None  # type narrowing guaranteed by apply_stack
         return msg["value"]
 
 
-def factor(name, log_factor, *, has_rsample=None):
+def factor(
+    name: str, log_factor: torch.Tensor, *, has_rsample: Optional[bool] = None
+) -> None:
     """
     Factor statement to add arbitrary log probability factor to a
     probabilisitic model.
@@ -188,7 +217,9 @@ def factor(name, log_factor, *, has_rsample=None):
     sample(name, unit_dist, obs=unit_value, infer={"is_auxiliary": True})
 
 
-def deterministic(name, value, event_dim=None):
+def deterministic(
+    name: str, value: torch.Tensor, event_dim: Optional[int] = None
+) -> torch.Tensor:
     """
     Deterministic statement to add a :class:`~pyro.distributions.Delta` site
     with name `name` and value `value` to the trace. This is useful when we
@@ -215,7 +246,7 @@ def deterministic(name, value, event_dim=None):
 
 
 @effectful(type="subsample")
-def subsample(data, event_dim):
+def subsample(data: torch.Tensor, event_dim: int) -> torch.Tensor:
     """
     Subsampling statement to subsample data tensors based on enclosing
     :class:`plate` s.
@@ -374,7 +405,9 @@ class irange(SubsampleMessenger):
 
 
 @contextmanager
-def plate_stack(prefix, sizes, rightmost_dim=-1):
+def plate_stack(
+    prefix: str, sizes: Sequence[int], rightmost_dim: int = -1
+) -> Iterator[None]:
     """
     Create a contiguous stack of :class:`plate` s with dimensions::
 
@@ -392,7 +425,9 @@ def plate_stack(prefix, sizes, rightmost_dim=-1):
         yield
 
 
-def module(name, nn_module, update_module_params=False):
+def module(
+    name: str, nn_module: torch.nn.Module, update_module_params: bool = False
+) -> torch.nn.Module:
     """
     Registers all parameters of a :class:`torch.nn.Module` with Pyro's
     :mod:`~pyro.params.param_store`.  In conjunction with the
@@ -458,11 +493,11 @@ def module(name, nn_module, update_module_params=False):
                 mod_name = _name
             if _name in target_state_dict.keys():
                 if not is_param:
-                    deep_getattr(nn_module, mod_name)._parameters[
-                        param_name
-                    ] = target_state_dict[_name]
+                    deep_getattr(nn_module, mod_name)._parameters[param_name] = (
+                        target_state_dict[_name]
+                    )
                 else:
-                    nn_module._parameters[mod_name] = target_state_dict[_name]
+                    nn_module._parameters[mod_name] = target_state_dict[_name]  # type: ignore[assignment]
 
     return nn_module
 
@@ -508,7 +543,7 @@ def random_module(name, nn_module, prior, *args, **kwargs):
 
 
 @effectful(type="barrier")
-def barrier(data):
+def barrier(data: torch.Tensor) -> torch.Tensor:
     """
     EXPERIMENTAL Ensures all values in ``data`` are ground, rather than lazy
     funsor values. This is useful in combination with
@@ -517,7 +552,7 @@ def barrier(data):
     return data
 
 
-def enable_validation(is_validate=True):
+def enable_validation(is_validate: bool = True) -> None:
     """
     Enable or disable validation checks in Pyro. Validation checks provide
     useful warnings and errors, e.g. NaN checks, validating distribution
@@ -544,7 +579,7 @@ def enable_validation(is_validate=True):
 
 
 @contextmanager
-def validation_enabled(is_validate=True):
+def validation_enabled(is_validate: bool = True) -> Iterator[None]:
     """
     Context manager that is useful when temporarily enabling/disabling
     validation checks.

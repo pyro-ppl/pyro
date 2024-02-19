@@ -24,6 +24,7 @@ class CholeskyTransform(Transform):
     Transform via the mapping :math:`y = safe_cholesky(x)`, where `x` is a
     positive definite matrix.
     """
+
     bijective = True
     domain = constraints.positive_definite
     codomain = constraints.lower_cholesky
@@ -51,6 +52,7 @@ class CorrMatrixCholeskyTransform(CholeskyTransform):
     Transform via the mapping :math:`y = safe_cholesky(x)`, where `x` is a
     correlation matrix.
     """
+
     bijective = True
     domain = constraints.corr_matrix
     # TODO: change corr_cholesky_constraint to corr_cholesky when the latter is availabler

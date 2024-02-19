@@ -107,13 +107,15 @@ class _Worker:
         self.rng_seed = (torch.initial_seed() + chain_id) % MAX_SEED
         self.log_queue = log_queue
         self.result_queue = result_queue
-        self.default_tensor_type = torch.Tensor().type()
+        self.default_dtype = torch.Tensor().dtype
+        self.default_device = torch.Tensor().device
         self.hook = hook
         self.event = event
 
     def run(self, *args, **kwargs):
         pyro.set_rng_seed(self.rng_seed)
-        torch.set_default_tensor_type(self.default_tensor_type)
+        torch.set_default_dtype(self.default_dtype)
+        torch.set_default_device(self.default_device)
         kwargs = kwargs
         logger = logging.getLogger("pyro.infer.mcmc")
         logger_id = "CHAIN:{}".format(self.chain_id)

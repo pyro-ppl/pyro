@@ -45,6 +45,7 @@ Pyro Documentation
    contrib.randomvariable
    contrib.timeseries
    contrib.tracking
+   contrib.zuko
 
 
 Indices and tables

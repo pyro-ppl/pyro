@@ -13,7 +13,7 @@ from tests.common import assert_equal
 @pytest.mark.parametrize("obs_dim", [2, 4])
 @pytest.mark.parametrize("T", [11, 17])
 def test_generic_lgssm_forecast(model_class, state_dim, obs_dim, T):
-    torch.set_default_tensor_type("torch.DoubleTensor")
+    torch.set_default_dtype(torch.float64)
 
     if model_class == "lgssm":
         model = GenericLGSSM(

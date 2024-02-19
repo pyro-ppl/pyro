@@ -2,18 +2,183 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
-from typing import Dict
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+    overload,
+)
+
+import torch
+from typing_extensions import Literal, ParamSpec, TypedDict
 
 from pyro.params.param_store import (  # noqa: F401
     _MODULE_NAMESPACE_DIVIDER,
     ParamStoreDict,
 )
 
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+
+if TYPE_CHECKING:
+    from collections import Counter
+
+    from pyro.distributions.score_parts import ScoreParts
+    from pyro.distributions.torch_distribution import TorchDistributionMixin
+    from pyro.poutine.indep_messenger import CondIndepStackFrame
+    from pyro.poutine.messenger import Messenger
+
 # the global pyro stack
-_PYRO_STACK = []
+_PYRO_STACK: List["Messenger"] = []
 
 # the global ParamStore
 _PYRO_PARAM_STORE = ParamStoreDict()
+
+
+class InferDict(TypedDict, total=False):
+    """
+    A dictionary that contains information about inference.
+
+    This can be used to configure per-site inference strategies, e.g.::
+
+        pyro.sample(
+            "x",
+            dist.Bernoulli(0.5),
+            infer={"enumerate": "parallel"},
+        )
+
+    Keys:
+        enumerate (str):
+            If one of the strings "sequential" or "parallel", enables
+            enumeration. Parallel enumeration is generally faster but requires
+            broadcasting-safe operations and static structure.
+        expand (bool):
+            Whether to expand the distribution during enumeration. Defaults to
+            False if missing.
+        is_auxiliary (bool):
+            Whether the sample site is auxiliary, e.g. for use in guides that
+            deterministically transform auxiliary variables. Defaults to False
+            if missing.
+        is_observed (bool):
+            Whether the sample site is observed (i.e. not latent). Defaults to
+            False if missing.
+        num_samples (int):
+            The number of samples to draw. Defaults to 1 if missing.
+        obs (optional torch.Tensor):
+            The observed value, or None for latent variables. Defaults to None
+            if missing.
+        prior (optional torch.distributions.Distribution):
+            (internal) For use in GuideMessenger to store the model's prior
+            distribution (conditioned on upstream sites).
+        tmc (str):
+            Whether to use the diagonal or mixture approximation for Tensor
+            Monte Carlo in TraceTMC_ELBO.
+        was_observed (bool):
+            (internal) Whether the sample site was originally observed, in the
+            context of inference via Reweighted Wake Sleep or Compiled
+            Sequential Importance Sampling.
+    """
+
+    enumerate: Literal["sequential", "parallel"]
+    expand: bool
+    is_auxiliary: bool
+    is_observed: bool
+    num_samples: int
+    obs: Optional[torch.Tensor]
+    prior: "TorchDistributionMixin"
+    tmc: Literal["diagonal", "mixture"]
+    was_observed: bool
+    _deterministic: bool
+    _dim_to_symbol: Dict[int, str]
+    _do_not_trace: bool
+    _enumerate_symbol: str
+    _markov_scope: "Counter"
+    _enumerate_dim: int
+    _dim_to_id: Dict[int, int]
+    _markov_depth: int
+
+
+class Message(TypedDict, Generic[_P, _T], total=False):
+    """
+    Pyro's internal message type for effect handling.
+
+    Messages are stored in trace objects, e.g.::
+
+        trace.nodes["my_site_name"]  # This is a Message.
+
+    Keys:
+        type (str):
+            The message type, typically one of the strings "sample", "param",
+            "plate", or "markov", but possibly custom.
+        name (str):
+            The site name, typically naming a sample or parameter.
+        fn (callable):
+            The distribution or function used to generate the sample.
+        is_observed (bool):
+            A flag to indicate whether the value is observed.
+        args (tuple):
+            Positional arguments to the distribution or function.
+        kwargs (dict):
+            Keyword arguments to the distribution or function.
+        value (torch.Tensor):
+            The value of the sample (either observed or sampled).
+        scale (torch.Tensor):
+            A scaling factor for the log probability.
+        mask (bool torch.Tensor):
+            A bool or tensor to mask the log probability.
+        cond_indep_stack (tuple):
+            The site's local stack of conditional independence metadata.
+            Immutable.
+        done (bool):
+            A flag to indicate whether the message has been handled.
+        stop (bool):
+            A flag to stop further processing of the message.
+        continuation (callable):
+            A function to call after processing the message.
+        infer (optional InferDict):
+            A dictionary of inference parameters.
+        obs (torch.Tensor):
+            The observed value.
+        log_prob (torch.Tensor):
+            The log probability of the sample.
+        log_prob_sum (torch.Tensor):
+            The sum of the log probability.
+        unscaled_log_prob (torch.Tensor):
+            The unscaled log probability.
+        score_parts (pyro.distributions.ScoreParts):
+            A collection of score parts.
+        packed (Message):
+            A packed message, used during enumeration.
+    """
+
+    type: str
+    name: Optional[str]
+    fn: Callable[_P, _T]
+    is_observed: bool
+    args: Tuple
+    kwargs: Dict
+    value: Optional[_T]
+    scale: Union[torch.Tensor, float]
+    mask: Union[bool, torch.Tensor, None]
+    cond_indep_stack: Tuple["CondIndepStackFrame", ...]
+    done: bool
+    stop: bool
+    continuation: Optional[Callable[["Message"], None]]
+    infer: Optional[InferDict]
+    obs: Optional[torch.Tensor]
+    log_prob: torch.Tensor
+    log_prob_sum: torch.Tensor
+    unscaled_log_prob: torch.Tensor
+    score_parts: "ScoreParts"
+    packed: "Message"
+    _intervener_id: Optional[str]
 
 
 class _DimAllocator:
@@ -24,26 +189,25 @@ class _DimAllocator:
     Note that dimensions are indexed from the right, e.g. -1, -2.
     """
 
-    def __init__(self):
-        self._stack = []  # in reverse orientation of log_prob.shape
+    def __init__(self) -> None:
+        # in reverse orientation of log_prob.shape
+        self._stack: List[Optional[str]] = []
 
-    def allocate(self, name, dim):
+    def allocate(self, name: str, dim: Optional[int]) -> int:
         """
         Allocate a dimension to an :class:`plate` with given name.
         Dim should be either None for automatic allocation or a negative
         integer for manual allocation.
         """
         if name in self._stack:
-            raise ValueError('duplicate plate "{}"'.format(name))
+            raise ValueError(f"duplicate plate '{name}'")
         if dim is None:
             # Automatically designate the rightmost available dim for allocation.
             dim = -1
             while -dim <= len(self._stack) and self._stack[-1 - dim] is not None:
                 dim -= 1
         elif dim >= 0:
-            raise ValueError(
-                "Expected dim < 0 to index from the right, actual {}".format(dim)
-            )
+            raise ValueError(f"Expected dim < 0 to index from the right, actual {dim}")
 
         # Allocate the requested dimension.
         while dim < -len(self._stack):
@@ -64,7 +228,7 @@ class _DimAllocator:
         self._stack[-1 - dim] = name
         return dim
 
-    def free(self, name, dim):
+    def free(self, name: str, dim: int) -> None:
         """
         Free a dimension.
         """
@@ -88,7 +252,7 @@ class _EnumAllocator:
     Note that ids are simply nonnegative integers here.
     """
 
-    def set_first_available_dim(self, first_available_dim):
+    def set_first_available_dim(self, first_available_dim: int) -> None:
         """
         Set the first available dim, which should be to the left of all
         :class:`plate` dimensions, e.g. ``-1 - max_plate_nesting``. This should
@@ -98,9 +262,9 @@ class _EnumAllocator:
         assert first_available_dim < 0, first_available_dim
         self.next_available_dim = first_available_dim
         self.next_available_id = 0
-        self.dim_to_id = {}  # only the global ids
+        self.dim_to_id: Dict[int, int] = {}  # only the global ids
 
-    def allocate(self, scope_dims=None):
+    def allocate(self, scope_dims: Optional[Set[int]] = None) -> Tuple[int, int]:
         """
         Allocate a new recyclable dim and a unique id.
 
@@ -146,7 +310,7 @@ class NonlocalExit(Exception):
     Used by poutine.EscapeMessenger to return site information.
     """
 
-    def __init__(self, site, *args, **kwargs):
+    def __init__(self, site: Message, *args, **kwargs) -> None:
         """
         :param site: message at a pyro site constructor.
             Just stores the input site.
@@ -154,18 +318,20 @@ class NonlocalExit(Exception):
         super().__init__(*args, **kwargs)
         self.site = site
 
-    def reset_stack(self):
+    def reset_stack(self) -> None:
         """
         Reset the state of the frames remaining in the stack.
         Necessary for multiple re-executions in poutine.queue.
         """
+        from pyro.poutine.block_messenger import BlockMessenger
+
         for frame in reversed(_PYRO_STACK):
             frame._reset()
-            if type(frame).__name__ == "BlockMessenger" and frame.hide_fn(self.site):
+            if isinstance(frame, BlockMessenger) and frame.hide_fn(self.site):
                 break
 
 
-def default_process_message(msg):
+def default_process_message(msg: Message) -> None:
     """
     Default method for processing messages in inference.
 
@@ -174,7 +340,7 @@ def default_process_message(msg):
     """
     if msg["done"] or msg["is_observed"] or msg["value"] is not None:
         msg["done"] = True
-        return msg
+        return
 
     msg["value"] = msg["fn"](*msg["args"], **msg["kwargs"])
 
@@ -182,7 +348,7 @@ def default_process_message(msg):
     msg["done"] = True
 
 
-def apply_stack(initial_msg):
+def apply_stack(initial_msg: Message) -> None:
     """
     Execute the effect stack at a single site according to the following scheme:
 
@@ -223,10 +389,8 @@ def apply_stack(initial_msg):
     if cont is not None:
         cont(msg)
 
-    return None
 
-
-def am_i_wrapped():
+def am_i_wrapped() -> bool:
     """
     Checks whether the current computation is wrapped in a poutine.
     :returns: bool
@@ -234,7 +398,21 @@ def am_i_wrapped():
     return len(_PYRO_STACK) > 0
 
 
-def effectful(fn=None, type=None):
+@overload
+def effectful(
+    fn: None = ..., type: Optional[str] = ...
+) -> Callable[[Callable[_P, _T]], Callable[..., Optional[_T]]]: ...
+
+
+@overload
+def effectful(
+    fn: Callable[_P, _T] = ..., type: Optional[str] = ...
+) -> Callable[..., Optional[_T]]: ...
+
+
+def effectful(
+    fn: Optional[Callable[_P, _T]] = None, type: Optional[str] = None
+) -> Callable:
     """
     :param fn: function or callable that performs an effectful computation
     :param str type: the type label of the operation, e.g. `"sample"`
@@ -247,45 +425,47 @@ def effectful(fn=None, type=None):
     if getattr(fn, "_is_effectful", None):
         return fn
 
-    assert type is not None, "must provide a type label for operation {}".format(fn)
+    assert type is not None, f"must provide a type label for operation {fn}"
     assert type != "message", "cannot use 'message' as keyword"
 
     @functools.wraps(fn)
-    def _fn(*args, **kwargs):
-        name = kwargs.pop("name", None)
-        infer = kwargs.pop("infer", {})
-
-        value = kwargs.pop("obs", None)
-        is_observed = value is not None
+    def _fn(
+        *args: _P.args,
+        name: Optional[str] = None,
+        infer: Optional[InferDict] = None,
+        obs: Optional[_T] = None,
+        **kwargs: _P.kwargs,
+    ) -> Optional[_T]:
+        is_observed = obs is not None
 
         if not am_i_wrapped():
             return fn(*args, **kwargs)
         else:
-            msg = {
-                "type": type,
-                "name": name,
-                "fn": fn,
-                "is_observed": is_observed,
-                "args": args,
-                "kwargs": kwargs,
-                "value": value,
-                "scale": 1.0,
-                "mask": None,
-                "cond_indep_stack": (),
-                "done": False,
-                "stop": False,
-                "continuation": None,
-                "infer": infer,
-            }
+            msg = Message(
+                type=type,
+                name=name,
+                fn=fn,
+                is_observed=is_observed,
+                args=args,
+                kwargs=kwargs,
+                value=obs,
+                scale=1.0,
+                mask=None,
+                cond_indep_stack=(),
+                done=False,
+                stop=False,
+                continuation=None,
+                infer=infer if infer is not None else {},
+            )
             # apply the stack and return its return value
             apply_stack(msg)
             return msg["value"]
 
-    _fn._is_effectful = True
+    _fn._is_effectful = True  # type: ignore[attr-defined]
     return _fn
 
 
-def _inspect() -> Dict[str, object]:
+def _inspect() -> Message:
     """
     EXPERIMENTAL Inspect the Pyro stack.
 
@@ -295,27 +475,27 @@ def _inspect() -> Dict[str, object]:
     :returns: A message with all effects applied.
     :rtype: dict
     """
-    msg = {
-        "type": "inspect",
-        "name": "_pyro_inspect",
-        "fn": lambda: True,
-        "is_observed": False,
-        "args": (),
-        "kwargs": {},
-        "value": None,
-        "infer": {"_do_not_trace": True},
-        "scale": 1.0,
-        "mask": None,
-        "cond_indep_stack": (),
-        "done": False,
-        "stop": False,
-        "continuation": None,
-    }
+    msg = Message(
+        type="inspect",
+        name="_pyro_inspect",
+        fn=lambda: True,
+        is_observed=False,
+        args=(),
+        kwargs={},
+        value=None,
+        infer={"_do_not_trace": True},
+        scale=1.0,
+        mask=None,
+        cond_indep_stack=(),
+        done=False,
+        stop=False,
+        continuation=None,
+    )
     apply_stack(msg)
     return msg
 
 
-def get_mask():
+def get_mask() -> Union[bool, torch.Tensor, None]:
     """
     Records the effects of enclosing ``poutine.mask`` handlers.
 
@@ -335,7 +515,7 @@ def get_mask():
     return _inspect()["mask"]
 
 
-def get_plates() -> tuple:
+def get_plates() -> Tuple["CondIndepStackFrame", ...]:
     """
     Records the effects of enclosing ``pyro.plate`` contexts.
 

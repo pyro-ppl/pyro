@@ -1,8 +1,15 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from .messenger import Messenger
-from .trace_struct import Trace
+from typing import TYPE_CHECKING, Dict, Union
+
+import torch
+
+from pyro.poutine.messenger import Messenger
+from pyro.poutine.trace_struct import Trace
+
+if TYPE_CHECKING:
+    from pyro.poutine.runtime import Message
 
 
 class ConditionMessenger(Messenger):
@@ -31,7 +38,7 @@ class ConditionMessenger(Messenger):
     :returns: stochastic function decorated with a :class:`~pyro.poutine.condition_messenger.ConditionMessenger`
     """
 
-    def __init__(self, data):
+    def __init__(self, data: Union[Dict[str, torch.Tensor], Trace]) -> None:
         """
         :param data: a dict or a Trace
 
@@ -41,7 +48,7 @@ class ConditionMessenger(Messenger):
         super().__init__()
         self.data = data
 
-    def _pyro_sample(self, msg):
+    def _pyro_sample(self, msg: "Message") -> None:
         """
         :param msg: current message at a trace site.
         :returns: a sample from the stochastic function at the site.
@@ -53,6 +60,7 @@ class ConditionMessenger(Messenger):
         Otherwise, implements default sampling behavior
         with no additional effects.
         """
+        assert isinstance(msg["name"], str)
         name = msg["name"]
 
         if name in self.data:
@@ -61,4 +69,3 @@ class ConditionMessenger(Messenger):
             else:
                 msg["value"] = self.data[name]
             msg["is_observed"] = msg["value"] is not None
-        return None

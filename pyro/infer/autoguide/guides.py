@@ -138,7 +138,7 @@ class AutoGuide(PyroModule):
                 self.plates = {p.name: p for p in plates}
             for name, frame in sorted(self._prototype_frames.items()):
                 if name not in self.plates:
-                    full_size = getattr(frame, "full_size", frame.size)
+                    full_size = frame.full_size or frame.size
                     self.plates[name] = pyro.plate(
                         name, full_size, dim=frame.dim, subsample_size=frame.size
                     )
@@ -182,7 +182,7 @@ class AutoGuide(PyroModule):
 
 class AutoGuideList(AutoGuide, nn.ModuleList):
     """
-    Container class to combine multiple automatic guides.
+    Container class to combine multiple automatic or custom guides.
 
     Example usage::
 
@@ -203,7 +203,7 @@ class AutoGuideList(AutoGuide, nn.ModuleList):
 
     def append(self, part):
         """
-        Add an automatic guide for part of the model. The guide should
+        Add an automatic or custom guide for part of the model. The guide should
         have been created by blocking the model to restrict to a subset of
         sample sites. No two parts should operate on any one sample site.
 
@@ -286,15 +286,15 @@ class AutoCallable(AutoGuide):
             ...
 
         guide = AutoGuideList(model)
-        guide.add(AutoDelta(poutine.block(model, expose=['my_global_param']))
-        guide.add(my_local_guide)  # automatically wrapped in an AutoCallable
+        guide.append(AutoDelta(poutine.block(model, expose=['my_global_param']))
+        guide.append(my_local_guide)  # automatically wrapped in an AutoCallable
 
     To specify a median callable, you can instead::
 
         def my_local_median(*args, **kwargs)
             ...
 
-        guide.add(AutoCallable(model, my_local_guide, my_local_median))
+        guide.append(AutoCallable(model, my_local_guide, my_local_median))
 
     For more complex guides that need e.g. access to plates, users should
     instead subclass ``AutoGuide``.
@@ -363,7 +363,7 @@ class AutoDelta(AutoGuide):
 
             # If subsampling, repeat init_value to full size.
             for frame in site["cond_indep_stack"]:
-                full_size = getattr(frame, "full_size", frame.size)
+                full_size = frame.full_size or frame.size
                 if full_size != frame.size:
                     dim = frame.dim - event_dim
                     value = periodic_repeat(value, full_size, dim).contiguous()
@@ -475,7 +475,7 @@ class AutoNormal(AutoGuide):
 
             # If subsampling, repeat init_value to full size.
             for frame in site["cond_indep_stack"]:
-                full_size = getattr(frame, "full_size", frame.size)
+                full_size = frame.full_size or frame.size
                 if full_size != frame.size:
                     dim = frame.dim - event_dim
                     init_loc = periodic_repeat(init_loc, full_size, dim).contiguous()

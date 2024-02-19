@@ -204,7 +204,7 @@ class SineBivariateVonMises(TorchDistribution):
             curr_b0 = b0[missing > 0]
 
             x = (
-                torch.distributions.Normal(0.0, torch.sqrt(1 + 2 * curr_eig / curr_b0))
+                torch.distributions.Normal(0.0, torch.rsqrt(1 + 2 * curr_eig / curr_b0))
                 .sample((missing[missing > 0].min(),))
                 .view(2, -1, missing[missing > 0].min())
             )

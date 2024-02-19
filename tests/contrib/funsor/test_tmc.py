@@ -170,9 +170,11 @@ def test_tmc_normals_chain_gradient(
         guide = (
             factorized_guide
             if guide_type == "factorized"
-            else nonfactorized_guide
-            if guide_type == "nonfactorized"
-            else lambda *args: None
+            else (
+                nonfactorized_guide
+                if guide_type == "nonfactorized"
+                else lambda *args: None
+            )
         )
         tmc_guide = infer.config_enumerate(
             guide,

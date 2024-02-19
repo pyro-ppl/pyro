@@ -620,7 +620,7 @@ models = {
 
 def main(args):
     if args.cuda:
-        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+        torch.set_default_device("cuda")
 
     logging.info("Loading data")
     data = poly.load_data(poly.JSB_CHORALES)
@@ -677,9 +677,11 @@ def main(args):
         elbo = TraceTMC_ELBO(max_plate_nesting=1 if model is model_0 else 2)
         tmc_model = poutine.infer_config(
             model,
-            lambda msg: {"num_samples": args.tmc_num_samples, "expand": False}
-            if msg["infer"].get("enumerate", None) == "parallel"
-            else {},
+            lambda msg: (
+                {"num_samples": args.tmc_num_samples, "expand": False}
+                if msg["infer"].get("enumerate", None) == "parallel"
+                else {}
+            ),
         )  # noqa: E501
         svi = SVI(tmc_model, guide, optim, elbo)
     else:
@@ -735,7 +737,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.6")
+    assert pyro.__version__.startswith("1.9.0")
     parser = argparse.ArgumentParser(
         description="MAP Baum-Welch learning Bach Chorales"
     )

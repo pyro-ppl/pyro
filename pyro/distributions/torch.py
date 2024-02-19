@@ -385,5 +385,8 @@ __doc__ = "\n\n".join(
             _name
         )
         for _name in sorted(__all__)
+        # Work around sphinx autodoc error in case two InverseGamma's are defined:
+        # "duplicate object description of pyro.distributions.InverseGamma"
+        if _name != "InverseGamma"
     ]
 )

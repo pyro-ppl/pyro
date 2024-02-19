@@ -1,9 +1,14 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import TYPE_CHECKING, Union
+
 import torch
 
-from .messenger import Messenger
+from pyro.poutine.messenger import Messenger
+
+if TYPE_CHECKING:
+    from pyro.poutine.runtime import Message
 
 
 class MaskMessenger(Messenger):
@@ -17,7 +22,7 @@ class MaskMessenger(Messenger):
     :returns: stochastic function decorated with a :class:`~pyro.poutine.scale_messenger.MaskMessenger`
     """
 
-    def __init__(self, mask):
+    def __init__(self, mask: Union[bool, torch.BoolTensor]) -> None:
         if isinstance(mask, torch.Tensor):
             if mask.dtype != torch.bool:
                 raise ValueError(
@@ -31,6 +36,5 @@ class MaskMessenger(Messenger):
         super().__init__()
         self.mask = mask
 
-    def _process_message(self, msg):
+    def _process_message(self, msg: "Message") -> None:
         msg["mask"] = self.mask if msg["mask"] is None else msg["mask"] & self.mask
-        return None

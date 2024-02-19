@@ -1,8 +1,10 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from .messenger import Messenger
-from .runtime import NonlocalExit
+from typing import Callable
+
+from pyro.poutine.messenger import Messenger
+from pyro.poutine.runtime import Message, NonlocalExit
 
 
 class EscapeMessenger(Messenger):
@@ -10,7 +12,7 @@ class EscapeMessenger(Messenger):
     Messenger that does a nonlocal exit by raising a util.NonlocalExit exception
     """
 
-    def __init__(self, escape_fn):
+    def __init__(self, escape_fn: Callable[[Message], bool]) -> None:
         """
         :param escape_fn: function that takes a msg as input and returns True
             if the poutine should perform a nonlocal exit at that site.
@@ -20,7 +22,7 @@ class EscapeMessenger(Messenger):
         super().__init__()
         self.escape_fn = escape_fn
 
-    def _pyro_sample(self, msg):
+    def _pyro_sample(self, msg: Message) -> None:
         """
         :param msg: current message at a trace site
         :returns: a sample from the stochastic function at the site.
@@ -34,8 +36,7 @@ class EscapeMessenger(Messenger):
             msg["done"] = True
             msg["stop"] = True
 
-            def cont(m):
+            def cont(m: Message) -> None:
                 raise NonlocalExit(m)
 
             msg["continuation"] = cont
-        return None

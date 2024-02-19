@@ -82,9 +82,11 @@ class ConditionalComposeTransformModule(
 
     def __init__(self, transforms, cache_size: int = 0):
         self.transforms = [
-            ConstantConditionalTransform(t)
-            if not isinstance(t, ConditionalTransform)
-            else t
+            (
+                ConstantConditionalTransform(t)
+                if not isinstance(t, ConditionalTransform)
+                else t
+            )
             for t in transforms
         ]
         super().__init__()
@@ -131,9 +133,11 @@ class ConditionalTransformedDistribution(ConditionalDistribution):
             else ConstantConditionalDistribution(base_dist)
         )
         self.transforms = [
-            t
-            if isinstance(t, ConditionalTransform)
-            else ConstantConditionalTransform(t)
+            (
+                t
+                if isinstance(t, ConditionalTransform)
+                else ConstantConditionalTransform(t)
+            )
             for t in transforms
         ]
 

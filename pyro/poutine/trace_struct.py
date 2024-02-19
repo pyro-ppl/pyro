@@ -3,6 +3,20 @@
 
 import sys
 from collections import OrderedDict
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Literal,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 import opt_einsum
 
@@ -11,6 +25,16 @@ from pyro.distributions.util import scale_and_mask
 from pyro.ops.packed import pack
 from pyro.poutine.util import is_validation_enabled
 from pyro.util import warn_if_inf, warn_if_nan
+
+if TYPE_CHECKING:
+    import torch
+
+    from pyro.distributions.distribution import Distribution
+    from pyro.poutine.runtime import Message
+
+
+def allow_all_sites(name: str, site: "Message") -> bool:
+    return True
 
 
 class Trace:
@@ -70,31 +94,31 @@ class Trace:
     :param string graph_type: string specifying the kind of trace graph to construct
     """
 
-    def __init__(self, graph_type="flat"):
+    def __init__(self, graph_type: Literal["flat", "dense"] = "flat") -> None:
         assert graph_type in ("flat", "dense"), "{} not a valid graph type".format(
             graph_type
         )
         self.graph_type = graph_type
-        self.nodes = OrderedDict()
-        self._succ = OrderedDict()
-        self._pred = OrderedDict()
+        self.nodes: OrderedDict[str, "Message"] = OrderedDict()
+        self._succ: OrderedDict[str, Set[str]] = OrderedDict()
+        self._pred: OrderedDict[str, Set[str]] = OrderedDict()
 
-    def __contains__(self, name):
+    def __contains__(self, name: str) -> bool:
         return name in self.nodes
 
-    def __iter__(self):
+    def __iter__(self) -> Iterable[str]:
         return iter(self.nodes.keys())
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.nodes)
 
     @property
-    def edges(self):
+    def edges(self) -> Iterable[Tuple[str, str]]:
         for site, adj_nodes in self._succ.items():
             for adj_node in adj_nodes:
                 yield site, adj_node
 
-    def add_node(self, site_name, **kwargs):
+    def add_node(self, site_name: str, **kwargs: Any) -> None:
         """
         :param string site_name: the name of the site to be added
 
@@ -117,18 +141,18 @@ class Trace:
                 )
 
         # XXX should copy in case site gets mutated, or dont bother?
-        self.nodes[site_name] = kwargs
+        self.nodes[site_name] = kwargs  # type: ignore[assignment]
         self._pred[site_name] = set()
         self._succ[site_name] = set()
 
-    def add_edge(self, site1, site2):
+    def add_edge(self, site1: str, site2: str) -> None:
         for site in (site1, site2):
             if site not in self.nodes:
                 self.add_node(site)
         self._succ[site1].add(site2)
         self._pred[site2].add(site1)
 
-    def remove_node(self, site_name):
+    def remove_node(self, site_name: str) -> None:
         self.nodes.pop(site_name)
         for p in self._pred[site_name]:
             self._succ[p].remove(site_name)
@@ -137,13 +161,13 @@ class Trace:
         self._pred.pop(site_name)
         self._succ.pop(site_name)
 
-    def predecessors(self, site_name):
+    def predecessors(self, site_name: str) -> Set[str]:
         return self._pred[site_name]
 
-    def successors(self, site_name):
+    def successors(self, site_name: str) -> Set[str]:
         return self._succ[site_name]
 
-    def copy(self):
+    def copy(self) -> "Trace":
         """
         Makes a shallow copy of self with nodes and edges preserved.
         """
@@ -153,7 +177,7 @@ class Trace:
         new_tr._pred.update(self._pred)
         return new_tr
 
-    def _dfs(self, site, visited):
+    def _dfs(self, site: str, visited: Set[str]) -> Iterable[str]:
         if site in visited:
             return
         for s in self._succ[site]:
@@ -162,21 +186,24 @@ class Trace:
         visited.add(site)
         yield site
 
-    def topological_sort(self, reverse=False):
+    def topological_sort(self, reverse: bool = False) -> List[str]:
         """
         Return a list of nodes (site names) in topologically sorted order.
 
         :param bool reverse: Return the list in reverse order.
         :return: list of topologically sorted nodes (site names).
         """
-        visited = set()
+        visited: Set[str] = set()
         top_sorted = []
         for s in self._succ:
             for node in self._dfs(s, visited):
                 top_sorted.append(node)
         return top_sorted if reverse else list(reversed(top_sorted))
 
-    def log_prob_sum(self, site_filter=lambda name, site: True):
+    def log_prob_sum(
+        self,
+        site_filter: Callable[[str, "Message"], bool] = allow_all_sites,
+    ) -> Union["torch.Tensor", float]:
         """
         Compute the site-wise log probabilities of the trace.
         Each ``log_prob`` has shape equal to the corresponding ``batch_shape``.
@@ -189,6 +216,8 @@ class Trace:
         result = 0.0
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
+                if TYPE_CHECKING:
+                    assert isinstance(site["fn"], Distribution)
                 if "log_prob_sum" in site:
                     log_p = site["log_prob_sum"]
                 else:
@@ -213,10 +242,13 @@ class Trace:
                             "log_prob_sum at site '{}'".format(name),
                             allow_neginf=True,
                         )
-                result = result + log_p
+                result = result + log_p  # type: ignore[assignment]
         return result
 
-    def compute_log_prob(self, site_filter=lambda name, site: True):
+    def compute_log_prob(
+        self,
+        site_filter: Callable[[str, "Message"], bool] = allow_all_sites,
+    ) -> None:
         """
         Compute the site-wise log probabilities of the trace.
         Each ``log_prob`` has shape equal to the corresponding ``batch_shape``.
@@ -225,6 +257,8 @@ class Trace:
         """
         for name, site in self.nodes.items():
             if site["type"] == "sample" and site_filter(name, site):
+                if TYPE_CHECKING:
+                    assert isinstance(site["fn"], Distribution)
                 if "log_prob" not in site:
                     try:
                         log_p = site["fn"].log_prob(
@@ -253,7 +287,7 @@ class Trace:
                             allow_neginf=True,
                         )
 
-    def compute_score_parts(self):
+    def compute_score_parts(self) -> None:
         """
         Compute the batched local score parts at each site of the trace.
         Each ``log_prob`` has shape equal to the corresponding ``batch_shape``.
@@ -262,6 +296,8 @@ class Trace:
         """
         for name, site in self.nodes.items():
             if site["type"] == "sample" and "score_parts" not in site:
+                if TYPE_CHECKING:
+                    assert isinstance(site["fn"], Distribution)
                 # Note that ScoreParts overloads the multiplication operator
                 # to correctly scale each of its three parts.
                 try:
@@ -291,16 +327,17 @@ class Trace:
                         allow_neginf=True,
                     )
 
-    def detach_(self):
+    def detach_(self) -> None:
         """
         Detach values (in-place) at each sample site of the trace.
         """
         for _, site in self.nodes.items():
             if site["type"] == "sample":
+                assert site["value"] is not None
                 site["value"] = site["value"].detach()
 
     @property
-    def observation_nodes(self):
+    def observation_nodes(self) -> List[str]:
         """
         :return: a list of names of observe sites
         """
@@ -311,14 +348,14 @@ class Trace:
         ]
 
     @property
-    def param_nodes(self):
+    def param_nodes(self) -> List[str]:
         """
         :return: a list of names of param sites
         """
         return [name for name, node in self.nodes.items() if node["type"] == "param"]
 
     @property
-    def stochastic_nodes(self):
+    def stochastic_nodes(self) -> List[str]:
         """
         :return: a list of names of sample sites
         """
@@ -329,7 +366,7 @@ class Trace:
         ]
 
     @property
-    def reparameterized_nodes(self):
+    def reparameterized_nodes(self) -> List[str]:
         """
         :return: a list of names of sample sites whose stochastic functions
             are reparameterizable primitive distributions
@@ -343,14 +380,14 @@ class Trace:
         ]
 
     @property
-    def nonreparam_stochastic_nodes(self):
+    def nonreparam_stochastic_nodes(self) -> List[str]:
         """
         :return: a list of names of sample sites whose stochastic functions
             are not reparameterizable primitive distributions
         """
         return list(set(self.stochastic_nodes) - set(self.reparameterized_nodes))
 
-    def iter_stochastic_nodes(self):
+    def iter_stochastic_nodes(self) -> Iterator[Tuple[str, "Message"]]:
         """
         :return: an iterator over stochastic nodes in the trace.
         """
@@ -358,7 +395,7 @@ class Trace:
             if node["type"] == "sample" and not node["is_observed"]:
                 yield name, node
 
-    def symbolize_dims(self, plate_to_symbol=None):
+    def symbolize_dims(self, plate_to_symbol: Optional[Dict[str, str]] = None) -> None:
         """
         Assign unique symbols to all tensor dimensions.
         """
@@ -369,9 +406,10 @@ class Trace:
                 continue
 
             # allocate even symbols for plate dims
-            dim_to_symbol = {}
+            dim_to_symbol: Dict[int, str] = {}
             for frame in site["cond_indep_stack"]:
                 if frame.vectorized:
+                    assert frame.dim is not None
                     if frame.name in plate_to_symbol:
                         symbol = plate_to_symbol[frame.name]
                     else:
@@ -381,6 +419,7 @@ class Trace:
                     dim_to_symbol[frame.dim] = symbol
 
             # allocate odd symbols for enum dims
+            assert site["infer"] is not None
             for dim, id_ in site["infer"].get("_dim_to_id", {}).items():
                 symbol = opt_einsum.get_symbol(1 + 2 * id_)
                 symbol_to_dim[symbol] = dim
@@ -393,7 +432,7 @@ class Trace:
         self.plate_to_symbol = plate_to_symbol
         self.symbol_to_dim = symbol_to_dim
 
-    def pack_tensors(self, plate_to_symbol=None):
+    def pack_tensors(self, plate_to_symbol: Optional[Dict[str, str]] = None) -> None:
         """
         Computes packed representations of tensors in the trace.
         This should be called after :meth:`compute_log_prob` or :meth:`compute_score_parts`.
@@ -402,6 +441,7 @@ class Trace:
         for site in self.nodes.values():
             if site["type"] != "sample":
                 continue
+            assert site["infer"] is not None
             dim_to_symbol = site["infer"]["_dim_to_symbol"]
             packed = site.setdefault("packed", {})
             try:
@@ -432,18 +472,22 @@ class Trace:
                     )
                 ).with_traceback(traceback) from e
 
-    def format_shapes(self, title="Trace Shapes:", last_site=None):
+    def format_shapes(
+        self, title: str = "Trace Shapes:", last_site: Optional[str] = None
+    ) -> str:
         """
         Returns a string showing a table of the shapes of all sites in the
         trace.
         """
         if not self.nodes:
             return title
-        rows = [[title]]
+        rows: List[List[Optional[str]]] = [[title]]
 
         rows.append(["Param Sites:"])
         for name, site in self.nodes.items():
             if site["type"] == "param":
+                if TYPE_CHECKING:
+                    assert isinstance(site["value"], torch.Tensor)
                 rows.append([name, None] + [str(size) for size in site["value"].shape])
             if name == last_site:
                 break
@@ -487,7 +531,7 @@ class Trace:
         return _format_table(rows)
 
 
-def _format_table(rows):
+def _format_table(rows: List[List[Optional[str]]]) -> str:
     """
     Formats a right justified table using None as column separator.
     """
@@ -505,8 +549,9 @@ def _format_table(rows):
             column_widths[j] = max(column_widths[j], widths[j])
 
     # justify columns
-    for i, row in enumerate(rows):
-        cols = [[], [], []]
+    justified_rows: List[List[str]] = []
+    for row in rows:
+        cols: List[List[str]] = [[], [], []]
         j = 0
         for cell in row:
             if cell is None:
@@ -514,21 +559,23 @@ def _format_table(rows):
             else:
                 cols[j].append(cell)
         cols = [
-            [""] * (width - len(col)) + col
-            if direction == "r"
-            else col + [""] * (width - len(col))
+            (
+                [""] * (width - len(col)) + col
+                if direction == "r"
+                else col + [""] * (width - len(col))
+            )
             for width, col, direction in zip(column_widths, cols, "rrl")
         ]
-        rows[i] = sum(cols, [])
+        justified_rows.append(sum(cols, []))
 
     # compute cell widths
-    cell_widths = [0] * len(rows[0])
-    for row in rows:
-        for j, cell in enumerate(row):
+    cell_widths = [0] * len(justified_rows[0])
+    for justified_row in justified_rows:
+        for j, cell in enumerate(justified_row):
             cell_widths[j] = max(cell_widths[j], len(cell))
 
     # justify cells
     return "\n".join(
-        " ".join(cell.rjust(width) for cell, width in zip(row, cell_widths))
-        for row in rows
+        " ".join(cell.rjust(width) for cell, width in zip(justified_row, cell_widths))
+        for justified_row in justified_rows
     )

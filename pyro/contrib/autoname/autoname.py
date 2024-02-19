@@ -153,9 +153,8 @@ class AutonameMessenger(ReentrantMessenger):
         msg["stop"] = True
 
 
-_handler_name, _handler = _make_handler(AutonameMessenger)
-_handler.__module__ = __name__
-locals()[_handler_name] = _handler
+@_make_handler(AutonameMessenger, __name__)
+def autoname(fn=None, name=None): ...
 
 
 @singledispatch

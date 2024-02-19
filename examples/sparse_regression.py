@@ -41,7 +41,7 @@ References
 """
 
 
-torch.set_default_tensor_type("torch.FloatTensor")
+torch.set_default_dtype(torch.float32)
 
 
 def dot(X, Z):
@@ -364,7 +364,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.8.6")
+    assert pyro.__version__.startswith("1.9.0")
     parser = argparse.ArgumentParser(description="Krylov KIT")
     parser.add_argument("--num-data", type=int, default=750)
     parser.add_argument("--num-steps", type=int, default=1000)

@@ -2,40 +2,46 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import numbers
-from collections import namedtuple
+from typing import Iterator, NamedTuple, Optional, Tuple
 
 import torch
+from typing_extensions import Self
 
+from pyro.poutine.messenger import Messenger
+from pyro.poutine.runtime import _DIM_ALLOCATOR, Message
 from pyro.util import ignore_jit_warnings
 
-from .messenger import Messenger
-from .runtime import _DIM_ALLOCATOR
 
+class CondIndepStackFrame(NamedTuple):
+    name: str
+    dim: Optional[int]
+    size: int
+    counter: int
+    full_size: Optional[int] = None
 
-class CondIndepStackFrame(
-    namedtuple("CondIndepStackFrame", ["name", "dim", "size", "counter"])
-):
     @property
-    def vectorized(self):
+    def vectorized(self) -> bool:
         return self.dim is not None
 
-    def _key(self):
+    def _key(self) -> Tuple[str, Optional[int], int, int]:
+        size = self.size
         with ignore_jit_warnings(["Converting a tensor to a Python number"]):
-            size = (
-                self.size.item() if isinstance(self.size, torch.Tensor) else self.size
-            )
-            return self.name, self.dim, size, self.counter
+            if isinstance(size, torch.Tensor):  # type: ignore[unreachable]
+                size = size.item()  # type: ignore[unreachable]
+        return self.name, self.dim, size, self.counter
 
-    def __eq__(self, other):
-        return type(self) == type(other) and self._key() == other._key()
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, CondIndepStackFrame):
+            return False
+        return self._key() == other._key()
 
-    def __ne__(self, other):
+    def __ne__(self, other: object) -> bool:
         return not self.__eq__(other)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self._key())
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -59,7 +65,13 @@ class IndepMessenger(Messenger):
 
     """
 
-    def __init__(self, name=None, size=None, dim=None, device=None):
+    def __init__(
+        self,
+        name: str,
+        size: int,
+        dim: Optional[int] = None,
+        device: Optional[str] = None,
+    ) -> None:
         if not torch._C._get_tracing_state() and size == 0:
             raise ZeroDivisionError("size cannot be zero")
 
@@ -68,20 +80,20 @@ class IndepMessenger(Messenger):
         if dim is not None:
             self._vectorized = True
 
-        self._indices = None
+        self._indices: Optional[torch.Tensor] = None
         self.name = name
         self.dim = dim
         self.size = size
         self.device = device
         self.counter = 0
 
-    def next_context(self):
+    def next_context(self) -> None:
         """
         Increments the counter.
         """
         self.counter += 1
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         if self._vectorized is not False:
             self._vectorized = True
 
@@ -90,12 +102,13 @@ class IndepMessenger(Messenger):
 
         return super().__enter__()
 
-    def __exit__(self, *args):
+    def __exit__(self, *args) -> None:
         if self._vectorized is True:
+            assert self.dim is not None
             _DIM_ALLOCATOR.free(self.name, self.dim)
         return super().__exit__(*args)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[int]:
         if self._vectorized is True or self.dim is not None:
             raise ValueError(
                 "cannot use plate {} as both vectorized and non-vectorized"
@@ -110,18 +123,19 @@ class IndepMessenger(Messenger):
                 with self:
                     yield i if isinstance(i, numbers.Number) else i.item()
 
-    def _reset(self):
+    def _reset(self) -> None:
         if self._vectorized:
+            assert self.dim is not None
             _DIM_ALLOCATOR.free(self.name, self.dim)
         self._vectorized = None
         self.counter = 0
 
     @property
-    def indices(self):
+    def indices(self) -> torch.Tensor:
         if self._indices is None:
             self._indices = torch.arange(self.size, dtype=torch.long).to(self.device)
         return self._indices
 
-    def _process_message(self, msg):
+    def _process_message(self, msg: Message) -> None:
         frame = CondIndepStackFrame(self.name, self.dim, self.size, self.counter)
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]

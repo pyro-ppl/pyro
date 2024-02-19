@@ -114,9 +114,11 @@ class SineSkewed(TorchDistribution):
             [
                 "{}: {}".format(
                     p,
-                    getattr(self, p)
-                    if getattr(self, p).numel() == 1
-                    else getattr(self, p).size(),
+                    (
+                        getattr(self, p)
+                        if getattr(self, p).numel() == 1
+                        else getattr(self, p).size()
+                    ),
                 )
                 for p in self.arg_constraints.keys()
             ]

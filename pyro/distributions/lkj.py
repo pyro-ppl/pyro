@@ -42,6 +42,7 @@ class LKJ(TransformedDistribution):
     [1] `Generating random correlation matrices based on vines and extended onion method`,
     Daniel Lewandowski, Dorota Kurowicka, Harry Joe
     """
+
     arg_constraints = {"concentration": constraints.positive}
     support = constraints.corr_matrix
 

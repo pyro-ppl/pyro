@@ -2,10 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
+from typing import TYPE_CHECKING, Dict, Set
+
+from typing_extensions import Self
 
 from pyro import params
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.util import is_validation_enabled
+
+if TYPE_CHECKING:
+    import torch
+
+    from pyro.poutine.runtime import Message
 
 
 class SubstituteMessenger(Messenger):
@@ -20,30 +28,30 @@ class SubstituteMessenger(Messenger):
         ...     a = pyro.param("a", torch.tensor(0.5))
         ...     x = pyro.sample("x", dist.Bernoulli(probs=a))
         ...     return x
-        >>> substituted_model = pyro.poutine.substitute(model, data={"s": 0.3})
+        >>> substituted_model = pyro.poutine.substitute(model, data={"a": torch.tensor(0.3)})
 
-    In this example, site `a` will now have value `0.3`.
+    In this example, site `a` will now have value `torch.tensor(0.3)`.
     :param data: dictionary of values keyed by site names.
     :returns: ``fn`` decorated with a :class:`~pyro.poutine.substitute_messenger.SubstituteMessenger`
     """
 
-    def __init__(self, data):
+    def __init__(self, data: Dict[str, "torch.Tensor"]) -> None:
         """
         :param data: values for the parameters.
         Constructor
         """
         super().__init__()
         self.data = data
-        self._data_cache = {}
+        self._data_cache: Dict[str, "Message"] = {}
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         self._data_cache = {}
         if is_validation_enabled() and isinstance(self.data, dict):
-            self._param_hits = set()
-            self._param_misses = set()
+            self._param_hits: Set[str] = set()
+            self._param_misses: Set[str] = set()
         return super().__enter__()
 
-    def __exit__(self, *args, **kwargs):
+    def __exit__(self, *args, **kwargs) -> None:
         self._data_cache = {}
         if is_validation_enabled() and isinstance(self.data, dict):
             extra = set(self.data) - self._param_hits
@@ -56,15 +64,16 @@ class SubstituteMessenger(Messenger):
                 )
         return super().__exit__(*args, **kwargs)
 
-    def _pyro_sample(self, msg):
+    def _pyro_sample(self, msg: "Message") -> None:
         return None
 
-    def _pyro_param(self, msg):
+    def _pyro_param(self, msg: "Message") -> None:
         """
         Overrides the `pyro.param` with substituted values.
         If the param name does not match the name the keys in `data`,
         that param value is unchanged.
         """
+        assert msg["name"] is not None
         name = msg["name"]
         param_name = params.user_param_name(name)
 

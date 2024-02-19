@@ -174,9 +174,7 @@ def time_fn(fn, equation, *operands, **kwargs):
 
 def main(args):
     if args.cuda:
-        torch.set_default_tensor_type("torch.cuda.FloatTensor")
-    else:
-        torch.set_default_tensor_type("torch.FloatTensor")
+        torch.set_default_device("cuda")
 
     if args.method == "all":
         for method in ["prob", "logprob", "gradient", "marginal", "map", "sample"]:

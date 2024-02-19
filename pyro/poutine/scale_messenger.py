@@ -1,11 +1,15 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+from typing import TYPE_CHECKING, Union
+
 import torch
 
+from pyro.poutine.messenger import Messenger
 from pyro.poutine.util import is_validation_enabled
 
-from .messenger import Messenger
+if TYPE_CHECKING:
+    from pyro.poutine.runtime import Message
 
 
 class ScaleMessenger(Messenger):
@@ -33,7 +37,7 @@ class ScaleMessenger(Messenger):
     :returns: stochastic function decorated with a :class:`~pyro.poutine.scale_messenger.ScaleMessenger`
     """
 
-    def __init__(self, scale):
+    def __init__(self, scale: Union[float, torch.Tensor]) -> None:
         if isinstance(scale, torch.Tensor):
             if is_validation_enabled() and not (scale > 0).all():
                 raise ValueError(
@@ -45,6 +49,5 @@ class ScaleMessenger(Messenger):
         super().__init__()
         self.scale = scale
 
-    def _process_message(self, msg):
+    def _process_message(self, msg: "Message") -> None:
         msg["scale"] = self.scale * msg["scale"]
-        return None

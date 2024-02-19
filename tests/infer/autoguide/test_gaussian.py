@@ -857,9 +857,7 @@ if __name__ == "__main__":
 
     torch.set_default_dtype(torch.double if args.double else torch.float)
     if args.cuda:
-        torch.set_default_tensor_type(
-            torch.cuda.DoubleTensor if args.double else torch.cuda.FloatTensor
-        )
+        torch.set_default_device("cuda")
 
     if args.profile:
         p = cProfile.Profile()

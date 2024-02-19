@@ -1,7 +1,12 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from .messenger import Messenger
+from typing import TYPE_CHECKING, Callable
+
+from pyro.poutine.messenger import Messenger
+
+if TYPE_CHECKING:
+    from pyro.poutine.runtime import InferDict, Message
 
 
 class InferConfigMessenger(Messenger):
@@ -15,7 +20,7 @@ class InferConfigMessenger(Messenger):
     :returns: stochastic function decorated with :class:`~pyro.poutine.infer_config_messenger.InferConfigMessenger`
     """
 
-    def __init__(self, config_fn):
+    def __init__(self, config_fn: Callable[["Message"], "InferDict"]) -> None:
         """
         :param config_fn: a callable taking a site and returning an infer dict
 
@@ -25,7 +30,7 @@ class InferConfigMessenger(Messenger):
         super().__init__()
         self.config_fn = config_fn
 
-    def _pyro_sample(self, msg):
+    def _pyro_sample(self, msg: "Message") -> None:
         """
         :param msg: current message at a trace site.
 
@@ -35,10 +40,10 @@ class InferConfigMessenger(Messenger):
         Otherwise, implements default sampling behavior
         with no additional effects.
         """
+        assert msg["infer"] is not None
         msg["infer"].update(self.config_fn(msg))
-        return None
 
-    def _pyro_param(self, msg):
+    def _pyro_param(self, msg: "Message") -> None:
         """
         :param msg: current message at a trace site.
 
@@ -48,5 +53,5 @@ class InferConfigMessenger(Messenger):
         Otherwise, implements default param behavior
         with no additional effects.
         """
+        assert msg["infer"] is not None
         msg["infer"].update(self.config_fn(msg))
-        return None

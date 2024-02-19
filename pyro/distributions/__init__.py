@@ -48,7 +48,9 @@ from pyro.distributions.hmm import (
     LinearHMM,
 )
 from pyro.distributions.improper_uniform import ImproperUniform
-from pyro.distributions.inverse_gamma import InverseGamma
+
+if "InverseGamma" not in locals():  # Use PyTorch version if available.
+    from pyro.distributions.inverse_gamma import InverseGamma
 from pyro.distributions.lkj import LKJ, LKJCorrCholesky
 from pyro.distributions.log_normal_negative_binomial import LogNormalNegativeBinomial
 from pyro.distributions.logistic import Logistic, SkewLogistic
