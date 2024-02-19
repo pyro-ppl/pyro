@@ -3,6 +3,9 @@
 
 from typing import TYPE_CHECKING, List, Optional
 
+from functorch.dim import Dim
+
+from pyro.distributions.named import NamedDistribution
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.poutine.messenger import Messenger
 from pyro.util import ignore_jit_warnings
@@ -56,6 +59,10 @@ class BroadcastMessenger(Messenger):
 
         dist = msg["fn"]
         actual_batch_shape = dist.batch_shape
+        if isinstance(msg["fn"], NamedDistribution):
+            prefix_batch_shape = tuple(f.dim for f in msg["cond_indep_stack"])
+            msg["fn"].expand(prefix_batch_shape)
+            return
         target_batch_shape = [
             None if size == 1 else size for size in actual_batch_shape
         ]

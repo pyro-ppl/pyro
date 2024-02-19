@@ -5,6 +5,7 @@ import numbers
 from typing import Iterator, NamedTuple, Optional, Tuple
 
 import torch
+from functorch.dim import Dim
 from typing_extensions import Self
 
 from pyro.poutine.messenger import Messenger
@@ -98,14 +99,15 @@ class IndepMessenger(Messenger):
             self._vectorized = True
 
         if self._vectorized is True:
-            self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
+            assert self.dim is not None
+            # self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
 
         return super().__enter__()
 
     def __exit__(self, *args) -> None:
         if self._vectorized is True:
             assert self.dim is not None
-            _DIM_ALLOCATOR.free(self.name, self.dim)
+            # _DIM_ALLOCATOR.free(self.name, self.dim)
         return super().__exit__(*args)
 
     def __iter__(self) -> Iterator[int]:
@@ -134,7 +136,7 @@ class IndepMessenger(Messenger):
     def indices(self) -> torch.Tensor:
         if self._indices is None:
             self._indices = torch.arange(self.size, dtype=torch.long).to(self.device)
-        return self._indices
+        return self._indices[self.dim]
 
     def _process_message(self, msg: Message) -> None:
         frame = CondIndepStackFrame(self.name, self.dim, self.size, self.counter)
