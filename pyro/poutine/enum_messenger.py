@@ -4,14 +4,13 @@
 from typing import Any, Dict, List, Optional
 
 import torch
-from functorch.dim import Dim
 from typing_extensions import Self
 
 from pyro.distributions.torch import Categorical
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.ops.indexing import Vindex
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.runtime import Message
+from pyro.poutine.runtime import _ENUM_ALLOCATOR, Message
 from pyro.util import ignore_jit_warnings
 
 
@@ -153,8 +152,8 @@ class EnumMessenger(Messenger):
         super().__init__()
 
     def __enter__(self) -> Self:
-        # if self.first_available_dim is not None:
-        #     _ENUM_ALLOCATOR.set_first_available_dim(self.first_available_dim)
+        if self.first_available_dim is not None:
+            _ENUM_ALLOCATOR.set_first_available_dim(self.first_available_dim)
         self._markov_depths: Dict[str, int] = (
             {}
         )  # site name -> depth (nonnegative integer)
@@ -177,67 +176,61 @@ class EnumMessenger(Messenger):
 
         assert isinstance(msg["name"], str)
         assert msg["infer"] is not None
+        # Compute upstream dims in scope; these are unsafe to use for this site's target_dim.
+        scope = msg["infer"].get("_markov_scope")  # site name -> markov depth
+        param_dims = _ENUM_ALLOCATOR.dim_to_id.copy()  # enum dim -> unique id
+        if scope is not None:
+            for name, depth in scope.items():
+                if (
+                    self._markov_depths[name] == depth
+                ):  # hide sites whose markov context has exited
+                    param_dims.update(self._value_dims[name])
+            self._markov_depths[msg["name"]] = msg["infer"]["_markov_depth"]
+        self._param_dims[msg["name"]] = param_dims
         if msg["is_observed"] or msg["infer"].get("enumerate") != "parallel":
             return
-        value = msg["fn"].enumerate_support(False)
-        dim = Dim(msg["name"])
-        msg["value"] = value[dim]
+
+        # Compute an enumerated value (at an arbitrary dim).
+        value = enumerate_site(msg)
+        actual_dim = -1 - len(msg["fn"].batch_shape)  # the leftmost dim of log_prob
+
+        # Move actual_dim to a safe target_dim.
+        target_dim, id_ = _ENUM_ALLOCATOR.allocate(
+            None if scope is None else set(param_dims)
+        )
+        event_dim = msg["fn"].event_dim
+        categorical_support = getattr(value, "_pyro_categorical_support", None)
+        if categorical_support is not None:
+            # Preserve categorical supports to speed up Categorical.log_prob().
+            # See pyro/distributions/torch.py for details.
+            assert target_dim < 0
+            value = value.reshape(value.shape[:1] + (1,) * (-1 - target_dim))
+            value._pyro_categorical_support = categorical_support  # type: ignore[attr-defined]
+        elif actual_dim < target_dim:
+            assert (
+                value.size(target_dim - event_dim) == 1
+            ), "pyro.markov dim conflict at dim {}".format(actual_dim)
+            value = value.transpose(target_dim - event_dim, actual_dim - event_dim)
+            while value.dim() and value.size(0) == 1:
+                value = value.squeeze(0)
+        elif target_dim < actual_dim:
+            diff = actual_dim - target_dim
+            value = value.reshape(value.shape[:1] + (1,) * diff + value.shape[1:])
+
+        # Compute dims passed downstream through the value.
+        value_dims = {
+            dim: param_dims[dim]
+            for dim in range(event_dim - value.dim(), 0)
+            if value.size(dim - event_dim) > 1 and dim in param_dims
+        }
+        value_dims[target_dim] = id_
+
+        msg["infer"]["_enumerate_dim"] = target_dim
+        msg["infer"]["_dim_to_id"] = value_dims
+        msg["value"] = value
         msg["done"] = True
-        # Compute upstream dims in scope; these are unsafe to use for this site's target_dim.
-        # scope = msg["infer"].get("_markov_scope")  # site name -> markov depth
-        # param_dims = _ENUM_ALLOCATOR.dim_to_id.copy()  # enum dim -> unique id
-        # if scope is not None:
-        #     for name, depth in scope.items():
-        #         if (
-        #             self._markov_depths[name] == depth
-        #         ):  # hide sites whose markov context has exited
-        #             param_dims.update(self._value_dims[name])
-        #     self._markov_depths[msg["name"]] = msg["infer"]["_markov_depth"]
-        # self._param_dims[msg["name"]] = param_dims
-        # if msg["is_observed"] or msg["infer"].get("enumerate") != "parallel":
-        #     return
 
-        # # Compute an enumerated value (at an arbitrary dim).
-        # value = enumerate_site(msg)
-        # actual_dim = -1 - len(msg["fn"].batch_shape)  # the leftmost dim of log_prob
-
-        # # Move actual_dim to a safe target_dim.
-        # target_dim, id_ = _ENUM_ALLOCATOR.allocate(
-        #     None if scope is None else set(param_dims)
-        # )
-        # event_dim = msg["fn"].event_dim
-        # categorical_support = getattr(value, "_pyro_categorical_support", None)
-        # if categorical_support is not None:
-        #     # Preserve categorical supports to speed up Categorical.log_prob().
-        #     # See pyro/distributions/torch.py for details.
-        #     assert target_dim < 0
-        #     value = value.reshape(value.shape[:1] + (1,) * (-1 - target_dim))
-        #     value._pyro_categorical_support = categorical_support  # type: ignore[attr-defined]
-        # elif actual_dim < target_dim:
-        #     assert (
-        #         value.size(target_dim - event_dim) == 1
-        #     ), "pyro.markov dim conflict at dim {}".format(actual_dim)
-        #     value = value.transpose(target_dim - event_dim, actual_dim - event_dim)
-        #     while value.dim() and value.size(0) == 1:
-        #         value = value.squeeze(0)
-        # elif target_dim < actual_dim:
-        #     diff = actual_dim - target_dim
-        #     value = value.reshape(value.shape[:1] + (1,) * diff + value.shape[1:])
-
-        # # Compute dims passed downstream through the value.
-        # value_dims = {
-        #     dim: param_dims[dim]
-        #     for dim in range(event_dim - value.dim(), 0)
-        #     if value.size(dim - event_dim) > 1 and dim in param_dims
-        # }
-        # value_dims[target_dim] = id_
-
-        # msg["infer"]["_enumerate_dim"] = target_dim
-        # msg["infer"]["_dim_to_id"] = value_dims
-        # msg["value"] = value
-        # msg["done"] = True
-
-    def _pyro_post_sample_(self, msg: Message) -> None:
+    def _pyro_post_sample(self, msg: Message) -> None:
         # Save all dims exposed in this sample value.
         # Whereas all of site["_dim_to_id"] are needed to interpret a
         # site's log_prob tensor, only a filtered subset self._value_dims[msg["name"]]

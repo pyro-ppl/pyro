@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import numbers
-from typing import Iterator, NamedTuple, Optional, Tuple
+from typing import Iterator, NamedTuple, Optional, Tuple, Union
 
 import torch
 from functorch.dim import Dim
@@ -15,7 +15,7 @@ from pyro.util import ignore_jit_warnings
 
 class CondIndepStackFrame(NamedTuple):
     name: str
-    dim: Optional[int]
+    dim: Optional[Union[int, Dim]]
     size: int
     counter: int
     full_size: Optional[int] = None
@@ -24,7 +24,7 @@ class CondIndepStackFrame(NamedTuple):
     def vectorized(self) -> bool:
         return self.dim is not None
 
-    def _key(self) -> Tuple[str, Optional[int], int, int]:
+    def _key(self) -> Tuple[str, Optional[Union[int, Dim]], int, int]:
         size = self.size
         with ignore_jit_warnings(["Converting a tensor to a Python number"]):
             if isinstance(size, torch.Tensor):  # type: ignore[unreachable]
@@ -70,7 +70,7 @@ class IndepMessenger(Messenger):
         self,
         name: str,
         size: int,
-        dim: Optional[int] = None,
+        dim: Optional[Union[int, Dim]] = None,
         device: Optional[str] = None,
     ) -> None:
         if not torch._C._get_tracing_state() and size == 0:
@@ -99,15 +99,16 @@ class IndepMessenger(Messenger):
             self._vectorized = True
 
         if self._vectorized is True:
-            assert self.dim is not None
-            # self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
+            if not isinstance(self.dim, Dim):
+                self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
 
         return super().__enter__()
 
     def __exit__(self, *args) -> None:
         if self._vectorized is True:
             assert self.dim is not None
-            # _DIM_ALLOCATOR.free(self.name, self.dim)
+            if not isinstance(self.dim, Dim):
+                _DIM_ALLOCATOR.free(self.name, self.dim)
         return super().__exit__(*args)
 
     def __iter__(self) -> Iterator[int]:
@@ -128,7 +129,8 @@ class IndepMessenger(Messenger):
     def _reset(self) -> None:
         if self._vectorized:
             assert self.dim is not None
-            _DIM_ALLOCATOR.free(self.name, self.dim)
+            if not isinstance(self.dim, Dim):
+                _DIM_ALLOCATOR.free(self.name, self.dim)
         self._vectorized = None
         self.counter = 0
 

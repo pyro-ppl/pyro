@@ -5,21 +5,19 @@ from functorch.dim import dims
 
 import pyro
 from pyro import poutine
+from pyro.poutine.util import prune_subsample_sites
 
 
 def log_density(fn, args, kwargs):
     """
-    (EXPERIMENTAL INTERFACE) Computes log of joint density for the model given
-    latent values ``params``.
+    Compute log density of a stochastic function given its arguments.
 
-    :param fn: Python callable containing NumPyro primitives.
-    :param tuple model_args: args provided to the model.
-    :param dict model_kwargs: kwargs provided to the model.
-    :param dict params: dictionary of current parameter values keyed by site
-        name.
+    :param fn: Python callable containing Pyro primitives.
+    :param tuple args: args provided to the function.
+    :param dict kwargs: kwargs provided to the function.
     :return: log of joint density and a corresponding model trace
     """
-    fn_trace = poutine.trace(fn).get_trace(*args, **kwargs)
+    fn_trace = prune_subsample_sites(poutine.trace(fn).get_trace(*args, **kwargs))
     log_joint = 0.0
     for site in fn_trace.nodes.values():
         if site["type"] == "sample" and site["fn"]:
@@ -30,9 +28,8 @@ def log_density(fn, args, kwargs):
             if scale is not None:
                 log_prob = scale * log_prob
 
-            sum_dims = getattr(log_prob, "dims", ()) + tuple(range(log_prob.ndim))
-            log_prob = log_prob.sum(sum_dims)
-            log_joint = log_joint + log_prob
+            sum_dims = tuple(f.dim for f in site["cond_indep_stack"])
+            log_joint += log_prob.sum(sum_dims)
     return log_joint, fn_trace
 
 
@@ -43,7 +40,7 @@ class ELBO:
 
     def loss(self, model, guide, *args, **kwargs):
         if self.num_particles > 1:
-            vectorize = pyro.plate("num_particles", self.num_particles, dim=dims())
+            vectorize = pyro.plate("num_particles", self.num_particles, dim=dims(1))
             model = vectorize(model)
             guide = vectorize(guide)
 
