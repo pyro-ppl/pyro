@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, List, Optional
 
 from functorch.dim import Dim
 
-from pyro.distributions.named import NamedDistribution
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.poutine.messenger import Messenger
 from pyro.util import ignore_jit_warnings
@@ -59,14 +58,14 @@ class BroadcastMessenger(Messenger):
 
         dist = msg["fn"]
         actual_batch_shape = dist.batch_shape
-        if isinstance(msg["fn"], NamedDistribution):
-            prefix_batch_shape = tuple(f.dim for f in msg["cond_indep_stack"])
-            msg["fn"].expand(prefix_batch_shape)
-            return
         target_batch_shape = [
             None if size == 1 else size for size in actual_batch_shape
         ]
+        named_batch_shape = []
         for f in msg["cond_indep_stack"]:
+            if isinstance(f.dim, Dim):
+                named_batch_shape.append(f.dim)
+                continue
             if f.dim is None or f.size == -1:
                 continue
             assert f.dim < 0
@@ -95,6 +94,9 @@ class BroadcastMessenger(Messenger):
                 target_batch_shape[i] = (
                     actual_batch_shape[i] if len(actual_batch_shape) >= -i else 1
                 )
+        dist = dist.expand_named_shape(named_batch_shape)
         msg["fn"] = dist.expand(target_batch_shape)
+        msg["fn"]._named_batch_shape = dist.named_batch_shape
+        msg["fn"].sample_shape = dist.sample_shape
         if msg["fn"].has_rsample != dist.has_rsample:
             msg["fn"].has_rsample = dist.has_rsample  # copy custom attribute

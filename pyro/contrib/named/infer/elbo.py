@@ -1,9 +1,10 @@
-import torch
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 from functorch.dim import dims
 
 import pyro
 from pyro import poutine
-from pyro.distributions.util import is_identically_zero
 
 
 def log_density(model, args, kwargs):

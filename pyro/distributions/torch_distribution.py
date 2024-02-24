@@ -6,6 +6,7 @@ from collections import OrderedDict
 from typing import Callable
 
 import torch
+from functorch.dim import Tensor
 from torch.distributions.kl import kl_divergence, register_kl
 
 import pyro.distributions.torch
@@ -45,11 +46,37 @@ class TorchDistributionMixin(Distribution, Callable):
             batched). The shape of the result should be `self.shape()`.
         :rtype: torch.Tensor
         """
+        # return self.base_dist.sample(self.sample_shape + sample_shape)[self.batch_dims]
         return (
-            self.rsample(sample_shape)
+            self.rsample(self.sample_shape + sample_shape)
             if self.has_rsample
-            else self.sample(sample_shape)
-        )
+            else self.sample(self.sample_shape + sample_shape)
+        )[
+            self.named_batch_shape[
+                len(self.named_batch_shape) - len(self.sample_shape) :
+            ]
+        ]
+
+    @property
+    def named_batch_shape(self):
+        if not hasattr(self, "_named_batch_shape"):
+            self._named_batch_shape = ()
+            for param in self.arg_constraints:
+                value = getattr(self, param)
+                if isinstance(value, Tensor):
+                    for dim in value.dims:
+                        if dim not in set(self._named_batch_shape):
+                            self._named_batch_shape += (dim,)
+        return self._named_batch_shape
+
+    def expand_named_shape(self, named_batch_shape):
+        if not hasattr(self, "sample_shape"):
+            self.sample_shape = torch.Size()
+        for dim in named_batch_shape:
+            if dim not in set(self.named_batch_shape):
+                self._named_batch_shape += (dim,)
+                self.sample_shape = self.sample_shape + (dim.size,)
+        return self
 
     @property
     def batch_shape(self) -> torch.Size:

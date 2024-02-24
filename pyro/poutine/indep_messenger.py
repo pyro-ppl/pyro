@@ -136,7 +136,9 @@ class IndepMessenger(Messenger):
     def indices(self) -> torch.Tensor:
         if self._indices is None:
             self._indices = torch.arange(self.size, dtype=torch.long).to(self.device)
-        return self._indices[self.dim]
+        if isinstance(self.dim, Dim):
+            return self._indices[self.dim]
+        return self._indices
 
     def _process_message(self, msg: Message) -> None:
         frame = CondIndepStackFrame(self.name, self.dim, self.size, self.counter)

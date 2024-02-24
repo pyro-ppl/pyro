@@ -11,7 +11,7 @@ from pyro.distributions.torch import Categorical
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.ops.indexing import Vindex
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.runtime import _ENUM_ALLOCATOR, Message
+from pyro.poutine.runtime import Message
 from pyro.util import ignore_jit_warnings
 
 
