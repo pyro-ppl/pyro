@@ -7,21 +7,21 @@ import pyro
 from pyro import poutine
 
 
-def log_density(model, args, kwargs):
+def log_density(fn, args, kwargs):
     """
     (EXPERIMENTAL INTERFACE) Computes log of joint density for the model given
     latent values ``params``.
 
-    :param model: Python callable containing NumPyro primitives.
+    :param fn: Python callable containing NumPyro primitives.
     :param tuple model_args: args provided to the model.
     :param dict model_kwargs: kwargs provided to the model.
     :param dict params: dictionary of current parameter values keyed by site
         name.
     :return: log of joint density and a corresponding model trace
     """
-    model_trace = poutine.trace(model).get_trace(*args, **kwargs)
+    fn_trace = poutine.trace(fn).get_trace(*args, **kwargs)
     log_joint = 0.0
-    for site in model_trace.nodes.values():
+    for site in fn_trace.nodes.values():
         if site["type"] == "sample" and site["fn"]:
             value = site["value"]
             scale = site["scale"]
@@ -33,7 +33,7 @@ def log_density(model, args, kwargs):
             sum_dims = getattr(log_prob, "dims", ()) + tuple(range(log_prob.ndim))
             log_prob = log_prob.sum(sum_dims)
             log_joint = log_joint + log_prob
-    return log_joint, model_trace
+    return log_joint, fn_trace
 
 
 class ELBO:
@@ -43,7 +43,7 @@ class ELBO:
 
     def loss(self, model, guide, *args, **kwargs):
         if self.num_particles > 1:
-            vectorize = pyro.plate("num_particles", self.num_particles, dim=dims(1))
+            vectorize = pyro.plate("num_particles", self.num_particles, dim=dims())
             model = vectorize(model)
             guide = vectorize(guide)
 

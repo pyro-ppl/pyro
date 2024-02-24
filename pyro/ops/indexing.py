@@ -215,3 +215,7 @@ class Vindex:
 
     def __getitem__(self, args):
         return vindex(self._tensor, args)
+
+
+def index_select(input, dim, index):
+    return input.order(dim)[index]
