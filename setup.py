@@ -88,7 +88,10 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(include=["pyro", "pyro.*"]),
-    package_data={"pyro.distributions": ["*.cpp"]},
+    package_data={
+        "pyro": ["py.typed"],
+        "pyro.distributions": ["*.cpp"],
+    },
     author="Uber AI Labs",
     url="http://pyro.ai",
     project_urls={
@@ -107,8 +110,7 @@ setup(
     ],
     extras_require={
         "extras": EXTRAS_REQUIRE,
-        "test": EXTRAS_REQUIRE
-        + [
+        "test": EXTRAS_REQUIRE + [
             "black>=21.4b0",
             "nbval",
             "pytest-cov",
@@ -117,8 +119,7 @@ setup(
             "ruff",
         ],
         "profile": ["prettytable", "pytest-benchmark", "snakeviz"],
-        "dev": EXTRAS_REQUIRE
-        + [
+        "dev": EXTRAS_REQUIRE + [
             "black>=21.4b0",
             "mypy>=0.812",
             "nbformat",
