@@ -110,7 +110,8 @@ setup(
     ],
     extras_require={
         "extras": EXTRAS_REQUIRE,
-        "test": EXTRAS_REQUIRE + [
+        "test": EXTRAS_REQUIRE
+        + [
             "black>=21.4b0",
             "nbval",
             "pytest-cov",
@@ -119,7 +120,8 @@ setup(
             "ruff",
         ],
         "profile": ["prettytable", "pytest-benchmark", "snakeviz"],
-        "dev": EXTRAS_REQUIRE + [
+        "dev": EXTRAS_REQUIRE
+        + [
             "black>=21.4b0",
             "mypy>=0.812",
             "nbformat",

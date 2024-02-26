@@ -1277,9 +1277,14 @@ __all__.sort(
     key=lambda name, vals=locals(): vals[name].__init__.__code__.co_firstlineno
 )
 __doc__ = "\n\n".join(
-    ["""
+    [
+        """
     {}
     ----------------------------------------------------------------
     .. autoclass:: pyro.contrib.epidemiology.models.{}
-    """.format(re.sub("([A-Z][a-z]+)", r"\1 ", _name[:-5]), _name) for _name in __all__]
+    """.format(
+            re.sub("([A-Z][a-z]+)", r"\1 ", _name[:-5]), _name
+        )
+        for _name in __all__
+    ]
 )
