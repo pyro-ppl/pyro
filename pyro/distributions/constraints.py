@@ -1,18 +1,50 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+# Import * to get the latest upstream constraints.
 from torch.distributions.constraints import *  # noqa F403
+
+# Additionally try to import explicitly to help mypy static analysis.
+try:
+    from torch.distributions.constraints import (
+        Constraint,
+        boolean,
+        cat,
+        corr_cholesky,
+        dependent,
+        dependent_property,
+        greater_than,
+        greater_than_eq,
+        half_open_interval,
+        independent,
+        integer_interval,
+        interval,
+        is_dependent,
+        less_than,
+        lower_cholesky,
+        lower_triangular,
+        multinomial,
+        nonnegative,
+        nonnegative_integer,
+        one_hot,
+        positive,
+        positive_definite,
+        positive_integer,
+        positive_semidefinite,
+        real,
+        real_vector,
+        simplex,
+        square,
+        stack,
+        symmetric,
+        unit_interval,
+    )
+except ImportError:
+    pass
 
 # isort: split
 
 import torch
-from torch.distributions.constraints import (
-    Constraint,
-    independent,
-    lower_cholesky,
-    positive,
-    positive_definite,
-)
 from torch.distributions.constraints import __all__ as torch_constraints
 
 
@@ -129,19 +161,50 @@ unit_lower_cholesky = _UnitLowerCholesky()
 corr_cholesky_constraint = corr_cholesky  # noqa: F405 DEPRECATED
 
 __all__ = [
+    "Constraint",
+    "boolean",
+    "cat",
+    "corr_cholesky",
     "corr_cholesky_constraint",
     "corr_matrix",
+    "dependent",
+    "dependent_property",
+    "greater_than",
+    "greater_than_eq",
+    "half_open_interval",
+    "independent",
     "integer",
+    "integer_interval",
+    "interval",
+    "is_dependent",
+    "less_than",
+    "lower_cholesky",
+    "lower_triangular",
+    "multinomial",
+    "nonnegative",
+    "nonnegative_integer",
+    "one_hot",
     "ordered_vector",
+    "positive",
+    "positive_definite",
+    "positive_integer",
     "positive_ordered_vector",
+    "positive_semidefinite",
+    "real",
+    "real_vector",
+    "simplex",
     "softplus_lower_cholesky",
     "softplus_positive",
     "sphere",
+    "square",
+    "stack",
+    "symmetric",
+    "unit_interval",
     "unit_lower_cholesky",
 ]
 
 __all__.extend(torch_constraints)
-__all__ = sorted(set(__all__))
+__all__[:] = sorted(set(__all__))
 del torch_constraints
 
 

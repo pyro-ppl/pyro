@@ -94,8 +94,9 @@ def test_particle_gradient(Elbo, reparameterized, has_rsample):
     if reparameterized and has_rsample is not False:
         # pathwise gradient estimator
         expected_grads = {
-            "scale": -(-z * (z - loc) + (x - z) * (z - loc) + 1).sum(0, keepdim=True)
-            / scale,
+            "scale": (
+                -(-z * (z - loc) + (x - z) * (z - loc) + 1).sum(0, keepdim=True) / scale
+            ),
             "loc": -(-z + (x - z)),
         }
     else:

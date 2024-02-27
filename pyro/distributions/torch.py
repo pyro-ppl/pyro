@@ -346,8 +346,52 @@ def _cat_docstrings(*docstrings):
     return result
 
 
-# Programmatically load all distributions from PyTorch.
-__all__ = []
+# Add static imports to help mypy.
+__all__ = [  # noqa: F822
+    "Bernoulli",
+    "Beta",
+    "Binomial",
+    "Categorical",
+    "Cauchy",
+    "Chi2",
+    "ContinuousBernoulli",
+    "Dirichlet",
+    "ExponentialFamily",
+    "Exponential",
+    "FisherSnedecor",
+    "Gamma",
+    "Geometric",
+    "Gumbel",
+    "HalfCauchy",
+    "HalfNormal",
+    "Independent",
+    "Kumaraswamy",
+    "Laplace",
+    "LKJCholesky",
+    "LogNormal",
+    "LogisticNormal",
+    "LowRankMultivariateNormal",
+    "MixtureSameFamily",
+    "Multinomial",
+    "MultivariateNormal",
+    "NegativeBinomial",
+    "Normal",
+    "OneHotCategorical",
+    "OneHotCategoricalStraightThrough",
+    "Pareto",
+    "Poisson",
+    "RelaxedBernoulli",
+    "RelaxedOneHotCategorical",
+    "StudentT",
+    "TransformedDistribution",
+    "Uniform",
+    "VonMises",
+    "Weibull",
+    "Wishart",
+]
+
+# Programmatically load all distributions from PyTorch,
+# updating __all__ to include any new distributions.
 for _name, _Dist in torch.distributions.__dict__.items():
     if not isinstance(_Dist, type):
         continue
@@ -372,6 +416,7 @@ for _name, _Dist in torch.distributions.__dict__.items():
     )
     _PyroDist.__doc__ = _cat_docstrings(_PyroDist.__doc__, _Dist.__doc__)
     __all__.append(_name)
+__all__ = sorted(set(__all__))
 
 
 # Create sphinx documentation.
