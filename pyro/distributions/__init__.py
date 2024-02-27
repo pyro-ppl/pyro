@@ -3,50 +3,55 @@
 
 import pyro.distributions.torch_patch  # noqa F403
 
-# Import both * to get new distributions and explicitly to help mypy.
+# Import * to get the latest upstream distributions.
 from pyro.distributions.torch import *  # noqa F403
-from pyro.distributions.torch import (
-    Bernoulli,
-    Beta,
-    Binomial,
-    Categorical,
-    Cauchy,
-    Chi2,
-    ContinuousBernoulli,
-    Dirichlet,
-    ExponentialFamily,
-    Exponential,
-    FisherSnedecor,
-    Gamma,
-    Geometric,
-    Gumbel,
-    HalfCauchy,
-    HalfNormal,
-    Independent,
-    Kumaraswamy,
-    Laplace,
-    LKJCholesky,
-    LogNormal,
-    LogisticNormal,
-    LowRankMultivariateNormal,
-    MixtureSameFamily,
-    Multinomial,
-    MultivariateNormal,
-    NegativeBinomial,
-    Normal,
-    OneHotCategorical,
-    OneHotCategoricalStraightThrough,
-    Pareto,
-    Poisson,
-    RelaxedBernoulli,
-    RelaxedOneHotCategorical,
-    StudentT,
-    TransformedDistribution,
-    Uniform,
-    VonMises,
-    Weibull,
-    Wishart,
-)
+
+# Additionally try to import explicitly to help mypy static analysis.
+try:
+    from pyro.distributions.torch import (
+        Bernoulli,
+        Beta,
+        Binomial,
+        Categorical,
+        Cauchy,
+        Chi2,
+        ContinuousBernoulli,
+        Dirichlet,
+        Exponential,
+        ExponentialFamily,
+        FisherSnedecor,
+        Gamma,
+        Geometric,
+        Gumbel,
+        HalfCauchy,
+        HalfNormal,
+        Independent,
+        Kumaraswamy,
+        Laplace,
+        LKJCholesky,
+        LogisticNormal,
+        LogNormal,
+        LowRankMultivariateNormal,
+        MixtureSameFamily,
+        Multinomial,
+        MultivariateNormal,
+        NegativeBinomial,
+        Normal,
+        OneHotCategorical,
+        OneHotCategoricalStraightThrough,
+        Pareto,
+        Poisson,
+        RelaxedBernoulli,
+        RelaxedOneHotCategorical,
+        StudentT,
+        TransformedDistribution,
+        Uniform,
+        VonMises,
+        Weibull,
+        Wishart,
+    )
+except ImportError:
+    pass
 
 # isort: split
 
@@ -255,4 +260,5 @@ __all__ = [
 
 # Import all torch distributions from `pyro.distributions.torch_distribution`
 __all__.extend(torch_dists)
+__all__[:] = sorted(set(__all__))
 del torch_dists
