@@ -85,7 +85,7 @@ from pyro.poutine.runtime import NonlocalExit
 from pyro.poutine.scale_messenger import ScaleMessenger
 from pyro.poutine.seed_messenger import SeedMessenger
 from pyro.poutine.substitute_messenger import SubstituteMessenger
-from pyro.poutine.trace_messenger import TraceMessenger
+from pyro.poutine.trace_messenger import TraceHandler, TraceMessenger
 from pyro.poutine.uncondition_messenger import UnconditionMessenger
 
 if TYPE_CHECKING:
@@ -467,7 +467,7 @@ def substitute(  # type: ignore[empty-body]
 
 @overload
 def trace(
-    fn: None = ...,
+    fn: None = None,
     graph_type: Optional[Literal["flat", "dense"]] = None,
     param_only: Optional[bool] = None,
 ) -> TraceMessenger: ...
@@ -475,10 +475,10 @@ def trace(
 
 @overload
 def trace(
-    fn: Callable[_P, _T] = ...,
+    fn: Callable[_P, _T],
     graph_type: Optional[Literal["flat", "dense"]] = None,
     param_only: Optional[bool] = None,
-) -> Callable[_P, _T]: ...
+) -> TraceHandler[_P, _T]: ...
 
 
 @_make_handler(TraceMessenger)
@@ -486,7 +486,7 @@ def trace(  # type: ignore[empty-body]
     fn: Optional[Callable[_P, _T]] = None,
     graph_type: Optional[Literal["flat", "dense"]] = None,
     param_only: Optional[bool] = None,
-) -> Union[TraceMessenger, Callable[_P, _T]]: ...
+) -> Union[TraceMessenger, TraceHandler[_P, _T]]: ...
 
 
 @overload
