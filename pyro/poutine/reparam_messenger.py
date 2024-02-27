@@ -67,7 +67,7 @@ class ReparamMessenger(Messenger):
         self.config = config
         self._args_kwargs = None
 
-    def __call__(self, fn: Callable[_P, _T]) -> Callable[_P, _T]:
+    def __call__(self, fn: Callable[_P, _T]) -> "ReparamHandler[_P, _T]":
         return ReparamHandler(self, fn)
 
     def _pyro_sample(self, msg: "Message") -> None:

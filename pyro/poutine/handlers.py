@@ -79,13 +79,13 @@ from pyro.poutine.infer_config_messenger import InferConfigMessenger
 from pyro.poutine.lift_messenger import LiftMessenger
 from pyro.poutine.markov_messenger import MarkovMessenger
 from pyro.poutine.mask_messenger import MaskMessenger
-from pyro.poutine.reparam_messenger import ReparamMessenger
+from pyro.poutine.reparam_messenger import ReparamHandler, ReparamMessenger
 from pyro.poutine.replay_messenger import ReplayMessenger
 from pyro.poutine.runtime import NonlocalExit
 from pyro.poutine.scale_messenger import ScaleMessenger
 from pyro.poutine.seed_messenger import SeedMessenger
 from pyro.poutine.substitute_messenger import SubstituteMessenger
-from pyro.poutine.trace_messenger import TraceMessenger
+from pyro.poutine.trace_messenger import TraceHandler, TraceMessenger
 from pyro.poutine.uncondition_messenger import UnconditionMessenger
 
 if TYPE_CHECKING:
@@ -152,7 +152,7 @@ def block(
 
 @overload
 def block(
-    fn: Callable[_P, _T] = ...,
+    fn: Callable[_P, _T],
     hide_fn: Optional[Callable[["Message"], Optional[bool]]] = None,
     expose_fn: Optional[Callable[["Message"], Optional[bool]]] = None,
     hide_all: bool = True,
@@ -186,7 +186,7 @@ def broadcast(
 
 @overload
 def broadcast(
-    fn: Callable[_P, _T] = ...,
+    fn: Callable[_P, _T],
 ) -> Callable[_P, _T]: ...
 
 
@@ -206,7 +206,7 @@ def collapse(
 
 @overload
 def collapse(
-    fn: Callable[_P, _T] = ...,
+    fn: Callable[_P, _T],
     *args: Any,
     **kwargs: Any,
 ) -> Callable[_P, _T]: ...
@@ -269,7 +269,7 @@ def enum(
 
 @overload
 def enum(
-    fn: Callable[_P, _T] = ...,
+    fn: Callable[_P, _T],
     first_available_dim: Optional[int] = None,
 ) -> Callable[_P, _T]: ...
 
@@ -371,14 +371,14 @@ def reparam(
 def reparam(
     fn: Callable[_P, _T],
     config: Union[Dict[str, "Reparam"], Callable[["Message"], Optional["Reparam"]]],
-) -> Callable[_P, _T]: ...
+) -> ReparamHandler[_P, _T]: ...
 
 
 @_make_handler(ReparamMessenger)
 def reparam(  # type: ignore[empty-body]
     fn: Callable[_P, _T],
     config: Union[Dict[str, "Reparam"], Callable[["Message"], Optional["Reparam"]]],
-) -> Union[ReparamMessenger, Callable[_P, _T]]: ...
+) -> Union[ReparamMessenger, ReparamHandler[_P, _T]]: ...
 
 
 @overload
@@ -391,7 +391,7 @@ def replay(
 
 @overload
 def replay(
-    fn: Callable[_P, _T] = ...,
+    fn: Callable[_P, _T],
     trace: Optional["Trace"] = None,
     params: Optional[Dict[str, "torch.Tensor"]] = None,
 ) -> Callable[_P, _T]: ...
@@ -475,10 +475,10 @@ def trace(
 
 @overload
 def trace(
-    fn: Callable[_P, _T] = ...,
+    fn: Callable[_P, _T],
     graph_type: Optional[Literal["flat", "dense"]] = None,
     param_only: Optional[bool] = None,
-) -> Callable[_P, _T]: ...
+) -> TraceHandler[_P, _T]: ...
 
 
 @_make_handler(TraceMessenger)
@@ -486,7 +486,7 @@ def trace(  # type: ignore[empty-body]
     fn: Optional[Callable[_P, _T]] = None,
     graph_type: Optional[Literal["flat", "dense"]] = None,
     param_only: Optional[bool] = None,
-) -> Union[TraceMessenger, Callable[_P, _T]]: ...
+) -> Union[TraceMessenger, TraceHandler[_P, _T]]: ...
 
 
 @overload
