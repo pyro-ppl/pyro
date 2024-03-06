@@ -14,9 +14,10 @@ the :class:`PyroSample` struct::
 """
 import functools
 import inspect
+from typing import Union
 import weakref
 from collections import OrderedDict, namedtuple
-
+from torch._jit_internal import _copy_to_script_wrapper
 import torch
 from torch.distributions import constraints, transform_to
 
@@ -826,3 +827,30 @@ class _FlatWeightsDescriptor:
 
 
 PyroModule[torch.nn.RNNBase]._flat_weights = _FlatWeightsDescriptor()
+
+
+# pyro module list
+# using pyro.nn.PyroModule[torch.nn.ModuleList] can cause issues when
+# slice-indexing nested PyroModuleLists, so we define a separate PyroModuleList
+# class that overwrites the __getitem__ method to return a torch.nn.ModuleList
+# to not use self.__class__ in __getitem__, as that would call the
+# PyroModule.__init__ without the parent module context, leading to a loss
+# of the parent module's _pyro_name, and eventually, errors during sampling
+# as parameter names may not be unique anymore
+# The scenario is rare but happend.
+# The fix could not be applied in torch directly, which is why we have to deal
+# with it here, see https://github.com/pytorch/pytorch/issues/121008
+class PyroModuleList(PyroModule, torch.nn.ModuleList):
+    def __init__(self, modules):
+        PyroModule.__init__(self)
+        torch.nn.ModuleList.__init__(self, modules)
+
+    @_copy_to_script_wrapper
+    def __getitem__(
+        self, idx: Union[int, slice]
+    ) -> Union[torch.nn.Module, "PyroModuleList"]:
+        if isinstance(idx, slice):
+            # return self.__class__(list(self._modules.values())[idx])
+            return torch.nn.ModuleList(list(self._modules.values())[idx])
+        else:
+            return self._modules[self._get_abs_string_index(idx)]
