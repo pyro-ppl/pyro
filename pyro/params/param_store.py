@@ -162,8 +162,8 @@ class ParamStoreDict:
         constraint: constraints.Constraint = constraints.real,
     ) -> torch.Tensor:
         """
-        Retrieve a *constrained* parameter value from the if it exists, otherwise
-        set the initial value. Note that this is a little fancier than
+        Retrieve a *constrained* parameter value from the ``ParamStoreDict`` if it exists,
+        otherwise set the initial value. Note that this is a little fancier than
         :meth:`dict.setdefault`.
 
         If the parameter already exists, ``init_constrained_tensor`` will be ignored. To avoid

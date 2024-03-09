@@ -24,16 +24,18 @@ from typing import (
     Callable,
     Dict,
     Iterator,
+    List,
     NamedTuple,
     Optional,
     Tuple,
     Type,
+    TypeVar,
     Union,
 )
 
 import torch
 from torch.distributions import constraints, transform_to
-from typing_extensions import reveal_type
+from typing_extensions import Concatenate, ParamSpec
 
 import pyro
 import pyro.params.param_store
@@ -42,6 +44,10 @@ from pyro.params.param_store import StateDict
 from pyro.poutine.runtime import _PYRO_PARAM_STORE
 
 _MODULE_LOCAL_PARAMS: bool = False
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+_PyroModule = TypeVar("_PyroModule", bound="PyroModule")
 
 if TYPE_CHECKING:
     from pyro.distributions.torch_distribution import TorchDistributionMixin
@@ -53,7 +59,7 @@ def _validate_module_local_params(value: bool) -> None:
 
 
 def _is_module_local_param_enabled() -> Optional[bool]:
-    return pyro.settings.get("module_local_params")
+    return pyro.settings.get("module_local_params")  # type: ignore[no-any-return]
 
 
 class PyroParam(NamedTuple):
@@ -105,7 +111,6 @@ class PyroParam(NamedTuple):
     init_value: Optional[
         Union[
             torch.Tensor,
-            Callable[["PyroModule"], torch.Tensor],
             Callable[[], torch.Tensor],
         ]
     ] = None
@@ -212,6 +217,8 @@ class PyroSample:
             setattr(obj_type, self.prior.__name__, self.prior)  # for pickling
 
         obj.__dict__["_pyro_samples"].setdefault(self.name, self.prior)
+        if TYPE_CHECKING:
+            assert isinstance(self.name, str)
         value: PyroSample = obj.__getattr__(self.name)
         return value
 
@@ -309,7 +316,7 @@ class _PyroModuleMeta(type):
             PyroModule[b] for b in Module.__bases__ if issubclass(b, torch.nn.Module)
         ]
 
-        class result(Module, *bases):
+        class result(Module, *bases):  # type: ignore[valid-type, misc]
             # Unpickling helper to load an object of type PyroModule[Module].
             def __reduce__(self):
                 state = getattr(self, "__getstate__", self.__dict__.copy)()
@@ -661,6 +668,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
             except AttributeError:
                 pass
             constrained_value, constraint, event_dim = value
+            assert constrained_value is not None
             self._pyro_params[name] = constraint, event_dim
             if self._pyro_context.active and not _is_module_local_param_enabled():
                 fullname = self._pyro_get_fullname(name)
@@ -672,7 +680,6 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 )
                 constrained_value = detach_provenance(pyro.param(fullname))
                 unconstrained_value: torch.Tensor = constrained_value.unconstrained()  # type: ignore[attr-defined]
-                reveal_type(unconstrained_value)
                 if not isinstance(unconstrained_value, torch.nn.Parameter):
                     # Update PyroModule ---> ParamStore (type only; data is preserved).
                     unconstrained_value = torch.nn.Parameter(unconstrained_value)
@@ -684,7 +691,11 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 fullname = self._pyro_get_fullname(name)
                 constrained_value = detach_provenance(
                     pyro.poutine.runtime.effectful(type="param")(
-                        lambda *_, **__: constrained_value
+                        lambda *_, **__: (
+                            constrained_value()
+                            if callable(constrained_value)
+                            else constrained_value
+                        )
                     )(
                         fullname,
                         constraint=constraint,
@@ -789,7 +800,9 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         return getattr(super(), "__getstate__", self.__dict__.copy)()
 
 
-def pyro_method(fn):
+def pyro_method(
+    fn: Callable[Concatenate[_PyroModule, _P], _T]
+) -> Callable[Concatenate[_PyroModule, _P], _T]:
     """
     Decorator for top-level methods of a :class:`PyroModule` to enable pyro
     effects and cache ``pyro.sample`` statements.
@@ -799,14 +812,14 @@ def pyro_method(fn):
     """
 
     @functools.wraps(fn)
-    def cached_fn(self, *args, **kwargs):
+    def cached_fn(self: _PyroModule, *args: _P.args, **kwargs: _P.kwargs) -> _T:
         with self._pyro_context:
             return fn(self, *args, **kwargs)
 
     return cached_fn
 
 
-def clear(mod):
+def clear(mod: PyroModule) -> None:
     """
     Removes data from both a :class:`PyroModule` and the param store.
 
@@ -821,7 +834,7 @@ def clear(mod):
         delattr(mod, name)
 
 
-def to_pyro_module_(m, recurse=True):
+def to_pyro_module_(m: torch.nn.Module, recurse: bool = True) -> None:
     """
     Converts an ordinary :class:`torch.nn.Module` instance to a
     :class:`PyroModule` **in-place**.
@@ -856,25 +869,28 @@ def to_pyro_module_(m, recurse=True):
 
     if isinstance(m, PyroModule):
         if recurse:
-            for name, value in list(m._modules.items()):
-                to_pyro_module_(value)
-                setattr(m, name, value)
+            for name, module in list(m._modules.items()):
+                assert module is not None
+                to_pyro_module_(module)
+                setattr(m, name, module)
         return
 
     # Change m's type in-place.
     m.__class__ = PyroModule[m.__class__]
+    assert isinstance(m, PyroModule)
     m._pyro_name = ""
     m._pyro_context = _Context()
     m._pyro_params = OrderedDict()
     m._pyro_samples = OrderedDict()
 
     # Reregister parameters and submodules.
-    for name, value in list(m._parameters.items()):
-        setattr(m, name, value)
-    for name, value in list(m._modules.items()):
+    for name, param in list(m._parameters.items()):
+        setattr(m, name, param)
+    for name, module in list(m._modules.items()):
         if recurse:
-            to_pyro_module_(value)
-        setattr(m, name, value)
+            assert module is not None
+            to_pyro_module_(module)
+        setattr(m, name, module)
 
 
 # The following descriptor disables the ._flat_weights cache of
@@ -882,13 +898,17 @@ def to_pyro_module_(m, recurse=True):
 # attribute. This is required if any attribute is set to a PyroParam or
 # PyroSample. For motivation, see https://github.com/pyro-ppl/pyro/issues/2390
 class _FlatWeightsDescriptor:
-    def __get__(self, obj, obj_type=None):
+    def __get__(
+        self,
+        obj: Optional[torch.nn.RNNBase],
+        obj_type: Optional[Type[torch.nn.RNNBase]] = None,
+    ) -> Union["_FlatWeightsDescriptor", List]:
         if obj is None:
             return self
         return [getattr(obj, name) for name in obj._flat_weights_names]
 
-    def __set__(self, obj, value):
+    def __set__(self, obj: object, value: Any) -> None:
         pass  # Ignore value.
 
 
-PyroModule[torch.nn.RNNBase]._flat_weights = _FlatWeightsDescriptor()
+PyroModule[torch.nn.RNNBase]._flat_weights = _FlatWeightsDescriptor()  # type: ignore[attr-defined]
