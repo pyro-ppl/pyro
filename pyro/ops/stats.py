@@ -270,7 +270,7 @@ def weighed_quantile(input, probs, log_weights, dim=0):
     :param torch.Tensor log_weights: sample weights tensor.
     :param int dim: dimension to take quantiles from ``input``.
     :returns torch.Tensor: quantiles of ``input`` at ``probs``.
-    
+
     Example:
     >>> from pyro.ops.stats import weighed_quantile
     >>> from torch import Tensor
@@ -293,7 +293,12 @@ def weighed_quantile(input, probs, log_weights, dim=0):
     weights = weights - weights.min(dim, keepdim=True)[0]
     weights = weights / weights.max(dim, keepdim=True)[0]
     # Calculate indices
-    indices_above = (weights[..., None] <= probs).sum(dim, keepdim=True).swapaxes(dim, -1).clamp(max=input.size(dim) - 1)[..., 0]
+    indices_above = (
+        (weights[..., None] <= probs)
+        .sum(dim, keepdim=True)
+        .swapaxes(dim, -1)
+        .clamp(max=input.size(dim) - 1)[..., 0]
+    )
     indices_below = (indices_above - 1).clamp(min=0)
     # Calculate below and above qunatiles
     quantiles_below = sorted_input.gather(dim, indices_below)
