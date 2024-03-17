@@ -103,9 +103,7 @@ class ReparamMessenger(Messenger):
         # ReplayMessenger we would need to ensure those messengers can
         # similarly be safely applied twice, with the second application
         # avoiding overwriting the original application.
-        _get_init_messengers_iter = _get_init_messengers()
-        assert _get_init_messengers_iter is not None
-        for m in _get_init_messengers_iter:
+        for m in _get_init_messengers():
             m._process_message(msg)
 
         # Pass args_kwargs to the reparam via a side channel.
