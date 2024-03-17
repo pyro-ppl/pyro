@@ -28,6 +28,7 @@ except ImportError:
     def _copy_to_script_wrapper(fn):
         return fn
 
+
 from collections import OrderedDict
 from dataclasses import dataclass
 from types import TracebackType
@@ -915,6 +916,7 @@ class _FlatWeightsDescriptor:
 
 
 PyroModule[torch.nn.RNNBase]._flat_weights = _FlatWeightsDescriptor()  # type: ignore[attr-defined]
+
 
 # pyro module list
 # using pyro.nn.PyroModule[torch.nn.ModuleList] can cause issues when
