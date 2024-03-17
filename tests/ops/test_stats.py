@@ -20,6 +20,7 @@ from pyro.ops.stats import (
     resample,
     split_gelman_rubin,
     waic,
+    weighed_quantile,
 )
 from tests.common import assert_close, assert_equal, xfail_if_not_implemented
 
@@ -55,6 +56,25 @@ def test_quantile():
     )
     assert_equal(quantile(y, probs=0.2), torch.tensor(0.2), prec=0.02)
     assert_equal(quantile(z, probs=0.8413), torch.tensor(1.0), prec=0.02)
+
+
+@pytest.mark.init(rng_seed=3)
+def test_weighed_quantile():
+    # Fixed values test
+    input = torch.Tensor([[10, 50, 40], [20, 30, 0]])
+    probs = [0.2, 0.8]
+    log_weights = torch.Tensor([0.4, 0.5, 0.1]).log()
+    result = weighed_quantile(input, probs, log_weights, -1)
+    assert_equal(result, torch.Tensor([[40.4, 47.6], [9.0, 26.4]]))
+
+    # Random values test
+    dist = torch.distributions.normal.Normal(0, 1)
+    input = dist.sample((100000,))
+    probs = [0.1, 0.7, 0.95]
+    log_weights = dist.log_prob(input)
+    result = weighed_quantile(input, probs, log_weights)
+    result_dist = torch.distributions.normal.Normal(0, torch.tensor(0.5).sqrt())
+    assert_equal(result, result_dist.icdf(torch.Tensor(probs)), prec=0.01)
 
 
 def test_pi():

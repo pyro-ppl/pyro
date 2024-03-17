@@ -3,6 +3,7 @@
 
 import math
 import numbers
+from typing import List, Tuple, Union
 
 import torch
 from torch.fft import irfft, rfft
@@ -261,7 +262,12 @@ def quantile(input, probs, dim=0):
     return quantiles if probs.shape != torch.Size([]) else quantiles.squeeze(dim)
 
 
-def weighed_quantile(input, probs, log_weights, dim=0):
+def weighed_quantile(
+    input: torch.Tensor,
+    probs: Union[List[float], Tuple[float], torch.Tensor],
+    log_weights: torch.Tensor,
+    dim: int = 0,
+) -> torch.Tensor:
     """
     Computes quantiles of weighed ``input`` samples at ``probs``.
 
@@ -283,6 +289,7 @@ def weighed_quantile(input, probs, log_weights, dim=0):
     dim = dim if dim >= 0 else (len(input.shape) + dim)
     if isinstance(probs, (list, tuple)):
         probs = torch.tensor(probs, dtype=input.dtype, device=input.device)
+    assert isinstance(probs, torch.Tensor)
     # Calculate normalized weights
     weights = (log_weights - torch.logsumexp(log_weights, 0)).exp()
     # Sort input and weights
@@ -303,8 +310,7 @@ def weighed_quantile(input, probs, log_weights, dim=0):
     quantiles_below = sorted_input.gather(dim, indices_below)
     quantiles_above = sorted_input.gather(dim, indices_above)
     # Calculate weights for below and above quantiles
-    probs_shape = [None] * len(input.shape)
-    probs_shape[dim] = slice(None)
+    probs_shape = [None] * dim + [slice(None)] + [None] * (len(input.shape) - dim - 1)
     expanded_probs_shape = list(input.shape)
     expanded_probs_shape[dim] = len(probs)
     probs = probs[probs_shape].expand(*expanded_probs_shape)
