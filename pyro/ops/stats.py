@@ -264,7 +264,7 @@ def quantile(input, probs, dim=0):
 
 def weighed_quantile(
     input: torch.Tensor,
-    probs: Union[List[float], Tuple[float], torch.Tensor],
+    probs: Union[List[float], Tuple[float, ...], torch.Tensor],
     log_weights: torch.Tensor,
     dim: int = 0,
 ) -> torch.Tensor:
