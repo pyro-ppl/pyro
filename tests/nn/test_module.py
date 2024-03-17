@@ -1026,8 +1026,9 @@ class TestTorchModuleList(ModuleListTester):
 
     def test_with_slice_indexing(self) -> None:
         self.setup(False)
-        with pytest.raises(RuntimeError):
-            self.train_nested_bnn(self.get_slice_indexing_modulelist_bnn)
+        # with pytest.raises(RuntimeError):
+        # error no longer gets raised
+        self.train_nested_bnn(self.get_slice_indexing_modulelist_bnn)
 
 
 class TestPyroModuleList(ModuleListTester):
@@ -1038,3 +1039,7 @@ class TestPyroModuleList(ModuleListTester):
     def test_with_slice_indexing(self) -> None:
         self.setup(True)
         self.train_nested_bnn(self.get_slice_indexing_modulelist_bnn)
+
+
+def test_module_list() -> None:
+    assert PyroModule[torch.nn.ModuleList] is pyro.nn.PyroModuleList

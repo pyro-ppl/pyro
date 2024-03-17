@@ -867,3 +867,6 @@ class PyroModuleList(PyroModule, torch.nn.ModuleList):
             return torch.nn.ModuleList(list(self._modules.values())[idx])
         else:
             return self._modules[self._get_abs_string_index(idx)]
+
+
+_PyroModuleMeta._pyro_mixin_cache[torch.nn.ModuleList] = PyroModuleList
