@@ -17,7 +17,20 @@ import inspect
 from typing import Union
 import weakref
 from collections import OrderedDict, namedtuple
-from torch._jit_internal import _copy_to_script_wrapper
+import warnings
+
+try:
+    from torch._jit_internal import _copy_to_script_wrapper
+except ImportError:
+    warnings.warn(
+        "Cannot find torch._jit_internal._copy_to_script_wrapper", ImportWarning
+    )
+
+    # Fall back to trivial decorator.
+    def _copy_to_script_wrapper(fn):
+        return fn
+
+
 import torch
 from torch.distributions import constraints, transform_to
 
