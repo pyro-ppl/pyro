@@ -14,10 +14,10 @@ the :class:`PyroSample` struct::
 """
 import functools
 import inspect
-from typing import Iterable, Union
+import warnings
 import weakref
 from collections import OrderedDict, namedtuple
-import warnings
+from typing import Union
 
 try:
     from torch._jit_internal import _copy_to_script_wrapper

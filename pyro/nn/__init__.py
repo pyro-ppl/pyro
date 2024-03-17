@@ -11,10 +11,10 @@ from pyro.nn.auto_reg_nn import (
 from pyro.nn.dense_nn import ConditionalDenseNN, DenseNN
 from pyro.nn.module import (
     PyroModule,
+    PyroModuleList,
     PyroParam,
     PyroSample,
     pyro_method,
-    PyroModuleList,
 )
 
 __all__ = [

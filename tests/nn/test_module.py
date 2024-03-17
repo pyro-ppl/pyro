@@ -3,12 +3,14 @@
 
 import io
 import math
-from typing import Callable, Iterable
 import warnings
+from typing import Callable, Iterable
+
 import pytest
 import torch
 from torch import nn
 from torch.distributions import constraints, transform_to
+
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
