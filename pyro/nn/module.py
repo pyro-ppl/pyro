@@ -14,7 +14,7 @@ the :class:`PyroSample` struct::
 """
 import functools
 import inspect
-from typing import Union
+from typing import Iterable, Union
 import weakref
 from collections import OrderedDict, namedtuple
 import warnings
@@ -853,10 +853,9 @@ PyroModule[torch.nn.RNNBase]._flat_weights = _FlatWeightsDescriptor()
 # The scenario is rare but happend.
 # The fix could not be applied in torch directly, which is why we have to deal
 # with it here, see https://github.com/pytorch/pytorch/issues/121008
-class PyroModuleList(PyroModule, torch.nn.ModuleList):
+class PyroModuleList(torch.nn.ModuleList, PyroModule):
     def __init__(self, modules):
-        PyroModule.__init__(self)
-        torch.nn.ModuleList.__init__(self, modules)
+        super().__init__(modules)
 
     @_copy_to_script_wrapper
     def __getitem__(
