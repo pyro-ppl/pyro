@@ -137,7 +137,7 @@ class PyroParam(NamedTuple):
         return PyroParam(init_value, self.constraint, self.event_dim)
 
 
-@dataclass
+@dataclass(frozen=True)
 class PyroSample:
     """
     Declares a Pyro-managed random attribute of a :class:`PyroModule`, similar
@@ -174,14 +174,14 @@ class PyroSample:
     ]
 
     def __post_init__(self) -> None:
-        super().__init__()
         if not hasattr(self.prior, "sample"):  # if not a distribution
             assert 1 == sum(
                 1
                 for p in inspect.signature(self.prior).parameters.values()
                 if p.default is inspect.Parameter.empty
             ), "prior should take the single argument 'self'"
-            self.name: Optional[str] = getattr(self.prior, "__name__", None)
+            object.__setattr__(self, "name", getattr(self.prior, "__name__", None))
+            self.name: Optional[str]
             if self.name is not None:
                 # Ensure decorated function is accessible for pickling.
                 self.prior.__name__ = "_pyro_prior_" + self.prior.__name__
@@ -638,7 +638,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
     def __setattr__(
         self,
         name: str,
-        value: Union[torch.Tensor, torch.nn.Module, PyroParam, PyroSample],
+        value: Any,
     ) -> None:
         if isinstance(value, PyroModule):
             # Create a new sub PyroModule, overwriting any old value.
