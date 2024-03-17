@@ -401,13 +401,13 @@ def am_i_wrapped() -> bool:
 @overload
 def effectful(
     fn: None = ..., type: Optional[str] = ...
-) -> Callable[[Callable[_P, _T]], Callable[..., Optional[_T]]]: ...
+) -> Callable[[Callable[_P, _T]], Callable[..., _T]]: ...
 
 
 @overload
 def effectful(
     fn: Callable[_P, _T] = ..., type: Optional[str] = ...
-) -> Callable[..., Optional[_T]]: ...
+) -> Callable[..., _T]: ...
 
 
 def effectful(
@@ -435,7 +435,7 @@ def effectful(
         infer: Optional[InferDict] = None,
         obs: Optional[_T] = None,
         **kwargs: _P.kwargs,
-    ) -> Optional[_T]:
+    ) -> _T:
         is_observed = obs is not None
 
         if not am_i_wrapped():
@@ -459,6 +459,8 @@ def effectful(
             )
             # apply the stack and return its return value
             apply_stack(msg)
+            if TYPE_CHECKING:
+                assert msg["value"] is not None
             return msg["value"]
 
     _fn._is_effectful = True  # type: ignore[attr-defined]

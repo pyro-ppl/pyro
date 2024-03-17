@@ -2,10 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from functools import partial, singledispatch
-from typing import Tuple
+from typing import Tuple, TypeVar
 
 import torch
 from torch.utils._pytree import tree_flatten, tree_map, tree_unflatten
+
+_Tensor = TypeVar("_Tensor", bound=torch.Tensor)
 
 
 class ProvenanceTensor(torch.Tensor):
@@ -160,7 +162,7 @@ def get_provenance(x) -> frozenset:
     return provenance
 
 
-def detach_provenance(x):
+def detach_provenance(x: _Tensor) -> _Tensor:
     """
     Blocks provenance tracking through a tensor, similar to :meth:`torch.Tensor.detach`.
 
@@ -169,4 +171,4 @@ def detach_provenance(x):
     :rtype: torch.Tensor
     """
     value, _ = extract_provenance(x)
-    return value
+    return value  # type: ignore[return-value]
