@@ -270,16 +270,15 @@ def weighed_quantile(input, probs, log_weights, dim=0):
     :param torch.Tensor log_weights: sample weights tensor.
     :param int dim: dimension to take quantiles from ``input``.
     :returns torch.Tensor: quantiles of ``input`` at ``probs``.
-    
+
     Example:
     >>> from pyro.ops.stats import weighed_quantile
-    >>> from torch import Tensor
-    >>> input = Tensor([[10, 50, 40], [20, 30, 0]])
-    >>> probs = Tensor([0.2, 0.8])
-    >>> log_weights = Tensor([0.4, 0.5, 0.1]).log()
-    >>> weighed_quantile(input, probs, log_weights, -1)
-    tensor([[40.4000, 47.6000],
-            [ 9.0000, 26.4000]])
+    >>> import torch
+    >>> input = torch.Tensor([[10, 50, 40], [20, 30, 0]])
+    >>> probs = torch.Tensor([0.2, 0.8])
+    >>> log_weights = torch.Tensor([0.4, 0.5, 0.1]).log()
+    >>> result = weighed_quantile(input, probs, log_weights, -1)
+    >>> torch.testing.assert_close(result, torch.Tensor([[40.4, 47.6], [9.0, 26.4]]))
     """
     dim = dim if dim >= 0 else (len(input.shape) + dim)
     if isinstance(probs, (list, tuple)):
@@ -293,7 +292,12 @@ def weighed_quantile(input, probs, log_weights, dim=0):
     weights = weights - weights.min(dim, keepdim=True)[0]
     weights = weights / weights.max(dim, keepdim=True)[0]
     # Calculate indices
-    indices_above = (weights[..., None] <= probs).sum(dim, keepdim=True).swapaxes(dim, -1).clamp(max=input.size(dim) - 1)[..., 0]
+    indices_above = (
+        (weights[..., None] <= probs)
+        .sum(dim, keepdim=True)
+        .swapaxes(dim, -1)
+        .clamp(max=input.size(dim) - 1)[..., 0]
+    )
     indices_below = (indices_above - 1).clamp(min=0)
     # Calculate below and above qunatiles
     quantiles_below = sorted_input.gather(dim, indices_below)
