@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-from collections.abc import Sequence
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.nn as nn
