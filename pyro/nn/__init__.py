@@ -9,7 +9,13 @@ from pyro.nn.auto_reg_nn import (
     MaskedLinear,
 )
 from pyro.nn.dense_nn import ConditionalDenseNN, DenseNN
-from pyro.nn.module import PyroModule, PyroParam, PyroSample, pyro_method
+from pyro.nn.module import (
+    PyroModule,
+    PyroModuleList,
+    PyroParam,
+    PyroSample,
+    pyro_method,
+)
 
 __all__ = [
     "AutoRegressiveNN",
@@ -21,4 +27,5 @@ __all__ = [
     "PyroParam",
     "PyroSample",
     "pyro_method",
+    "PyroModuleList",
 ]
