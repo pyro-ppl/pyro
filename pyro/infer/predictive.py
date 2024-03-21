@@ -3,11 +3,13 @@
 
 import warnings
 from functools import reduce
+from typing import List, NamedTuple, Union
 
 import torch
 
 import pyro
 import pyro.poutine as poutine
+from pyro.poutine.trace_struct import Trace
 from pyro.poutine.util import prune_subsample_sites
 
 
@@ -31,16 +33,16 @@ def _guess_max_plate_nesting(model, args, kwargs):
     return max_plate_nesting
 
 
+class _predictiveResults(NamedTuple):
+    samples: dict
+    trace: Union[Trace, List[Trace]]
+
+
 def _predictive_sequential(
-    model,
-    posterior_samples,
-    model_args,
-    model_kwargs,
-    num_samples,
-    return_site_shapes,
-    return_trace=False,
+    model, posterior_samples, model_args, model_kwargs, num_samples, return_site_shapes
 ):
-    collected = []
+    collected_samples = []
+    collected_trace = []
     samples = [
         {k: v[i] for k, v in posterior_samples.items()} for i in range(num_samples)
     ]
@@ -48,20 +50,18 @@ def _predictive_sequential(
         trace = poutine.trace(poutine.condition(model, samples[i])).get_trace(
             *model_args, **model_kwargs
         )
-        if return_trace:
-            collected.append(trace)
-        else:
-            collected.append(
-                {site: trace.nodes[site]["value"] for site in return_site_shapes}
-            )
+        collected_trace.append(trace)
+        collected_samples.append(
+            {site: trace.nodes[site]["value"] for site in return_site_shapes}
+        )
 
-    if return_trace:
-        return collected
-    else:
-        return {
-            site: torch.stack([s[site] for s in collected]).reshape(shape)
+    return _predictiveResults(
+        trace=collected_trace,
+        samples={
+            site: torch.stack([s[site] for s in collected_samples]).reshape(shape)
             for site, shape in return_site_shapes.items()
-        }
+        },
+    )
 
 
 def _predictive(
@@ -69,7 +69,6 @@ def _predictive(
     posterior_samples,
     num_samples,
     return_sites=(),
-    return_trace=False,
     parallel=False,
     model_args=(),
     model_kwargs={},
@@ -92,12 +91,6 @@ def _predictive(
             + sample_shape
         )
         reshaped_samples[name] = sample
-
-    if return_trace:
-        trace = poutine.trace(
-            poutine.condition(vectorize(model), reshaped_samples)
-        ).get_trace(*model_args, **model_kwargs)
-        return trace
 
     return_site_shapes = {}
     for site in model_trace.stochastic_nodes + model_trace.observation_nodes:
@@ -131,7 +124,6 @@ def _predictive(
             model_kwargs,
             num_samples,
             return_site_shapes,
-            return_trace=False,
         )
 
     trace = poutine.trace(
@@ -148,7 +140,7 @@ def _predictive(
         else:
             predictions[site] = value.reshape(shape)
 
-    return predictions
+    return _predictiveResults(trace=trace, samples=predictions)
 
 
 class Predictive(torch.nn.Module):
@@ -269,7 +261,7 @@ class Predictive(torch.nn.Module):
                 parallel=self.parallel,
                 model_args=args,
                 model_kwargs=kwargs,
-            )
+            ).samples
         return _predictive(
             self.model,
             posterior_samples,
@@ -278,7 +270,7 @@ class Predictive(torch.nn.Module):
             parallel=self.parallel,
             model_args=args,
             model_kwargs=kwargs,
-        )
+        ).samples
 
     def get_samples(self, *args, **kwargs):
         warnings.warn(
@@ -304,12 +296,12 @@ class Predictive(torch.nn.Module):
                 parallel=self.parallel,
                 model_args=args,
                 model_kwargs=kwargs,
-            )
+            ).samples
         return _predictive(
             self.model,
             posterior_samples,
             self.num_samples,
-            return_trace=True,
+            parallel=self.parallel,
             model_args=args,
             model_kwargs=kwargs,
-        )
+        ).trace
