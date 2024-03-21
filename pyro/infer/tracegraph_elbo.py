@@ -218,6 +218,8 @@ def _compute_elbo(model_trace, guide_trace):
     # we include only downstream costs to reduce variance
     # optionally include baselines to further reduce variance
     for node, downstream_cost in downstream_costs.items():
+        if node not in guide_trace.nodes:
+            continue
         guide_site = guide_trace.nodes[node]
         downstream_cost = downstream_cost.sum_to(guide_site["cond_indep_stack"])
         score_function = guide_site["score_parts"].score_function
