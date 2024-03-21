@@ -23,7 +23,7 @@ def sample_mask_indices(
     :type simple: bool
     """
     indices = torch.linspace(1, input_dim, steps=hidden_dim, device="cpu").to(
-        torch.Tensor().device
+        torch.tensor(0.0).device
     )
     if simple:
         # Simple procedure tries to space fractional indices evenly by rounding to nearest int
