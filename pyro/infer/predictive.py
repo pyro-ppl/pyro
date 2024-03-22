@@ -306,7 +306,7 @@ class Predictive(torch.nn.Module):
             self.model,
             posterior_samples,
             self.num_samples,
-            parallel=self.parallel,
+            parallel=True,
             model_args=args,
             model_kwargs=kwargs,
         ).trace
