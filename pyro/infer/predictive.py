@@ -322,8 +322,8 @@ def trace_log_prob(trace: Union[Trace, List[Trace]]) -> torch.Tensor:
 class WeighedPredictiveResults(NamedTuple):
     samples: Union[dict, tuple]
     log_weights: torch.Tensor
-    guide_prob: torch.Tensor
-    model_prob: torch.Tensor
+    guide_log_prob: torch.Tensor
+    model_log_prob: torch.Tensor
 
 
 class WeighedPredictive(Predictive):
@@ -349,8 +349,8 @@ class WeighedPredictive(Predictive):
         return WeighedPredictiveResults(
             samples=tuple(v for _, v in sorted(result.items())),
             log_weights=result.log_weights,
-            guide_prob=result.guide_prob,
-            model_prob=result.model_prob,
+            guide_log_prob=result.guide_log_prob,
+            model_log_prob=result.model_log_prob,
         )
 
     def forward(self, *args, **kwargs):
@@ -389,8 +389,8 @@ class WeighedPredictive(Predictive):
             model_predictive.trace.compute_log_prob()
             guide_predictive.trace.pack_tensors()
             model_predictive.trace.pack_tensors(guide_predictive.trace.plate_to_symbol)
-        model_prob = trace_log_prob(model_predictive.trace)
-        guide_prob = trace_log_prob(guide_predictive.trace)
+        model_log_prob = trace_log_prob(model_predictive.trace)
+        guide_log_prob = trace_log_prob(guide_predictive.trace)
         return WeighedPredictiveResults(
             samples=(
                 _predictive(
@@ -405,7 +405,7 @@ class WeighedPredictive(Predictive):
                 if model_guide is not self.model
                 else model_predictive.samples
             ),
-            log_weights=model_prob - guide_prob,
-            guide_prob=guide_prob,
-            model_prob=model_prob,
+            log_weights=model_log_prob - guide_log_prob,
+            guide_log_prob=guide_log_prob,
+            model_log_prob=model_log_prob,
         )
