@@ -331,8 +331,9 @@ class WeighedPredictive(Predictive):
     Class used to construct a weighed predictive distribution that is based
     on the same initialization interface as :class:`Predictive`.
     
-    The methods `.forward` and `.call` must be called with an additional keyword argument
+    The methods `.forward` and `.call` can be called with an additional keyword argument
     `model_guide` which is the model used to create and optimize the guide, and they return both samples and log_weights.
+    If not provided `model_guide` defaults to `self.model`.
 
     The weights are calculated as the per sample gap between the model_guide log-probability
     and the guide log-probability (a guide must always be provided).
@@ -341,7 +342,7 @@ class WeighedPredictive(Predictive):
     def call(self, *args, **kwargs):
         """
         Method `.call` that is backwards compatible with the same method found in :class:`Predictive`
-        but must be called with an additional keyword argument `model_guide`
+        but can be called with an additional keyword argument `model_guide`
         which is the model used to create and optimize the guide.
         """
         result = self.forward(*args, **kwargs)
@@ -354,11 +355,11 @@ class WeighedPredictive(Predictive):
 
     def forward(self, *args, **kwargs):
         """
-        Method `.forward` that is backwards compatible with the same method found in :class:`Predictive`.
-        but must be called with an additional keyword argument `model_guide`
+        Method `.forward` that is backwards compatible with the same method found in :class:`Predictive`
+        but can be called with an additional keyword argument `model_guide`
         which is the model used to create and optimize the guide.
         """
-        model_guide = kwargs.pop('model_guide')
+        model_guide = kwargs.pop('model_guide', self.model)
         return_sites = self.return_sites
         # return all sites by default if a guide is provided.
         return_sites = None if not return_sites else return_sites
@@ -397,7 +398,7 @@ class WeighedPredictive(Predictive):
                                 return_sites=return_sites,
                                 parallel=self.parallel,
                                 model_args=args,
-                                model_kwargs=kwargs).samples,
+                                model_kwargs=kwargs).samples if model_guide is not self.model else model_predictive.samples,
             log_weights=model_prob - guide_prob,
             guide_prob=guide_prob,
             model_prob=model_prob)

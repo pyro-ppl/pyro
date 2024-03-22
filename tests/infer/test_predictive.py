@@ -133,8 +133,9 @@ def test_posterior_predictive_svi_one_hot():
     assert_close(marginal_return_vals.mean(dim=0), true_probs.unsqueeze(0), rtol=0.1)
 
 
+@pytest.mark.parametrize("predictive", [Predictive, WeighedPredictive])
 @pytest.mark.parametrize("parallel", [False, True])
-def test_shapes(parallel):
+def test_shapes(parallel, predictive):
     num_samples = 10
 
     def model():
@@ -152,14 +153,17 @@ def test_shapes(parallel):
     expected = poutine.replay(vectorize(model), trace)()
 
     # Use Predictive.
-    predictive = Predictive(
+    actual = predictive(
         model,
         guide=guide,
         return_sites=["x", "y"],
         num_samples=num_samples,
         parallel=parallel,
-    )
-    actual = predictive()
+    )()
+    if predictive is WeighedPredictive:
+        assert actual.samples["x"].shape[:1] == actual.log_weights.shape
+        assert actual.samples["y"].shape[:1] == actual.log_weights.shape
+        actual = actual.samples
     assert set(actual) == set(expected)
     assert actual["x"].shape == expected["x"].shape
     assert actual["y"].shape == expected["y"].shape
@@ -167,7 +171,7 @@ def test_shapes(parallel):
 
 @pytest.mark.parametrize("with_plate", [True, False])
 @pytest.mark.parametrize("event_shape", [(), (2,)])
-def test_deterministic(with_plate, event_shape):
+def test_deterministic(with_plate, event_shape, predictive):
     def model(y=None):
         with pyro.util.optional(pyro.plate("plate", 3), with_plate):
             x = pyro.sample("x", dist.Normal(0, 1).expand(event_shape).to_event())
@@ -233,5 +237,3 @@ def test_get_mask_optimization():
     assert "guide-always" in called
     assert "model-sometimes" not in called
     assert "guide-sometimes" not in called
-
-test_posterior_predictive_svi_manual_guide(True, WeighedPredictive)
