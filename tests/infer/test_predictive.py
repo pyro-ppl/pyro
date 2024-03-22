@@ -169,6 +169,7 @@ def test_shapes(parallel, predictive):
     assert actual["y"].shape == expected["y"].shape
 
 
+@pytest.mark.parametrize("predictive", [Predictive, WeighedPredictive])
 @pytest.mark.parametrize("with_plate", [True, False])
 @pytest.mark.parametrize("event_shape", [(), (2,)])
 def test_deterministic(with_plate, event_shape, predictive):
@@ -186,9 +187,13 @@ def test_deterministic(with_plate, event_shape, predictive):
     for i in range(100):
         svi.step(y)
 
-    actual = Predictive(
+    actual = predictive(
         model, guide=guide, return_sites=["x2", "x3"], num_samples=1000
     )()
+    if predictive is WeighedPredictive:
+        assert actual.samples["x2"].shape[:1] == actual.log_weights.shape
+        assert actual.samples["x3"].shape[:1] == actual.log_weights.shape
+        actual = actual.samples
     x2_batch_shape = (3,) if with_plate else ()
     assert actual["x2"].shape == (1000,) + x2_batch_shape + event_shape
     # x3 shape is prepended 1 to match Pyro shape semantics
