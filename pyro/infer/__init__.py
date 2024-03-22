@@ -62,4 +62,5 @@ __all__ = [
     "TraceTailAdaptive_ELBO",
     "Trace_ELBO",
     "Trace_MMD",
+    "WeighedPredictive",
 ]

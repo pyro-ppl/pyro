@@ -76,7 +76,7 @@ def _predictive(
     parallel=False,
     model_args=(),
     model_kwargs={},
-    mask=True
+    mask=True,
 ):
     model = torch.no_grad()(poutine.mask(model, mask=False) if mask else model)
     max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
@@ -330,10 +330,10 @@ class WeighedPredictive(Predictive):
     """
     Class used to construct a weighed predictive distribution that is based
     on the same initialization interface as :class:`Predictive`.
-    
+
     The methods `.forward` and `.call` can be called with an additional keyword argument
-    `model_guide` which is the model used to create and optimize the guide, and they return both samples and log_weights.
-    If not provided `model_guide` defaults to `self.model`.
+    `model_guide` which is the model used to create and optimize the guide (if not
+    provided `model_guide` defaults to `self.model`), and they return both samples and log_weights.
 
     The weights are calculated as the per sample gap between the model_guide log-probability
     and the guide log-probability (a guide must always be provided).
@@ -350,7 +350,7 @@ class WeighedPredictive(Predictive):
             samples=tuple(v for _, v in sorted(result.items())),
             log_weights=result.log_weights,
             guide_prob=result.guide_prob,
-            model_prob=result.model_prob
+            model_prob=result.model_prob,
         )
 
     def forward(self, *args, **kwargs):
@@ -359,7 +359,7 @@ class WeighedPredictive(Predictive):
         but can be called with an additional keyword argument `model_guide`
         which is the model used to create and optimize the guide.
         """
-        model_guide = kwargs.pop('model_guide', self.model)
+        model_guide = kwargs.pop("model_guide", self.model)
         return_sites = self.return_sites
         # return all sites by default if a guide is provided.
         return_sites = None if not return_sites else return_sites
@@ -371,7 +371,7 @@ class WeighedPredictive(Predictive):
             parallel=self.parallel,
             model_args=args,
             model_kwargs=kwargs,
-            mask=False
+            mask=False,
         )
         posterior_samples = guide_predictive.samples
         model_predictive = _predictive(
@@ -382,23 +382,30 @@ class WeighedPredictive(Predictive):
             parallel=self.parallel,
             model_args=args,
             model_kwargs=kwargs,
-            mask=False
+            mask=False,
         )
         if not isinstance(guide_predictive.trace, list):
             guide_predictive.trace.compute_score_parts()
             model_predictive.trace.compute_log_prob()
             guide_predictive.trace.pack_tensors()
             model_predictive.trace.pack_tensors(guide_predictive.trace.plate_to_symbol)
-        model_prob = trace_log_prob(model_predictive.trace) 
+        model_prob = trace_log_prob(model_predictive.trace)
         guide_prob = trace_log_prob(guide_predictive.trace)
         return WeighedPredictiveResults(
-            samples=_predictive(self.model,
-                                posterior_samples,
-                                self.num_samples,
-                                return_sites=return_sites,
-                                parallel=self.parallel,
-                                model_args=args,
-                                model_kwargs=kwargs).samples if model_guide is not self.model else model_predictive.samples,
+            samples=(
+                _predictive(
+                    self.model,
+                    posterior_samples,
+                    self.num_samples,
+                    return_sites=return_sites,
+                    parallel=self.parallel,
+                    model_args=args,
+                    model_kwargs=kwargs,
+                ).samples
+                if model_guide is not self.model
+                else model_predictive.samples
+            ),
             log_weights=model_prob - guide_prob,
             guide_prob=guide_prob,
-            model_prob=model_prob)
+            model_prob=model_prob,
+        )

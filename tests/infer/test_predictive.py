@@ -8,7 +8,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 import pyro.poutine as poutine
-from pyro.infer import SVI, Predictive, WeighedPredictive, Trace_ELBO
+from pyro.infer import SVI, Predictive, Trace_ELBO, WeighedPredictive
 from pyro.infer.autoguide import AutoDelta, AutoDiagonalNormal
 from tests.common import assert_close
 
@@ -43,12 +43,16 @@ def beta_guide(num_trials):
 @pytest.mark.parametrize("parallel", [False, True])
 def test_posterior_predictive_svi_manual_guide(parallel, predictive):
     true_probs = torch.ones(5) * 0.7
-    num_trials = torch.ones(5) * 400 # Reduced to 400 from 1000 in order for guide optimization to converge
+    num_trials = (
+        torch.ones(5) * 400
+    )  # Reduced to 400 from 1000 in order for guide optimization to converge
     num_success = dist.Binomial(num_trials, true_probs).sample()
     conditioned_model = poutine.condition(model, data={"obs": num_success})
     elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
     svi = SVI(conditioned_model, beta_guide, optim.Adam(dict(lr=3.0)), elbo)
-    for i in range(5000): # Increased to 5000 from 1000 in order for guide optimization to converge
+    for i in range(
+        5000
+    ):  # Increased to 5000 from 1000 in order for guide optimization to converge
         svi.step(num_trials)
     posterior_predictive = predictive(
         model,
@@ -60,7 +64,9 @@ def test_posterior_predictive_svi_manual_guide(parallel, predictive):
     if predictive is Predictive:
         marginal_return_vals = posterior_predictive(num_trials)["_RETURN"]
     else:
-        weighed_samples = posterior_predictive(num_trials, model_guide=conditioned_model)
+        weighed_samples = posterior_predictive(
+            num_trials, model_guide=conditioned_model
+        )
         marginal_return_vals = weighed_samples.samples["_RETURN"]
         assert marginal_return_vals.shape[:1] == weighed_samples.log_weights.shape
         # Weights should be uniform as the guide has the same distribution as the model
@@ -85,7 +91,9 @@ def test_posterior_predictive_svi_auto_delta_guide(parallel, predictive):
     if predictive is Predictive:
         marginal_return_vals = posterior_predictive.get_samples(num_trials)["obs"]
     else:
-        weighed_samples = posterior_predictive.get_samples(num_trials, model_guide=conditioned_model)
+        weighed_samples = posterior_predictive.get_samples(
+            num_trials, model_guide=conditioned_model
+        )
         marginal_return_vals = weighed_samples.samples["obs"]
         assert marginal_return_vals.shape[:1] == weighed_samples.log_weights.shape
     assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 700, rtol=0.05)
@@ -113,7 +121,9 @@ def test_posterior_predictive_svi_auto_diag_normal_guide(return_trace, predictiv
         if predictive is Predictive:
             marginal_return_vals = posterior_predictive.get_samples(num_trials)["obs"]
         else:
-            weighed_samples = posterior_predictive.get_samples(num_trials, model_guide=conditioned_model)
+            weighed_samples = posterior_predictive.get_samples(
+                num_trials, model_guide=conditioned_model
+            )
             marginal_return_vals = weighed_samples.samples["obs"]
             assert marginal_return_vals.shape[:1] == weighed_samples.log_weights.shape
     assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 700, rtol=0.05)
