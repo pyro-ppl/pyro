@@ -9,6 +9,7 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
+from pyro.infer.util import plate_log_prob_sum
 from pyro.poutine.trace_struct import Trace
 from pyro.poutine.util import prune_subsample_sites
 
@@ -64,6 +65,9 @@ def _predictive_sequential(
     )
 
 
+_predictive_vectorize_plate_name = "_num_predictive_samples"
+
+
 def _predictive(
     model,
     posterior_samples,
@@ -72,11 +76,12 @@ def _predictive(
     parallel=False,
     model_args=(),
     model_kwargs={},
+    mask=True
 ):
-    model = torch.no_grad()(poutine.mask(model, mask=False))
+    model = torch.no_grad()(poutine.mask(model, mask=False) if mask else model)
     max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
     vectorize = pyro.plate(
-        "_num_predictive_samples", num_samples, dim=-max_plate_nesting - 1
+        _predictive_vectorize_plate_name, num_samples, dim=-max_plate_nesting - 1
     )
     model_trace = prune_subsample_sites(
         poutine.trace(model).get_trace(*model_args, **model_kwargs)
@@ -305,3 +310,94 @@ class Predictive(torch.nn.Module):
             model_args=args,
             model_kwargs=kwargs,
         ).trace
+
+
+def trace_log_prob(trace: Union[Trace, List[Trace]]) -> torch.Tensor:
+    if isinstance(trace, list):
+        return torch.Tensor([trace_element.log_prob_sum() for trace_element in trace])
+    else:
+        return plate_log_prob_sum(trace, _predictive_vectorize_plate_name)
+
+
+class WeighedPredictiveResults(NamedTuple):
+    samples: Union[dict, tuple]
+    log_weights: torch.Tensor
+    guide_prob: torch.Tensor
+    model_prob: torch.Tensor
+
+
+class WeighedPredictive(Predictive):
+    """
+    Class used to construct a weighed predictive distribution that is based
+    on the same initialization interface as :class:`Predictive`.
+    
+    The methods `.forward` and `.call` must be called with an additional keyword argument
+    `model_guide` which is the model used to create and optimize the guide, and they return both samples and log_weights.
+
+    The weights are calculated as the per sample gap between the model_guide log-probability
+    and the guide log-probability (a guide must always be provided).
+    """
+
+    def call(self, *args, **kwargs):
+        """
+        Method `.call` that is backwards compatible with the same method found in :class:`Predictive`
+        but must be called with an additional keyword argument `model_guide`
+        which is the model used to create and optimize the guide.
+        """
+        result = self.forward(*args, **kwargs)
+        return WeighedPredictiveResults(
+            samples=tuple(v for _, v in sorted(result.items())),
+            log_weights=result.log_weights,
+            guide_prob=result.guide_prob,
+            model_prob=result.model_prob
+        )
+
+    def forward(self, *args, **kwargs):
+        """
+        Method `.forward` that is backwards compatible with the same method found in :class:`Predictive`.
+        but must be called with an additional keyword argument `model_guide`
+        which is the model used to create and optimize the guide.
+        """
+        model_guide = kwargs.pop('model_guide')
+        return_sites = self.return_sites
+        # return all sites by default if a guide is provided.
+        return_sites = None if not return_sites else return_sites
+        guide_predictive = _predictive(
+            self.guide,
+            self.posterior_samples,
+            self.num_samples,
+            return_sites=None,
+            parallel=self.parallel,
+            model_args=args,
+            model_kwargs=kwargs,
+            mask=False
+        )
+        posterior_samples = guide_predictive.samples
+        model_predictive = _predictive(
+            model_guide,
+            posterior_samples,
+            self.num_samples,
+            return_sites=return_sites,
+            parallel=self.parallel,
+            model_args=args,
+            model_kwargs=kwargs,
+            mask=False
+        )
+        if not isinstance(guide_predictive.trace, list):
+            guide_predictive.trace.compute_score_parts()
+            model_predictive.trace.compute_log_prob()
+            guide_predictive.trace.pack_tensors()
+            model_predictive.trace.pack_tensors(guide_predictive.trace.plate_to_symbol)
+        model_prob = trace_log_prob(model_predictive.trace) 
+        guide_prob = trace_log_prob(guide_predictive.trace)
+        return WeighedPredictiveResults(
+            samples=_predictive(self.model,
+                                posterior_samples,
+                                self.num_samples,
+                                return_sites=return_sites,
+                                parallel=self.parallel,
+                                model_args=args,
+                                model_kwargs=kwargs).samples,
+            log_weights=model_prob - guide_prob,
+            guide_prob=guide_prob,
+            model_prob=model_prob)
