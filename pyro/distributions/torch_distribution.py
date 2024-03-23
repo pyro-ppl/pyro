@@ -3,9 +3,10 @@
 
 import warnings
 from collections import OrderedDict
-from typing import Callable
+from typing import Callable, Tuple
 
 import torch
+from functorch.dim import Dim
 from torch.distributions.kl import kl_divergence, register_kl
 
 import pyro.distributions.torch
@@ -45,8 +46,10 @@ class TorchDistributionMixin(Distribution, Callable):
             batched). The shape of the result should be `self.shape()`.
         :rtype: torch.Tensor
         """
-        sample_shape = self.sample_shape + sample_shape
-        bind_dims = self.dims[len(self.dims) - len(self.sample_shape) :]
+        sample_shape = self.named_sample_shape + sample_shape
+        bind_dims = self.named_shape[
+            len(self.named_shape) - len(self.named_sample_shape) :
+        ]
         return (
             self.rsample(sample_shape)
             if self.has_rsample
@@ -54,35 +57,33 @@ class TorchDistributionMixin(Distribution, Callable):
         )[bind_dims]
 
     @property
-    def dims(self):
-        if not hasattr(self, "_dims"):
-            seen = set()
+    def named_shape(self) -> Tuple[Dim]:
+        if getattr(self, "_named_shape", None) is None:
             result = []
             for param in self.arg_constraints:
                 value = getattr(self, param)
                 for dim in getattr(value, "dims", ()):
-                    if dim not in seen:
-                        seen.add(dim)
+                    if dim not in result:
                         result.append(dim)
-            self._dims = tuple(result)
-        return self._dims
+            self._named_shape = tuple(result)
+        return self._named_shape
 
-    def expand_dims(self, dims):
-        for dim in dims:
-            if dim not in set(self.dims):
-                self._dims += (dim,)
-                self.sample_shape = self.sample_shape + (dim.size,)
+    def expand_named_shape(self, named_shape):
+        for dim in named_shape:
+            if dim not in set(self.named_shape):
+                self._named_shape += (dim,)
+                self.named_sample_shape = self.named_sample_shape + (dim.size,)
         return self
 
     @property
-    def sample_shape(self):
-        if not hasattr(self, "_sample_shape"):
-            self._sample_shape = torch.Size()
-        return self._sample_shape
+    def named_sample_shape(self):
+        if getattr(self, "_named_sample_shape", None) is None:
+            self._named_sample_shape = torch.Size()
+        return self._named_sample_shape
 
-    @sample_shape.setter
-    def sample_shape(self, value):
-        self._sample_shape = value
+    @named_sample_shape.setter
+    def named_sample_shape(self, value):
+        self._named_sample_shape = value
 
     @property
     def batch_shape(self) -> torch.Size:
