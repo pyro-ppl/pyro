@@ -67,7 +67,7 @@ class ReparamMessenger(Messenger):
         self.config = config
         self._args_kwargs = None
 
-    def __call__(self, fn: Callable[_P, _T]) -> Callable[_P, _T]:
+    def __call__(self, fn: Callable[_P, _T]) -> "ReparamHandler[_P, _T]":
         return ReparamHandler(self, fn)
 
     def _pyro_sample(self, msg: "Message") -> None:
@@ -103,9 +103,7 @@ class ReparamMessenger(Messenger):
         # ReplayMessenger we would need to ensure those messengers can
         # similarly be safely applied twice, with the second application
         # avoiding overwriting the original application.
-        _get_init_messengers_iter = _get_init_messengers()
-        assert _get_init_messengers_iter is not None
-        for m in _get_init_messengers_iter:
+        for m in _get_init_messengers():
             m._process_message(msg)
 
         # Pass args_kwargs to the reparam via a side channel.

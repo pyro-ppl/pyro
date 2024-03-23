@@ -3,7 +3,7 @@
 all: docs test
 
 install: FORCE
-	pip install -e .[dev,profile]
+	pip install -e .[dev,profile] --config-settings editable_mode=strict
 
 uninstall: FORCE
 	pip uninstall pyro-ppl
@@ -21,7 +21,7 @@ lint: FORCE
 	ruff check .
 	black --check *.py pyro examples tests scripts profiler
 	python scripts/update_headers.py --check
-	mypy --install-types --non-interactive pyro scripts
+	mypy --install-types --non-interactive pyro scripts tests
 
 license: FORCE
 	python scripts/update_headers.py

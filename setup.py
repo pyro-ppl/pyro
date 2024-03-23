@@ -88,7 +88,10 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(include=["pyro", "pyro.*"]),
-    package_data={"pyro.distributions": ["*.cpp"]},
+    package_data={
+        "pyro": ["py.typed"],
+        "pyro.distributions": ["*.cpp"],
+    },
     author="Uber AI Labs",
     url="http://pyro.ai",
     project_urls={

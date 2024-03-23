@@ -66,8 +66,8 @@ class HMC(MCMCKernel):
         step size, hence the sampling will be slower and more robust. Default to 0.8.
     :param callable init_strategy: A per-site initialization function.
         See :ref:`autoguide-initialization` section for available functions.
-    :param min_stepsize (float): Lower bound on stepsize in adaptation strategy.
-    :param max_stepsize (float): Upper bound on stepsize in adaptation strategy.
+    :param float min_stepsize: Lower bound on stepsize in adaptation strategy.
+    :param float max_stepsize: Upper bound on stepsize in adaptation strategy.
 
     .. note:: Internally, the mass matrix will be ordered according to the order
         of the names of latent variables, not the order of their appearance in
