@@ -312,13 +312,6 @@ class Predictive(torch.nn.Module):
         ).trace
 
 
-def trace_log_prob(trace: Union[Trace, List[Trace]]) -> torch.Tensor:
-    if isinstance(trace, list):
-        return torch.Tensor([trace_element.log_prob_sum() for trace_element in trace])
-    else:
-        return plate_log_prob_sum(trace, _predictive_vectorize_plate_name)
-
-
 class WeighedPredictiveResults(NamedTuple):
     samples: Union[dict, tuple]
     log_weights: torch.Tensor
@@ -385,12 +378,28 @@ class WeighedPredictive(Predictive):
             mask=False,
         )
         if not isinstance(guide_predictive.trace, list):
-            guide_predictive.trace.compute_score_parts()
-            model_predictive.trace.compute_log_prob()
-            guide_predictive.trace.pack_tensors()
-            model_predictive.trace.pack_tensors(guide_predictive.trace.plate_to_symbol)
-        model_log_prob = trace_log_prob(model_predictive.trace)
-        guide_log_prob = trace_log_prob(guide_predictive.trace)
+            guide_trace = prune_subsample_sites(guide_predictive.trace)
+            model_trace = prune_subsample_sites(model_predictive.trace)
+            guide_trace.compute_score_parts()
+            model_trace.compute_log_prob()
+            guide_trace.pack_tensors()
+            model_trace.pack_tensors(guide_trace.plate_to_symbol)
+            plate_symbol = guide_trace.plate_to_symbol[_predictive_vectorize_plate_name]
+            guide_log_prob = plate_log_prob_sum(guide_trace, plate_symbol)
+            model_log_prob = plate_log_prob_sum(model_trace, plate_symbol)
+        else:
+            guide_log_prob = torch.Tensor(
+                [
+                    trace_element.log_prob_sum()
+                    for trace_element in guide_predictive.trace
+                ]
+            )
+            model_log_prob = torch.Tensor(
+                [
+                    trace_element.log_prob_sum()
+                    for trace_element in model_predictive.trace
+                ]
+            )
         return WeighedPredictiveResults(
             samples=(
                 _predictive(

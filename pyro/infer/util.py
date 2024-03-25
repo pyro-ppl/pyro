@@ -345,17 +345,16 @@ def check_fully_reparametrized(guide_site):
         )
 
 
-def plate_log_prob_sum(trace: Trace, plate_name: str) -> torch.Tensor:
+def plate_log_prob_sum(trace: Trace, plate_symbol: str) -> torch.Tensor:
     """
     Get log probability sum from trace while keeping indexing over the specified plate.
     """
-    wd = trace.plate_to_symbol[plate_name]
     log_prob_sum = 0.0
     for site in trace.nodes.values():
-        if site["type"] != "sample" or wd not in site["packed"]["log_prob"]._pyro_dims:
+        if site["type"] != "sample":
             continue
         log_prob_sum += torch.einsum(
-            site["packed"]["log_prob"]._pyro_dims + "->" + wd,
+            site["packed"]["log_prob"]._pyro_dims + "->" + plate_symbol,
             [site["packed"]["log_prob"]],
         )
     return log_prob_sum
