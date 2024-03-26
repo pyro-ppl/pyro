@@ -35,6 +35,10 @@ def _guess_max_plate_nesting(model, args, kwargs):
 
 
 class _predictiveResults(NamedTuple):
+    """
+    Return value of call to ``_predictive`` and ``_predictive_sequential``.
+    """
+
     samples: dict
     trace: Union[Trace, List[Trace]]
 
@@ -313,6 +317,10 @@ class Predictive(torch.nn.Module):
 
 
 class WeighedPredictiveResults(NamedTuple):
+    """
+    Return value of call to instance of :class:`WeighedPredictive`.
+    """
+
     samples: Union[dict, tuple]
     log_weights: torch.Tensor
     guide_log_prob: torch.Tensor
@@ -351,6 +359,9 @@ class WeighedPredictive(Predictive):
         Method `.call` that is backwards compatible with the same method found in :class:`Predictive`
         but can be called with an additional keyword argument `model_guide`
         which is the model used to create and optimize the guide.
+
+        Returns :class:`WeighedPredictiveResults` which has attributes ``.samples`` and per sample
+        weights ``.log_weights``.
         """
         result = self.forward(*args, **kwargs)
         return WeighedPredictiveResults(
@@ -365,6 +376,9 @@ class WeighedPredictive(Predictive):
         Method `.forward` that is backwards compatible with the same method found in :class:`Predictive`
         but can be called with an additional keyword argument `model_guide`
         which is the model used to create and optimize the guide.
+
+        Returns :class:`WeighedPredictiveResults` which has attributes ``.samples`` and per sample
+        weights ``.log_weights``.
         """
         model_guide = kwargs.pop("model_guide", self.model)
         return_sites = self.return_sites
