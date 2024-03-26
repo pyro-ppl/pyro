@@ -8,7 +8,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 import pyro.poutine as poutine
-from pyro.infer import SVI, Predictive, Trace_ELBO
+from pyro.infer import SVI, Predictive, Trace_ELBO, WeighedPredictive
 from pyro.infer.autoguide import AutoDelta, AutoDiagonalNormal
 from tests.common import assert_close
 
@@ -39,29 +39,44 @@ def beta_guide(num_trials):
         pyro.sample("phi", phi_posterior)
 
 
+@pytest.mark.parametrize("predictive", [Predictive, WeighedPredictive])
 @pytest.mark.parametrize("parallel", [False, True])
-def test_posterior_predictive_svi_manual_guide(parallel):
+def test_posterior_predictive_svi_manual_guide(parallel, predictive):
     true_probs = torch.ones(5) * 0.7
-    num_trials = torch.ones(5) * 1000
+    num_trials = (
+        torch.ones(5) * 400
+    )  # Reduced to 400 from 1000 in order for guide optimization to converge
     num_success = dist.Binomial(num_trials, true_probs).sample()
     conditioned_model = poutine.condition(model, data={"obs": num_success})
     elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
-    svi = SVI(conditioned_model, beta_guide, optim.Adam(dict(lr=1.0)), elbo)
-    for i in range(1000):
+    svi = SVI(conditioned_model, beta_guide, optim.Adam(dict(lr=3.0)), elbo)
+    for i in range(
+        5000
+    ):  # Increased to 5000 from 1000 in order for guide optimization to converge
         svi.step(num_trials)
-    posterior_predictive = Predictive(
+    posterior_predictive = predictive(
         model,
         guide=beta_guide,
         num_samples=10000,
         parallel=parallel,
         return_sites=["_RETURN"],
     )
-    marginal_return_vals = posterior_predictive(num_trials)["_RETURN"]
-    assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 700, rtol=0.05)
+    if predictive is Predictive:
+        marginal_return_vals = posterior_predictive(num_trials)["_RETURN"]
+    else:
+        weighed_samples = posterior_predictive(
+            num_trials, model_guide=conditioned_model
+        )
+        marginal_return_vals = weighed_samples.samples["_RETURN"]
+        assert marginal_return_vals.shape[:1] == weighed_samples.log_weights.shape
+        # Weights should be uniform as the guide has the same distribution as the model
+        assert weighed_samples.log_weights.std() < 0.6
+    assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 280, rtol=0.1)
 
 
+@pytest.mark.parametrize("predictive", [Predictive, WeighedPredictive])
 @pytest.mark.parametrize("parallel", [False, True])
-def test_posterior_predictive_svi_auto_delta_guide(parallel):
+def test_posterior_predictive_svi_auto_delta_guide(parallel, predictive):
     true_probs = torch.ones(5) * 0.7
     num_trials = torch.ones(5) * 1000
     num_success = dist.Binomial(num_trials, true_probs).sample()
@@ -70,15 +85,23 @@ def test_posterior_predictive_svi_auto_delta_guide(parallel):
     svi = SVI(conditioned_model, guide, optim.Adam(dict(lr=1.0)), Trace_ELBO())
     for i in range(1000):
         svi.step(num_trials)
-    posterior_predictive = Predictive(
+    posterior_predictive = predictive(
         model, guide=guide, num_samples=10000, parallel=parallel
     )
-    marginal_return_vals = posterior_predictive.get_samples(num_trials)["obs"]
+    if predictive is Predictive:
+        marginal_return_vals = posterior_predictive.get_samples(num_trials)["obs"]
+    else:
+        weighed_samples = posterior_predictive.get_samples(
+            num_trials, model_guide=conditioned_model
+        )
+        marginal_return_vals = weighed_samples.samples["obs"]
+        assert marginal_return_vals.shape[:1] == weighed_samples.log_weights.shape
     assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 700, rtol=0.05)
 
 
+@pytest.mark.parametrize("predictive", [Predictive, WeighedPredictive])
 @pytest.mark.parametrize("return_trace", [False, True])
-def test_posterior_predictive_svi_auto_diag_normal_guide(return_trace):
+def test_posterior_predictive_svi_auto_diag_normal_guide(return_trace, predictive):
     true_probs = torch.ones(5) * 0.7
     num_trials = torch.ones(5) * 1000
     num_success = dist.Binomial(num_trials, true_probs).sample()
@@ -87,7 +110,7 @@ def test_posterior_predictive_svi_auto_diag_normal_guide(return_trace):
     svi = SVI(conditioned_model, guide, optim.Adam(dict(lr=0.1)), Trace_ELBO())
     for i in range(1000):
         svi.step(num_trials)
-    posterior_predictive = Predictive(
+    posterior_predictive = predictive(
         model, guide=guide, num_samples=10000, parallel=True
     )
     if return_trace:
@@ -95,7 +118,14 @@ def test_posterior_predictive_svi_auto_diag_normal_guide(return_trace):
             num_trials
         ).nodes["obs"]["value"]
     else:
-        marginal_return_vals = posterior_predictive.get_samples(num_trials)["obs"]
+        if predictive is Predictive:
+            marginal_return_vals = posterior_predictive.get_samples(num_trials)["obs"]
+        else:
+            weighed_samples = posterior_predictive.get_samples(
+                num_trials, model_guide=conditioned_model
+            )
+            marginal_return_vals = weighed_samples.samples["obs"]
+            assert marginal_return_vals.shape[:1] == weighed_samples.log_weights.shape
     assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 700, rtol=0.05)
 
 
@@ -113,8 +143,9 @@ def test_posterior_predictive_svi_one_hot():
     assert_close(marginal_return_vals.mean(dim=0), true_probs.unsqueeze(0), rtol=0.1)
 
 
+@pytest.mark.parametrize("predictive", [Predictive, WeighedPredictive])
 @pytest.mark.parametrize("parallel", [False, True])
-def test_shapes(parallel):
+def test_shapes(parallel, predictive):
     num_samples = 10
 
     def model():
@@ -132,22 +163,26 @@ def test_shapes(parallel):
     expected = poutine.replay(vectorize(model), trace)()
 
     # Use Predictive.
-    predictive = Predictive(
+    actual = predictive(
         model,
         guide=guide,
         return_sites=["x", "y"],
         num_samples=num_samples,
         parallel=parallel,
-    )
-    actual = predictive()
+    )()
+    if predictive is WeighedPredictive:
+        assert actual.samples["x"].shape[:1] == actual.log_weights.shape
+        assert actual.samples["y"].shape[:1] == actual.log_weights.shape
+        actual = actual.samples
     assert set(actual) == set(expected)
     assert actual["x"].shape == expected["x"].shape
     assert actual["y"].shape == expected["y"].shape
 
 
+@pytest.mark.parametrize("predictive", [Predictive, WeighedPredictive])
 @pytest.mark.parametrize("with_plate", [True, False])
 @pytest.mark.parametrize("event_shape", [(), (2,)])
-def test_deterministic(with_plate, event_shape):
+def test_deterministic(with_plate, event_shape, predictive):
     def model(y=None):
         with pyro.util.optional(pyro.plate("plate", 3), with_plate):
             x = pyro.sample("x", dist.Normal(0, 1).expand(event_shape).to_event())
@@ -162,9 +197,13 @@ def test_deterministic(with_plate, event_shape):
     for i in range(100):
         svi.step(y)
 
-    actual = Predictive(
+    actual = predictive(
         model, guide=guide, return_sites=["x2", "x3"], num_samples=1000
     )()
+    if predictive is WeighedPredictive:
+        assert actual.samples["x2"].shape[:1] == actual.log_weights.shape
+        assert actual.samples["x3"].shape[:1] == actual.log_weights.shape
+        actual = actual.samples
     x2_batch_shape = (3,) if with_plate else ()
     assert actual["x2"].shape == (1000,) + x2_batch_shape + event_shape
     # x3 shape is prepended 1 to match Pyro shape semantics

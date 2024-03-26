@@ -277,14 +277,17 @@ def weighed_quantile(
     :param int dim: dimension to take quantiles from ``input``.
     :returns torch.Tensor: quantiles of ``input`` at ``probs``.
 
-    Example:
-    >>> from pyro.ops.stats import weighed_quantile
-    >>> import torch
-    >>> input = torch.Tensor([[10, 50, 40], [20, 30, 0]])
-    >>> probs = torch.Tensor([0.2, 0.8])
-    >>> log_weights = torch.Tensor([0.4, 0.5, 0.1]).log()
-    >>> result = weighed_quantile(input, probs, log_weights, -1)
-    >>> torch.testing.assert_close(result, torch.Tensor([[40.4, 47.6], [9.0, 26.4]]))
+    **Example:**
+
+    .. doctest::
+
+        >>> from pyro.ops.stats import weighed_quantile
+        >>> import torch
+        >>> input = torch.Tensor([[10, 50, 40], [20, 30, 0]])
+        >>> probs = torch.Tensor([0.2, 0.8])
+        >>> log_weights = torch.Tensor([0.4, 0.5, 0.1]).log()
+        >>> result = weighed_quantile(input, probs, log_weights, -1)
+        >>> torch.testing.assert_close(result, torch.Tensor([[40.4, 47.6], [9.0, 26.4]]))
     """
     dim = dim if dim >= 0 else (len(input.shape) + dim)
     if isinstance(probs, (list, tuple)):
