@@ -12,6 +12,7 @@ from pyro.ops.stats import fit_generalized_pareto
 
 from .abstract_infer import TracePosterior
 from .enum import get_importance_trace
+from .util import plate_log_prob_sum
 
 
 class Importance(TracePosterior):
@@ -143,22 +144,9 @@ def vectorized_importance_weights(model, guide, *args, **kwargs):
         log_weights = model_trace.log_prob_sum() - guide_trace.log_prob_sum()
     else:
         wd = guide_trace.plate_to_symbol["num_particles_vectorized"]
-        log_weights = 0.0
-        for site in model_trace.nodes.values():
-            if site["type"] != "sample":
-                continue
-            log_weights += torch.einsum(
-                site["packed"]["log_prob"]._pyro_dims + "->" + wd,
-                [site["packed"]["log_prob"]],
-            )
-
-        for site in guide_trace.nodes.values():
-            if site["type"] != "sample":
-                continue
-            log_weights -= torch.einsum(
-                site["packed"]["log_prob"]._pyro_dims + "->" + wd,
-                [site["packed"]["log_prob"]],
-            )
+        log_weights = plate_log_prob_sum(model_trace, wd) - plate_log_prob_sum(
+            guide_trace, wd
+        )
 
     if normalized:
         log_weights = log_weights - torch.logsumexp(log_weights)

@@ -14,6 +14,7 @@ from pyro.distributions.util import is_identically_zero
 from pyro.ops import packed
 from pyro.ops.einsum.adjoint import require_backward
 from pyro.ops.rings import MarginalRing
+from pyro.poutine.trace_struct import Trace
 from pyro.poutine.util import site_is_subsample
 
 from .. import settings
@@ -342,3 +343,18 @@ def check_fully_reparametrized(guide_site):
         raise NotImplementedError(
             "All distributions in the guide must be fully reparameterized."
         )
+
+
+def plate_log_prob_sum(trace: Trace, plate_symbol: str) -> torch.Tensor:
+    """
+    Get log probability sum from trace while keeping indexing over the specified plate.
+    """
+    log_prob_sum = 0.0
+    for site in trace.nodes.values():
+        if site["type"] != "sample":
+            continue
+        log_prob_sum += torch.einsum(
+            site["packed"]["log_prob"]._pyro_dims + "->" + plate_symbol,
+            [site["packed"]["log_prob"]],
+        )
+    return log_prob_sum
