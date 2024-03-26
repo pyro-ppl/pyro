@@ -8,6 +8,7 @@ from typing import Callable, Tuple
 import torch
 from functorch.dim import Dim
 from torch.distributions.kl import kl_divergence, register_kl
+from typing_extensions import Self
 
 import pyro.distributions.torch
 
@@ -47,14 +48,14 @@ class TorchDistributionMixin(Distribution, Callable):
         :rtype: torch.Tensor
         """
         sample_shape = self.named_sample_shape + sample_shape
-        bind_dims = self.named_shape[
+        bind_named_dims = self.named_shape[
             len(self.named_shape) - len(self.named_sample_shape) :
         ]
         return (
             self.rsample(sample_shape)
             if self.has_rsample
             else self.sample(sample_shape)
-        )[bind_dims]
+        )[bind_named_dims]
 
     @property
     def named_shape(self) -> Tuple[Dim]:
@@ -63,12 +64,17 @@ class TorchDistributionMixin(Distribution, Callable):
             for param in self.arg_constraints:
                 value = getattr(self, param)
                 for dim in getattr(value, "dims", ()):
-                    if dim not in result:
+                    # Can't use `dim in result` when `result` is a list or a tuple
+                    # RuntimeError: vmap: It looks like you're attempting to use
+                    # a Tensor in some data-dependent control flow. We don't support
+                    # that yet, please shout over at
+                    # https://github.com/pytorch/functorch/issues/257
+                    if dim not in set(result):
                         result.append(dim)
             self._named_shape = tuple(result)
         return self._named_shape
 
-    def expand_named_shape(self, named_shape):
+    def expand_named_shape(self, named_shape: Tuple[Dim]) -> Self:
         for dim in named_shape:
             if dim not in set(self.named_shape):
                 self._named_shape += (dim,)
@@ -76,13 +82,13 @@ class TorchDistributionMixin(Distribution, Callable):
         return self
 
     @property
-    def named_sample_shape(self):
+    def named_sample_shape(self) -> torch.Size:
         if getattr(self, "_named_sample_shape", None) is None:
             self._named_sample_shape = torch.Size()
         return self._named_sample_shape
 
     @named_sample_shape.setter
-    def named_sample_shape(self, value):
+    def named_sample_shape(self, value: torch.Size) -> None:
         self._named_sample_shape = value
 
     @property

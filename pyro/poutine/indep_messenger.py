@@ -98,17 +98,15 @@ class IndepMessenger(Messenger):
         if self._vectorized is not False:
             self._vectorized = True
 
-        if self._vectorized is True:
-            if not isinstance(self.dim, Dim):
-                self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
+        if self._vectorized is True and not isinstance(self.dim, Dim):
+            self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
 
         return super().__enter__()
 
     def __exit__(self, *args) -> None:
-        if self._vectorized is True:
+        if self._vectorized is True and not isinstance(self.dim, Dim):
             assert self.dim is not None
-            if not isinstance(self.dim, Dim):
-                _DIM_ALLOCATOR.free(self.name, self.dim)
+            _DIM_ALLOCATOR.free(self.name, self.dim)
         return super().__exit__(*args)
 
     def __iter__(self) -> Iterator[int]:
@@ -127,10 +125,9 @@ class IndepMessenger(Messenger):
                     yield i if isinstance(i, numbers.Number) else i.item()
 
     def _reset(self) -> None:
-        if self._vectorized:
+        if self._vectorized and not isinstance(self.dim, Dim):
             assert self.dim is not None
-            if not isinstance(self.dim, Dim):
-                _DIM_ALLOCATOR.free(self.name, self.dim)
+            _DIM_ALLOCATOR.free(self.name, self.dim)
         self._vectorized = None
         self.counter = 0
 
