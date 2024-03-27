@@ -61,7 +61,7 @@ class BroadcastMessenger(Messenger):
         target_batch_shape = [
             None if size == 1 else size for size in actual_batch_shape
         ]
-        named_shape: List[Dim] = []
+        named_shape: List["Dim"] = []
         for f in msg["cond_indep_stack"]:
             if hasattr(f.dim, "is_bound"):
                 named_shape.append(f.dim)
