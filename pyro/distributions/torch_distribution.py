@@ -50,14 +50,17 @@ class TorchDistributionMixin(Distribution, Callable):
         :rtype: torch.Tensor
         """
         sample_shape = self.named_sample_shape + sample_shape
-        bind_named_dims = self.named_shape[
-            len(self.named_shape) - len(self.named_sample_shape) :
-        ]
-        return (
+        result = (
             self.rsample(sample_shape)
             if self.has_rsample
             else self.sample(sample_shape)
-        )[bind_named_dims]
+        )
+        bind_named_dims = self.named_shape[
+            len(self.named_shape) - len(self.named_sample_shape) :
+        ]
+        if bind_named_dims:
+            result = result[bind_named_dims]
+        return result
 
     @property
     def named_shape(self) -> Tuple["Dim"]:
