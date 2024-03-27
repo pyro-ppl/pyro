@@ -7,8 +7,8 @@ on:
     branches: [dev, master]
 
 env:
-  CXX: g++-8
-  CC: gcc-8
+  CXX: g++-9
+  CC: gcc-9
   # See coveralls-python - Github Actions support:
   # https://github.com/TheKevJames/coveralls-python/blob/master/docs/usage/configuration.rst#github-actions-support
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -50,7 +50,7 @@ jobs:
         run: |
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
-          sudo apt-get install gcc-8 g++-8 ninja-build graphviz
+          sudo apt-get install gcc-9 g++-9 ninja-build graphviz
           python -m pip install --upgrade pip wheel 'setuptools!=58.5.*,<60'
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
@@ -78,7 +78,7 @@ jobs:
         run: |
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
-          sudo apt-get install gcc-8 g++-8 ninja-build graphviz pandoc
+          sudo apt-get install gcc-9 g++-9 ninja-build graphviz pandoc
           python -m pip install --upgrade pip wheel 'setuptools!=58.5.*,<60'
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
@@ -112,7 +112,7 @@ jobs:
         run: |
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
-          sudo apt-get install gcc-8 g++-8 ninja-build
+          sudo apt-get install gcc-9 g++-9 ninja-build
           python -m pip install --upgrade pip wheel 'setuptools!=58.5.*,<60'
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
@@ -146,7 +146,7 @@ jobs:
         run: |
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
-          sudo apt-get install gcc-8 g++-8 ninja-build
+          sudo apt-get install gcc-9 g++-9 ninja-build
           python -m pip install --upgrade pip wheel 'setuptools!=58.5.*,<60'
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
@@ -180,7 +180,7 @@ jobs:
         run: |
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
-          sudo apt-get install gcc-8 g++-8 ninja-build
+          sudo apt-get install gcc-9 g++-9 ninja-build
           python -m pip install --upgrade pip wheel 'setuptools!=58.5.*,<60'
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
@@ -212,7 +212,7 @@ jobs:
         run: |
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
-          sudo apt-get install gcc-8 g++-8 ninja-build
+          sudo apt-get install gcc-9 g++-9 ninja-build
           python -m pip install --upgrade pip wheel 'setuptools!=58.5.*,<60'
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
@@ -244,7 +244,7 @@ jobs:
         run: |
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
-          sudo apt-get install gcc-8 g++-8 ninja-build
+          sudo apt-get install gcc-9 g++-9 ninja-build
           python -m pip install --upgrade pip wheel 'setuptools!=58.5.*,<60'
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
