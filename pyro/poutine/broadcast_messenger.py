@@ -8,6 +8,8 @@ from pyro.poutine.messenger import Messenger
 from pyro.util import ignore_jit_warnings
 
 if TYPE_CHECKING:
+    from functorch.dim import Dim
+
     from pyro.poutine.runtime import Message
 
 
@@ -59,7 +61,11 @@ class BroadcastMessenger(Messenger):
         target_batch_shape = [
             None if size == 1 else size for size in actual_batch_shape
         ]
+        named_shape: List["Dim"] = []
         for f in msg["cond_indep_stack"]:
+            if hasattr(f.dim, "is_bound"):
+                named_shape.append(f.dim)
+                continue
             if f.dim is None or f.size == -1:
                 continue
             assert f.dim < 0
@@ -88,6 +94,10 @@ class BroadcastMessenger(Messenger):
                 target_batch_shape[i] = (
                     actual_batch_shape[i] if len(actual_batch_shape) >= -i else 1
                 )
-        msg["fn"] = dist.expand(target_batch_shape)
+        if named_shape:
+            assert len(target_batch_shape) == 0
+            msg["fn"] = dist.expand_named_shape(tuple(named_shape))
+        else:
+            msg["fn"] = dist.expand(target_batch_shape)
         if msg["fn"].has_rsample != dist.has_rsample:
             msg["fn"].has_rsample = dist.has_rsample  # copy custom attribute
