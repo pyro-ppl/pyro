@@ -2,20 +2,22 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import numbers
-from typing import Iterator, NamedTuple, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Iterator, NamedTuple, Optional, Tuple, Union
 
 import torch
-from functorch.dim import Dim
 from typing_extensions import Self
 
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.runtime import _DIM_ALLOCATOR, Message
 from pyro.util import ignore_jit_warnings
 
+if TYPE_CHECKING:
+    from functorch.dim import Dim
+
 
 class CondIndepStackFrame(NamedTuple):
     name: str
-    dim: Optional[Union[int, Dim]]
+    dim: Optional[Union[int, "Dim"]]
     size: int
     counter: int
     full_size: Optional[int] = None
@@ -24,7 +26,7 @@ class CondIndepStackFrame(NamedTuple):
     def vectorized(self) -> bool:
         return self.dim is not None
 
-    def _key(self) -> Tuple[str, Optional[Union[int, Dim]], int, int]:
+    def _key(self) -> Tuple[str, Optional[Union[int, "Dim"]], int, int]:
         size = self.size
         with ignore_jit_warnings(["Converting a tensor to a Python number"]):
             if isinstance(size, torch.Tensor):  # type: ignore[unreachable]
@@ -70,7 +72,7 @@ class IndepMessenger(Messenger):
         self,
         name: str,
         size: int,
-        dim: Optional[Union[int, Dim]] = None,
+        dim: Optional[Union[int, "Dim"]] = None,
         device: Optional[str] = None,
     ) -> None:
         if not torch._C._get_tracing_state() and size == 0:
@@ -98,13 +100,13 @@ class IndepMessenger(Messenger):
         if self._vectorized is not False:
             self._vectorized = True
 
-        if self._vectorized is True and not isinstance(self.dim, Dim):
+        if self._vectorized is True and not hasattr(self.dim, "is_bound"):
             self.dim = _DIM_ALLOCATOR.allocate(self.name, self.dim)
 
         return super().__enter__()
 
     def __exit__(self, *args) -> None:
-        if self._vectorized is True and not isinstance(self.dim, Dim):
+        if self._vectorized is True and not hasattr(self.dim, "is_bound"):
             assert self.dim is not None
             _DIM_ALLOCATOR.free(self.name, self.dim)
         return super().__exit__(*args)
@@ -125,7 +127,7 @@ class IndepMessenger(Messenger):
                     yield i if isinstance(i, numbers.Number) else i.item()
 
     def _reset(self) -> None:
-        if self._vectorized and not isinstance(self.dim, Dim):
+        if self._vectorized and not hasattr(self.dim, "is_bound"):
             assert self.dim is not None
             _DIM_ALLOCATOR.free(self.name, self.dim)
         self._vectorized = None
@@ -135,7 +137,7 @@ class IndepMessenger(Messenger):
     def indices(self) -> torch.Tensor:
         if self._indices is None:
             self._indices = torch.arange(self.size, dtype=torch.long).to(self.device)
-        if isinstance(self.dim, Dim):
+        if hasattr(self.dim, "is_bound"):
             return self._indices[self.dim]
         return self._indices
 

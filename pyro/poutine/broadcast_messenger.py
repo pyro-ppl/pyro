@@ -3,13 +3,13 @@
 
 from typing import TYPE_CHECKING, List, Optional
 
-from functorch.dim import Dim
-
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.poutine.messenger import Messenger
 from pyro.util import ignore_jit_warnings
 
 if TYPE_CHECKING:
+    from functorch.dim import Dim
+
     from pyro.poutine.runtime import Message
 
 
@@ -63,7 +63,7 @@ class BroadcastMessenger(Messenger):
         ]
         named_shape: List[Dim] = []
         for f in msg["cond_indep_stack"]:
-            if isinstance(f.dim, Dim):
+            if hasattr(f.dim, "is_bound"):
                 named_shape.append(f.dim)
                 continue
             if f.dim is None or f.size == -1:

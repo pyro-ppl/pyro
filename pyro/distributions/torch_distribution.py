@@ -3,10 +3,9 @@
 
 import warnings
 from collections import OrderedDict
-from typing import Callable, Tuple
+from typing import TYPE_CHECKING, Callable, Tuple
 
 import torch
-from functorch.dim import Dim
 from torch.distributions.kl import kl_divergence, register_kl
 from typing_extensions import Self
 
@@ -16,6 +15,9 @@ from . import constraints
 from .distribution import Distribution
 from .score_parts import ScoreParts
 from .util import broadcast_shape, scale_and_mask
+
+if TYPE_CHECKING:
+    from functorch.dim import Dim
 
 
 class TorchDistributionMixin(Distribution, Callable):
@@ -58,7 +60,7 @@ class TorchDistributionMixin(Distribution, Callable):
         )[bind_named_dims]
 
     @property
-    def named_shape(self) -> Tuple[Dim]:
+    def named_shape(self) -> Tuple["Dim"]:
         if getattr(self, "_named_shape", None) is None:
             result = []
             for param in self.arg_constraints:
@@ -74,7 +76,7 @@ class TorchDistributionMixin(Distribution, Callable):
             self._named_shape = tuple(result)
         return self._named_shape
 
-    def expand_named_shape(self, named_shape: Tuple[Dim]) -> Self:
+    def expand_named_shape(self, named_shape: Tuple["Dim"]) -> Self:
         for dim in named_shape:
             if dim not in set(self.named_shape):
                 self._named_shape += (dim,)
