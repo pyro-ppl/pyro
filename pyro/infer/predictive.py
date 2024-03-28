@@ -2,14 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
+from dataclasses import dataclass
 from functools import reduce
-from typing import List, NamedTuple, Union
+from typing import List, Union
 
 import torch
 
 import pyro
 import pyro.poutine as poutine
-from pyro.infer.importance import WeightAnalytics
+from pyro.infer.importance import LogWeightsMixin
 from pyro.infer.util import plate_log_prob_sum
 from pyro.poutine.trace_struct import Trace
 from pyro.poutine.util import prune_subsample_sites
@@ -35,7 +36,8 @@ def _guess_max_plate_nesting(model, args, kwargs):
     return max_plate_nesting
 
 
-class _predictiveResults(NamedTuple):
+@dataclass(frozen=True, eq=False)
+class _predictiveResults:
     """
     Return value of call to ``_predictive`` and ``_predictive_sequential``.
     """
@@ -317,19 +319,16 @@ class Predictive(torch.nn.Module):
         ).trace
 
 
-class WeighedPredictiveResults(NamedTuple):
-    samples: Union[dict, tuple]
-    log_weights: torch.Tensor
-    guide_log_prob: torch.Tensor
-    model_log_prob: torch.Tensor
-
-
-class WeighedPredictiveResults(WeighedPredictiveResults, WeightAnalytics):
+@dataclass(frozen=True, eq=False)
+class WeighedPredictiveResults(LogWeightsMixin):
     """
     Return value of call to instance of :class:`WeighedPredictive`.
     """
 
-    pass
+    samples: Union[dict, tuple]
+    log_weights: torch.Tensor
+    guide_log_prob: torch.Tensor
+    model_log_prob: torch.Tensor
 
 
 class WeighedPredictive(Predictive):

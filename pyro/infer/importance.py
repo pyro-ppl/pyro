@@ -3,6 +3,7 @@
 
 import math
 import warnings
+from typing import List, Union
 
 import torch
 
@@ -15,7 +16,13 @@ from .enum import get_importance_trace
 from .util import plate_log_prob_sum
 
 
-class WeightAnalytics:
+class LogWeightsMixin:
+    """
+    Mixin class to compute analytics from a ``.log_weights`` attribute.
+    """
+
+    log_weights: Union[List[Union[float, torch.Tensor]], torch.Tensor]
+
     def get_log_normalizer(self):
         """
         Estimator of the normalizing constant of the target distribution.
@@ -67,7 +74,7 @@ class WeightAnalytics:
         return ess
 
 
-class Importance(TracePosterior, WeightAnalytics):
+class Importance(TracePosterior, LogWeightsMixin):
     """
     :param model: probabilistic model defined as a function
     :param guide: guide used for sampling defined as a function
