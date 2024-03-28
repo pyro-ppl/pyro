@@ -9,6 +9,7 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
+from pyro.infer.importance import WeightAnalytics
 from pyro.infer.util import plate_log_prob_sum
 from pyro.poutine.trace_struct import Trace
 from pyro.poutine.util import prune_subsample_sites
@@ -317,14 +318,18 @@ class Predictive(torch.nn.Module):
 
 
 class WeighedPredictiveResults(NamedTuple):
-    """
-    Return value of call to instance of :class:`WeighedPredictive`.
-    """
-
     samples: Union[dict, tuple]
     log_weights: torch.Tensor
     guide_log_prob: torch.Tensor
     model_log_prob: torch.Tensor
+
+
+class WeighedPredictiveResults(WeighedPredictiveResults, WeightAnalytics):
+    """
+    Return value of call to instance of :class:`WeighedPredictive`.
+    """
+
+    pass
 
 
 class WeighedPredictive(Predictive):

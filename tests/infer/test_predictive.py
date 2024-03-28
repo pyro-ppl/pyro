@@ -46,6 +46,7 @@ def test_posterior_predictive_svi_manual_guide(parallel, predictive):
     num_trials = (
         torch.ones(5) * 400
     )  # Reduced to 400 from 1000 in order for guide optimization to converge
+    num_samples = 10000
     num_success = dist.Binomial(num_trials, true_probs).sample()
     conditioned_model = poutine.condition(model, data={"obs": num_success})
     elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
@@ -57,7 +58,7 @@ def test_posterior_predictive_svi_manual_guide(parallel, predictive):
     posterior_predictive = predictive(
         model,
         guide=beta_guide,
-        num_samples=10000,
+        num_samples=num_samples,
         parallel=parallel,
         return_sites=["_RETURN"],
     )
@@ -71,6 +72,8 @@ def test_posterior_predictive_svi_manual_guide(parallel, predictive):
         assert marginal_return_vals.shape[:1] == weighed_samples.log_weights.shape
         # Weights should be uniform as the guide has the same distribution as the model
         assert weighed_samples.log_weights.std() < 0.6
+        # Effective sample size should be close to actual number of samples taken from the guide
+        assert weighed_samples.get_ESS() > 0.8 * num_samples
     assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 280, rtol=0.1)
 
 
