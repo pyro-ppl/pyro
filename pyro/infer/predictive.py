@@ -2,16 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from functools import reduce
-from typing import List, Union
+from typing import Callable, List, Union
 
 import torch
 
 import pyro
 import pyro.poutine as poutine
 from pyro.infer.importance import LogWeightsMixin
-from pyro.infer.util import plate_log_prob_sum
+from pyro.infer.util import CloneMixin, plate_log_prob_sum
 from pyro.poutine.trace_struct import Trace
 from pyro.poutine.util import prune_subsample_sites
 
@@ -320,7 +320,7 @@ class Predictive(torch.nn.Module):
 
 
 @dataclass(frozen=True, eq=False)
-class WeighedPredictiveResults(LogWeightsMixin):
+class WeighedPredictiveResults(LogWeightsMixin, CloneMixin):
     """
     Return value of call to instance of :class:`WeighedPredictive`.
     """
@@ -450,3 +450,102 @@ class WeighedPredictive(Predictive):
             guide_log_prob=guide_log_prob,
             model_log_prob=model_log_prob,
         )
+
+
+class MHResampler(torch.nn.Module):
+    """
+    Resampler for weighed samples that is based on the Metropolis-Hastings algorithm.
+    """
+
+    def __init__(
+        self,
+        sampler: Callable,
+        source_samples_slice: slice = slice(0),
+        stored_samples_slice: slice = slice(0),
+    ):
+        super().__init__()
+        self.sampler = sampler
+        self.samples = None
+        self.transition_count = torch.tensor(0, dtype=torch.long)
+        self.source_samples = []
+        self.source_samples_slice = source_samples_slice
+        self.stored_samples = []
+        self.stored_samples_slice = stored_samples_slice
+
+    def forward(self, *args, **kwargs):
+        """
+        Perform single resampling step.
+        """
+        with torch.no_grad():
+            new_samples = self.sampler(*args, **kwargs)
+            # Store samples
+            self.source_samples.append(new_samples)
+            self.source_samples = self.source_samples[self.source_samples_slice]
+            if self.samples is None:
+                # First set of samples
+                self.samples = new_samples.clone()
+                self.transition_count = torch.zeros_like(
+                    new_samples.log_weights, dtype=torch.long
+                )
+            else:
+                # Apply Metropolis-Hastings algorithm
+                prob = torch.clamp(
+                    new_samples.log_weights - self.samples.log_weights, max=0.0
+                ).exp()
+                idx = torch.rand(*prob.shape) <= prob
+                self.transition_count[idx] += 1
+                for field_desc in fields(self.samples):
+                    field, new_field = getattr(self.samples, field_desc.name), getattr(
+                        new_samples, field_desc.name
+                    )
+                    if isinstance(field, dict):
+                        for key in field:
+                            field[key][idx] = new_field[key][idx]
+                    else:
+                        field[idx] = new_field[idx]
+        self.stored_samples.append(self.samples.clone())
+        self.stored_samples = self.stored_samples[self.stored_samples_slice]
+        return self.samples
+
+    def get_min_sample_transition_count(self):
+        """
+        Return transition count of sample with minimal amount of transitions.
+        """
+        return self.transition_count.min()
+
+    def get_total_transition_count(self):
+        """
+        Return total number of transitions.
+        """
+        return self.transition_count.sum()
+
+    def get_source_samples(self):
+        """
+        Return source samples that were the input to the Metropolis-Hastings algorithm.
+        """
+        return self.get_samples(self.source_samples)
+
+    def get_stored_samples(self):
+        """
+        Return stored samples that were the output of the Metropolis-Hastings algorithm.
+        """
+        return self.get_samples(self.stored_samples)
+
+    def get_samples(self, samples):
+        """
+        Return samples that were sampled during execution of the Metropolis-Hastings algorithm.
+        """
+        retval = dict()
+        for field_desc in fields(self.samples):
+            field_name, value = field_desc.name, getattr(self.samples, field_desc.name)
+            if isinstance(value, dict):
+                retval[field_name] = dict()
+                for key in value:
+                    retval[field_name][key] = torch.cat(
+                        [getattr(sample, field_name)[key] for sample in samples]
+                    )
+            else:
+                retval[field_name] = torch.cat(
+                    [getattr(sample, field_name) for sample in samples]
+                )
+        return self.samples.__class__(**retval)

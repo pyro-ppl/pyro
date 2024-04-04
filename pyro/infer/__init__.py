@@ -12,7 +12,7 @@ from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc.hmc import HMC
 from pyro.infer.mcmc.nuts import NUTS
 from pyro.infer.mcmc.rwkernel import RandomWalkKernel
-from pyro.infer.predictive import Predictive, WeighedPredictive
+from pyro.infer.predictive import MHResampler, Predictive, WeighedPredictive
 from pyro.infer.renyi_elbo import RenyiELBO
 from pyro.infer.rws import ReweightedWakeSleep
 from pyro.infer.smcfilter import SMCFilter
@@ -44,6 +44,7 @@ __all__ = [
     "JitTraceMeanField_ELBO",
     "JitTrace_ELBO",
     "MCMC",
+    "MHResampler",
     "NUTS",
     "Predictive",
     "RandomWalkKernel",

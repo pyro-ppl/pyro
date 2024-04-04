@@ -5,6 +5,7 @@ import math
 import numbers
 from collections import Counter, defaultdict
 from contextlib import contextmanager
+from dataclasses import fields
 
 import torch
 from opt_einsum import shared_intermediates
@@ -358,3 +359,22 @@ def plate_log_prob_sum(trace: Trace, plate_symbol: str) -> torch.Tensor:
             [site["packed"]["log_prob"]],
         )
     return log_prob_sum
+
+
+class CloneMixin:
+    """
+    Mixin class that adds ``.clone`` method to ``@dataclasses.dataclass`` decorated classes
+    that are made up of ``torch.Tensor`` fields.
+    """
+
+    def clone(self):
+        retval = dict()
+        for field_desc in fields(self):
+            field_name, value = field_desc.name, getattr(self, field_desc.name)
+            if isinstance(value, dict):
+                retval[field_name] = dict()
+                for key in value:
+                    retval[field_name][key] = value[key].clone()
+            else:
+                retval[field_name] = value.clone()
+        return self.__class__(**retval)
