@@ -417,7 +417,7 @@ def _cat_docstrings(*docstrings):
 
 
 # Add static imports to help mypy.
-__all__ = [  # noqa: F822
+__all__ = [
     "Bernoulli",
     "Beta",
     "Binomial",
