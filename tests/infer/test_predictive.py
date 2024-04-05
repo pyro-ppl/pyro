@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import logging
+
 import pytest
 import torch
 
@@ -8,8 +10,9 @@ import pyro
 import pyro.distributions as dist
 import pyro.optim as optim
 import pyro.poutine as poutine
-from pyro.infer import SVI, Predictive, Trace_ELBO, WeighedPredictive
+from pyro.infer import SVI, MHResampler, Predictive, Trace_ELBO, WeighedPredictive
 from pyro.infer.autoguide import AutoDelta, AutoDiagonalNormal
+from pyro.ops.stats import quantile, weighed_quantile
 from tests.common import assert_close
 
 
@@ -39,9 +42,18 @@ def beta_guide(num_trials):
         pyro.sample("phi", phi_posterior)
 
 
-@pytest.mark.parametrize("predictive", [Predictive, WeighedPredictive])
+@pytest.mark.parametrize(
+    "predictive, num_svi_steps, test_unweighed_convergence",
+    [
+        (Predictive, 5000, None),
+        (WeighedPredictive, 5000, True),
+        (WeighedPredictive, 1000, False),
+    ],
+)
 @pytest.mark.parametrize("parallel", [False, True])
-def test_posterior_predictive_svi_manual_guide(parallel, predictive):
+def test_posterior_predictive_svi_manual_guide(
+    parallel, predictive, num_svi_steps, test_unweighed_convergence
+):
     true_probs = torch.ones(5) * 0.7
     num_trials = (
         torch.ones(5) * 400
@@ -51,9 +63,7 @@ def test_posterior_predictive_svi_manual_guide(parallel, predictive):
     conditioned_model = poutine.condition(model, data={"obs": num_success})
     elbo = Trace_ELBO(num_particles=100, vectorize_particles=True)
     svi = SVI(conditioned_model, beta_guide, optim.Adam(dict(lr=3.0)), elbo)
-    for i in range(
-        5000
-    ):  # Increased to 5000 from 1000 in order for guide optimization to converge
+    for i in range(num_svi_steps):
         svi.step(num_trials)
     posterior_predictive = predictive(
         model,
@@ -70,10 +80,52 @@ def test_posterior_predictive_svi_manual_guide(parallel, predictive):
         )
         marginal_return_vals = weighed_samples.samples["_RETURN"]
         assert marginal_return_vals.shape[:1] == weighed_samples.log_weights.shape
-        # Weights should be uniform as the guide has the same distribution as the model
-        assert weighed_samples.log_weights.std() < 0.6
-        # Effective sample size should be close to actual number of samples taken from the guide
-        assert weighed_samples.get_ESS() > 0.8 * num_samples
+        # Resample weighed samples
+        resampler = MHResampler(posterior_predictive)
+        for resampling_count in range(10):
+            resampled_weighed_samples = resampler(
+                num_trials, model_guide=conditioned_model
+            )
+        resampled_marginal_return_vals = resampled_weighed_samples.samples["_RETURN"]
+        # Calculate CDF quantiles
+        quantile_test_point = 0.95
+        quantile_test_point_value = quantile(
+            marginal_return_vals, [quantile_test_point]
+        )[0]
+        weighed_quantile_test_point_value = weighed_quantile(
+            marginal_return_vals, [quantile_test_point], weighed_samples.log_weights
+        )[0]
+        resampled_quantile_tesT_point_value = quantile(
+            resampled_marginal_return_vals, [quantile_test_point]
+        )[0]
+        logging.info(
+            "Unweighed quantile at test point is: " + str(quantile_test_point_value)
+        )
+        logging.info(
+            "Weighed quantile at test point is:   "
+            + str(weighed_quantile_test_point_value)
+        )
+        logging.info(
+            "Resampled quantile at test point is: "
+            + str(resampled_quantile_tesT_point_value)
+        )
+        # Weighed and resampled quantiles should match
+        assert_close(
+            weighed_quantile_test_point_value,
+            resampled_quantile_tesT_point_value,
+            rtol=0.01,
+        )
+        if test_unweighed_convergence:
+            # Weights should be uniform as the guide has the same distribution as the model
+            assert weighed_samples.log_weights.std() < 0.6
+            # Effective sample size should be close to actual number of samples taken from the guide
+            assert weighed_samples.get_ESS() > 0.8 * num_samples
+            # Weighed and unweighed quantiles should match if guide converged to true model
+            assert_close(
+                quantile_test_point_value,
+                resampled_quantile_tesT_point_value,
+                rtol=0.01,
+            )
     assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 280, rtol=0.1)
 
 
