@@ -42,9 +42,7 @@ def iter_discrete_extend(trace, site, **ignored):
         yield extended_trace
 
 
-def get_importance_trace(
-    graph_type, max_plate_nesting, model, guide, args, kwargs, detach=False
-):
+def get_importance_trace(graph_type, max_plate_nesting, model, guide, args, kwargs, detach=False):
     """
     Returns a single trace from the guide, which can optionally be detached,
     and the model that is run against it.
@@ -57,14 +55,12 @@ def get_importance_trace(
         guide(*args, **kwargs)
         model_trace, guide_trace = unwrapped_guide.get_traces()
     else:
-        guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(
-            *args, **kwargs
-        )
+        guide_trace = poutine.trace(guide, graph_type=graph_type).get_trace(*args, **kwargs)
         if detach:
             guide_trace.detach_()
-        model_trace = poutine.trace(
-            poutine.replay(model, trace=guide_trace), graph_type=graph_type
-        ).get_trace(*args, **kwargs)
+        model_trace = poutine.trace(poutine.replay(model, trace=guide_trace), graph_type=graph_type).get_trace(
+            *args, **kwargs
+        )
 
     if is_validation_enabled():
         check_model_guide_match(model_trace, guide_trace, max_plate_nesting)
@@ -102,9 +98,7 @@ def iter_discrete_traces(graph_type, fn, *args, **kwargs):
     queue = LifoQueue()
     queue.put(Trace())
     traced_fn = poutine.trace(
-        poutine.queue(
-            fn, queue, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend
-        ),
+        poutine.queue(fn, queue, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend),
         graph_type=graph_type,
     )
     while not queue.empty():
@@ -135,9 +129,7 @@ def _config_enumerate(default, expand, num_samples, tmc):
     return partial(_config_fn, default, expand, num_samples, tmc)
 
 
-def config_enumerate(
-    guide=None, default="parallel", expand=False, num_samples=None, tmc="diagonal"
-):
+def config_enumerate(guide=None, default="parallel", expand=False, num_samples=None, tmc="diagonal"):
     """
     Configures enumeration for all relevant sites in a guide. This is mainly
     used in conjunction with :class:`~pyro.infer.traceenum_elbo.TraceEnum_ELBO`.
@@ -183,27 +175,18 @@ def config_enumerate(
     """
     if default not in ["sequential", "parallel", "flat", None]:
         raise ValueError(
-            "Invalid default value. Expected 'sequential', 'parallel', or None, but got {}".format(
-                repr(default)
-            )
+            "Invalid default value. Expected 'sequential', 'parallel', or None, but got {}".format(repr(default))
         )
     if expand not in [True, False]:
-        raise ValueError(
-            "Invalid expand value. Expected True or False, but got {}".format(
-                repr(expand)
-            )
-        )
+        raise ValueError("Invalid expand value. Expected True or False, but got {}".format(repr(expand)))
     if num_samples is not None:
         if not (isinstance(num_samples, numbers.Number) and num_samples > 0):
             raise ValueError(
-                "Invalid num_samples, expected None or positive integer, but got {}".format(
-                    repr(num_samples)
-                )
+                "Invalid num_samples, expected None or positive integer, but got {}".format(repr(num_samples))
             )
         if default == "sequential":
             raise ValueError(
-                'Local sampling does not support "sequential" sampling; '
-                'use "parallel" sampling instead.'
+                'Local sampling does not support "sequential" sampling; ' 'use "parallel" sampling instead.'
             )
     if tmc == "full" and num_samples is not None and num_samples > 1:
         # tmc strategies validated elsewhere (within enum handler)
@@ -211,10 +194,6 @@ def config_enumerate(
 
     # Support usage as a decorator:
     if guide is None:
-        return lambda guide: config_enumerate(
-            guide, default=default, expand=expand, num_samples=num_samples, tmc=tmc
-        )
+        return lambda guide: config_enumerate(guide, default=default, expand=expand, num_samples=num_samples, tmc=tmc)
 
-    return poutine.infer_config(
-        guide, config_fn=_config_enumerate(default, expand, num_samples, tmc)
-    )
+    return poutine.infer_config(guide, config_fn=_config_enumerate(default, expand, num_samples, tmc))

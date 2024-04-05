@@ -66,11 +66,7 @@ def main(args):
     print("| Min (sec) | Mean (sec) | Max (sec) | python -O examples/hmm.py ... |")
     print("| -: | -: | -: | - |")
     for config, times in sorted(grouped.items()):
-        print(
-            "| {:0.1f} | {:0.1f} | {:0.1f} | {} |".format(
-                min(times), median(times), max(times), " ".join(config)
-            )
-        )
+        print("| {:0.1f} | {:0.1f} | {:0.1f} | {} |".format(min(times), median(times), max(times), " ".join(config)))
 
 
 if __name__ == "__main__":

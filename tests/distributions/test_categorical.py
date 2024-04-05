@@ -37,26 +37,15 @@ class TestCategorical(TestCase):
         self.support = torch.tensor([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]])
 
     def test_log_prob_sum(self):
-        log_px_torch = (
-            dist.Categorical(self.probs).log_prob(self.test_data).sum().item()
-        )
-        log_px_np = float(
-            sp.multinomial.logpmf(
-                np.array([0, 0, 1]), 1, self.probs.detach().cpu().numpy()
-            )
-        )
+        log_px_torch = dist.Categorical(self.probs).log_prob(self.test_data).sum().item()
+        log_px_np = float(sp.multinomial.logpmf(np.array([0, 0, 1]), 1, self.probs.detach().cpu().numpy()))
         assert_equal(log_px_torch, log_px_np, prec=1e-4)
 
     def test_mean_and_var(self):
-        torch_samples = [
-            dist.Categorical(self.probs).sample().detach().cpu().numpy()
-            for _ in range(self.n_samples)
-        ]
+        torch_samples = [dist.Categorical(self.probs).sample().detach().cpu().numpy() for _ in range(self.n_samples)]
         _, counts = np.unique(torch_samples, return_counts=True)
         computed_mean = float(counts[0]) / self.n_samples
-        assert_equal(
-            computed_mean, self.analytic_mean.detach().cpu().numpy()[0], prec=0.05
-        )
+        assert_equal(computed_mean, self.analytic_mean.detach().cpu().numpy()[0], prec=0.05)
 
     def test_support_non_vectorized(self):
         s = dist.Categorical(self.d_ps[0].squeeze(0)).enumerate_support()

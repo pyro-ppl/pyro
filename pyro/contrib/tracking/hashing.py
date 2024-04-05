@@ -47,9 +47,7 @@ class LSH:
 
     def __init__(self, radius):
         if not (isinstance(radius, Number) and radius > 0):
-            raise ValueError(
-                "radius must be float greater than 0, given: {}".format(radius)
-            )
+            raise ValueError("radius must be float greater than 0, given: {}".format(radius))
         self._radius = radius
         self._hash_to_key = defaultdict(set)
         self._key_to_hash = {}
@@ -118,9 +116,7 @@ class ApproxSet:
 
     def __init__(self, radius):
         if not (isinstance(radius, Number) and radius > 0):
-            raise ValueError(
-                "radius must be float greater than 0, given: {}".format(radius)
-            )
+            raise ValueError("radius must be float greater than 0, given: {}".format(radius))
         self._radius = radius
         self._bins = set()
 
@@ -162,16 +158,10 @@ def merge_points(points, radius):
     :rtype: tuple
     """
     if points.dim() != 2:
-        raise ValueError(
-            "Expected points.shape == (K,D), but got {}".format(points.shape)
-        )
+        raise ValueError("Expected points.shape == (K,D), but got {}".format(points.shape))
     if not (isinstance(radius, Number) and radius > 0):
-        raise ValueError(
-            "Expected radius to be a positive number, but got {}".format(radius)
-        )
-    radius = (
-        0.99 * radius
-    )  # avoid merging points exactly radius apart, e.g. grid points
+        raise ValueError("Expected radius to be a positive number, but got {}".format(radius))
+    radius = 0.99 * radius  # avoid merging points exactly radius apart, e.g. grid points
     threshold = radius**2
 
     # setup data structures to cheaply search for nearest pairs

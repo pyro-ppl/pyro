@@ -62,9 +62,7 @@ class LocScaleReparam(Reparam):
 
         # Apply a partial decentering transform.
         if self.shape_params is None:
-            self.shape_params = tuple(
-                k for k in fn.arg_constraints if k not in ("loc", "scale")
-            )
+            self.shape_params = tuple(k for k in fn.arg_constraints if k not in ("loc", "scale"))
         params = {key: getattr(fn, key) for key in self.shape_params}
         if centered is None:
             centered = pyro.param(

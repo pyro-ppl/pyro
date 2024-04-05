@@ -26,9 +26,7 @@ def default_z_pres_prior_p(t):
 
 
 ModelState = namedtuple("ModelState", ["x", "z_pres", "z_where"])
-GuideState = namedtuple(
-    "GuideState", ["h", "c", "bl_h", "bl_c", "z_pres", "z_where", "z_what"]
-)
+GuideState = namedtuple("GuideState", ["h", "c", "bl_h", "bl_c", "z_pres", "z_where", "z_what"])
 
 
 class AIR(nn.Module):
@@ -101,18 +99,12 @@ class AIR(nn.Module):
             decoder_output_use_sigmoid,
             nl,
         )
-        self.predict = Predict(
-            rnn_hidden_size, predict_net, self.z_pres_size, self.z_where_size, nl
-        )
-        self.embed = (
-            Identity() if embed_net is None else MLP(x_size**2, embed_net, nl, True)
-        )
+        self.predict = Predict(rnn_hidden_size, predict_net, self.z_pres_size, self.z_where_size, nl)
+        self.embed = Identity() if embed_net is None else MLP(x_size**2, embed_net, nl, True)
 
         self.bl_rnn = nn.LSTMCell(rnn_input_size, rnn_hidden_size)
         self.bl_predict = MLP(rnn_hidden_size, bl_predict_net + [1], nl)
-        self.bl_embed = (
-            Identity() if embed_net is None else MLP(x_size**2, embed_net, nl, True)
-        )
+        self.bl_embed = Identity() if embed_net is None else MLP(x_size**2, embed_net, nl, True)
 
         # Create parameters.
         self.h_init = nn.Parameter(torch.zeros(1, rnn_hidden_size))
@@ -200,21 +192,18 @@ class AIR(nn.Module):
                 "obs",
                 dist.Normal(
                     x.view(n, -1),
-                    (
-                        self.likelihood_sd
-                        * torch.ones(n, self.x_size**2, **self.options)
-                    ),
+                    (self.likelihood_sd * torch.ones(n, self.x_size**2, **self.options)),
                 ).to_event(1),
                 obs=batch.view(n, -1),
             )
 
     def guide(self, data, batch_size, **kwargs):
-        pyro.module("rnn", self.rnn),
-        pyro.module("predict", self.predict),
-        pyro.module("encode", self.encode),
-        pyro.module("embed", self.embed),
-        pyro.module("bl_rnn", self.bl_rnn),
-        pyro.module("bl_predict", self.bl_predict),
+        (pyro.module("rnn", self.rnn),)
+        (pyro.module("predict", self.predict),)
+        (pyro.module("encode", self.encode),)
+        (pyro.module("embed", self.embed),)
+        (pyro.module("bl_rnn", self.bl_rnn),)
+        (pyro.module("bl_predict", self.bl_predict),)
         pyro.module("bl_embed", self.bl_embed)
 
         pyro.param("h_init", self.h_init)
@@ -224,9 +213,7 @@ class AIR(nn.Module):
         pyro.param("bl_h_init", self.bl_h_init)
         pyro.param("bl_c_init", self.bl_c_init)
 
-        with pyro.plate(
-            "data", data.size(0), subsample_size=batch_size, device=data.device
-        ) as ix:
+        with pyro.plate("data", data.size(0), subsample_size=batch_size, device=data.device) as ix:
             batch = data[ix]
             n = batch.size(0)
 
@@ -260,9 +247,7 @@ class AIR(nn.Module):
             return z_where, z_pres
 
     def guide_step(self, t, n, prev, inputs):
-        rnn_input = torch.cat(
-            (inputs["embed"], prev.z_where, prev.z_what, prev.z_pres), 1
-        )
+        rnn_input = torch.cat((inputs["embed"], prev.z_where, prev.z_what, prev.z_pres), 1)
         h, c = self.rnn(rnn_input, (prev.h, prev.c))
         z_pres_p, z_where_loc, z_where_scale = self.predict(h)
 
@@ -402,8 +387,5 @@ def image_to_window(z_where, window_size, image_size, images):
 # [batch_size, num_steps, z_where_size + z_pres_size]
 def latents_to_tensor(z):
     return torch.stack(
-        [
-            torch.cat((z_where.cpu().data, z_pres.cpu().data), 1)
-            for z_where, z_pres in zip(*z)
-        ]
+        [torch.cat((z_where.cpu().data, z_pres.cpu().data), 1) for z_where, z_pres in zip(*z)]
     ).transpose(0, 1)

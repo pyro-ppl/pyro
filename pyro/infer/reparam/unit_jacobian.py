@@ -26,9 +26,7 @@ class UnitJacobianReparam(Reparam):
         to the right will be converted to event dimensions. Defaults to False.
     """
 
-    def __init__(
-        self, transform, suffix="transformed", *, experimental_allow_batch=False
-    ):
+    def __init__(self, transform, suffix="transformed", *, experimental_allow_batch=False):
         self.transform = transform.with_cache()
         self.suffix = suffix
         self.experimental_allow_batch = experimental_allow_batch
@@ -60,22 +58,16 @@ class UnitJacobianReparam(Reparam):
                 old_shape = fn.batch_shape
                 new_shape = old_shape[:-shift] + (1,) * shift + old_shape[-shift:]
                 fn = reshape_batch(fn, new_shape).to_event(shift)
-                transform = reshape_transform_batch(
-                    transform, old_shape + fn.event_shape, new_shape + fn.event_shape
-                )
+                transform = reshape_transform_batch(transform, old_shape + fn.event_shape, new_shape + fn.event_shape)
                 if value is not None:
                     value = value.reshape(
-                        value.shape[: -shift - event_dim]
-                        + (1,) * shift
-                        + value.shape[-shift - event_dim :]
+                        value.shape[: -shift - event_dim] + (1,) * shift + value.shape[-shift - event_dim :]
                     )
                 for dim in range(-shift, 0):
                     stack.enter_context(block_plate(dim=dim, strict=False))
 
             # Differentiably invert transform.
-            transform = ComposeTransform(
-                [biject_to(fn.support).inv.with_cache(), self.transform]
-            )
+            transform = ComposeTransform([biject_to(fn.support).inv.with_cache(), self.transform])
             value_trans = None
             if value is not None:
                 value_trans = transform(value)
@@ -92,10 +84,7 @@ class UnitJacobianReparam(Reparam):
         if value is None:
             value = transform.inv(value_trans)
         if shift:
-            value = value.reshape(
-                value.shape[: -2 * shift - event_dim]
-                + value.shape[-shift - event_dim :]
-            )
+            value = value.reshape(value.shape[: -2 * shift - event_dim] + value.shape[-shift - event_dim :])
 
         # Simulate a pyro.deterministic() site.
         new_fn = dist.Delta(value, event_dim=event_dim)

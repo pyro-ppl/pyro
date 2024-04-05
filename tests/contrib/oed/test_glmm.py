@@ -20,21 +20,15 @@ from tests.common import assert_equal
 
 
 def lm_2p_10_10_1(design):
-    w = pyro.sample(
-        "w", dist.Normal(torch.tensor(0.0), torch.tensor([10.0, 10.0])).to_event(1)
-    )
+    w = pyro.sample("w", dist.Normal(torch.tensor(0.0), torch.tensor([10.0, 10.0])).to_event(1))
     mean = torch.matmul(design, w.unsqueeze(-1)).squeeze(-1)
     y = pyro.sample("y", dist.Normal(mean, torch.tensor(1.0)).to_event(1))
     return y
 
 
 def lm_2p_10_10_1_w12(design):
-    w1 = pyro.sample(
-        "w1", dist.Normal(torch.tensor([0.0]), torch.tensor(10.0)).to_event(1)
-    )
-    w2 = pyro.sample(
-        "w2", dist.Normal(torch.tensor([0.0]), torch.tensor(10.0)).to_event(1)
-    )
+    w1 = pyro.sample("w1", dist.Normal(torch.tensor([0.0]), torch.tensor(10.0)).to_event(1))
+    w2 = pyro.sample("w2", dist.Normal(torch.tensor([0.0]), torch.tensor(10.0)).to_event(1))
     w = torch.cat([w1, w2], dim=-1)
     mean = torch.matmul(design, w.unsqueeze(-1)).squeeze(-1)
     y = pyro.sample("y", dist.Normal(mean, torch.tensor(1.0)).to_event(1))
@@ -56,9 +50,7 @@ def normal_inv_gamma_2_2_10_10(design):
     obs_sd = 1.0 / torch.sqrt(tau)
     w = pyro.sample(
         "w",
-        dist.Normal(
-            torch.tensor([1.0, -1.0]), obs_sd * torch.tensor([10.0, 10.0])
-        ).to_event(1),
+        dist.Normal(torch.tensor([1.0, -1.0]), obs_sd * torch.tensor([10.0, 10.0])).to_event(1),
     )
     mean = torch.matmul(design, w.unsqueeze(-1)).squeeze(-1)
     y = pyro.sample("y", dist.Normal(mean, torch.tensor(1.0)).to_event(1))
@@ -77,12 +69,8 @@ def lr_10_10(design):
 
 def sigmoid_example(design):
     n = design.shape[-2]
-    random_effect_k = pyro.sample(
-        "k", dist.Gamma(2.0 * torch.ones(n), torch.tensor(2.0))
-    )
-    random_effect_offset = pyro.sample(
-        "w2", dist.Normal(torch.tensor(0.0), torch.ones(n))
-    )
+    random_effect_k = pyro.sample("k", dist.Gamma(2.0 * torch.ones(n), torch.tensor(2.0)))
+    random_effect_offset = pyro.sample("w2", dist.Normal(torch.tensor(0.0), torch.ones(n)))
     w1 = pyro.sample(
         "w1",
         dist.Normal(torch.tensor([1.0, -1.0]), torch.tensor([10.0, 10.0])).to_event(1),
@@ -125,9 +113,7 @@ def sigmoid_example(design):
             torch.tensor([[-1.5, 0.5], [1.5, 0.0]]),
         ),
         (
-            known_covariance_linear_model(
-                torch.tensor([1.0, -1.0]), torch.tensor([10.0, 10.0]), torch.tensor(1.0)
-            ),
+            known_covariance_linear_model(torch.tensor([1.0, -1.0]), torch.tensor([10.0, 10.0]), torch.tensor(1.0)),
             nz_lm_2p_10_10_1,
             torch.tensor([[-1.0, 0.5], [2.5, -2.0]]),
         ),

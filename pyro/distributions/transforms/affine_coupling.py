@@ -88,15 +88,7 @@ class AffineCoupling(TransformModule):
 
     bijective = True
 
-    def __init__(
-        self,
-        split_dim,
-        hypernet,
-        *,
-        dim=-1,
-        log_scale_min_clip=-5.0,
-        log_scale_max_clip=3.0
-    ):
+    def __init__(self, split_dim, hypernet, *, dim=-1, log_scale_min_clip=-5.0, log_scale_max_clip=3.0):
         super().__init__(cache_size=1)
         if dim >= 0:
             raise ValueError("'dim' keyword argument must be negative")
@@ -125,18 +117,14 @@ class AffineCoupling(TransformModule):
         :class:`~pyro.distributions.TransformedDistribution` `x` is a sample from
         the base distribution (or the output of a previous transform)
         """
-        x1, x2 = x.split(
-            [self.split_dim, x.size(self.dim) - self.split_dim], dim=self.dim
-        )
+        x1, x2 = x.split([self.split_dim, x.size(self.dim) - self.split_dim], dim=self.dim)
 
         # Now that we can split on an arbitrary dimension, we have do a bit of reshaping...
         mean, log_scale = self.nn(x1.reshape(x1.shape[: self.dim] + (-1,)))
         mean = mean.reshape(mean.shape[:-1] + x2.shape[self.dim :])
         log_scale = log_scale.reshape(log_scale.shape[:-1] + x2.shape[self.dim :])
 
-        log_scale = clamp_preserve_gradients(
-            log_scale, self.log_scale_min_clip, self.log_scale_max_clip
-        )
+        log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         self._cached_log_scale = log_scale
 
         y1 = x1
@@ -151,9 +139,7 @@ class AffineCoupling(TransformModule):
         Inverts y => x. Uses a previously cached inverse if available, otherwise
         performs the inversion afresh.
         """
-        y1, y2 = y.split(
-            [self.split_dim, y.size(self.dim) - self.split_dim], dim=self.dim
-        )
+        y1, y2 = y.split([self.split_dim, y.size(self.dim) - self.split_dim], dim=self.dim)
         x1 = y1
 
         # Now that we can split on an arbitrary dimension, we have do a bit of reshaping...
@@ -161,9 +147,7 @@ class AffineCoupling(TransformModule):
         mean = mean.reshape(mean.shape[:-1] + y2.shape[self.dim :])
         log_scale = log_scale.reshape(log_scale.shape[:-1] + y2.shape[self.dim :])
 
-        log_scale = clamp_preserve_gradients(
-            log_scale, self.log_scale_min_clip, self.log_scale_max_clip
-        )
+        log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         self._cached_log_scale = log_scale
 
         x2 = (y2 - mean) * torch.exp(-log_scale)
@@ -177,14 +161,10 @@ class AffineCoupling(TransformModule):
         if self._cached_log_scale is not None and x is x_old and y is y_old:
             log_scale = self._cached_log_scale
         else:
-            x1, x2 = x.split(
-                [self.split_dim, x.size(self.dim) - self.split_dim], dim=self.dim
-            )
+            x1, x2 = x.split([self.split_dim, x.size(self.dim) - self.split_dim], dim=self.dim)
             _, log_scale = self.nn(x1.reshape(x1.shape[: self.dim] + (-1,)))
             log_scale = log_scale.reshape(log_scale.shape[:-1] + x2.shape[self.dim :])
-            log_scale = clamp_preserve_gradients(
-                log_scale, self.log_scale_min_clip, self.log_scale_max_clip
-            )
+            log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         return _sum_rightmost(log_scale, self.event_dim)
 
 
@@ -306,11 +286,7 @@ def affine_coupling(input_dim, hidden_dims=None, split_dim=None, dim=-1, **kwarg
     """
     if not isinstance(input_dim, int):
         if len(input_dim) != -dim:
-            raise ValueError(
-                "event shape {} must have same length as event_dim {}".format(
-                    input_dim, -dim
-                )
-            )
+            raise ValueError("event shape {} must have same length as event_dim {}".format(input_dim, -dim))
         event_shape = input_dim
         extra_dims = reduce(operator.mul, event_shape[(dim + 1) :], 1)
     else:
@@ -334,9 +310,7 @@ def affine_coupling(input_dim, hidden_dims=None, split_dim=None, dim=-1, **kwarg
     return AffineCoupling(split_dim, hypernet, dim=dim, **kwargs)
 
 
-def conditional_affine_coupling(
-    input_dim, context_dim, hidden_dims=None, split_dim=None, dim=-1, **kwargs
-):
+def conditional_affine_coupling(input_dim, context_dim, hidden_dims=None, split_dim=None, dim=-1, **kwargs):
     """
     A helper function to create an
     :class:`~pyro.distributions.transforms.ConditionalAffineCoupling` object that
@@ -366,11 +340,7 @@ def conditional_affine_coupling(
     """
     if not isinstance(input_dim, int):
         if len(input_dim) != -dim:
-            raise ValueError(
-                "event shape {} must have same length as event_dim {}".format(
-                    input_dim, -dim
-                )
-            )
+            raise ValueError("event shape {} must have same length as event_dim {}".format(input_dim, -dim))
         event_shape = input_dim
         extra_dims = reduce(operator.mul, event_shape[(dim + 1) :], 1)
     else:

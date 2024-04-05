@@ -90,19 +90,12 @@ def test_profile_alternate_imp(M, batch_size, substitute):
             for mp in range(M + gp):
                 kp = mg2k(mp, gp, M)
                 if m + 1 - g == mp and gp == 0:
-                    expected_a0[b, kp] = (1 - r1[b, m + 1 - g, g]) * (
-                        1 - u1[b, m + 1 - g, g]
-                    )
+                    expected_a0[b, kp] = (1 - r1[b, m + 1 - g, g]) * (1 - u1[b, m + 1 - g, g])
                 elif m + 1 - g < mp and gp == 0:
                     expected_a0[b, kp] = (
                         (1 - r1[b, m + 1 - g, g])
                         * u1[b, m + 1 - g, g]
-                        * simpleprod(
-                            [
-                                (1 - r1[b, mpp, 2]) * u1[b, mpp, 2]
-                                for mpp in range(m + 2 - g, mp)
-                            ]
-                        )
+                        * simpleprod([(1 - r1[b, mpp, 2]) * u1[b, mpp, 2] for mpp in range(m + 2 - g, mp)])
                         * (1 - r1[b, mp, 2])
                         * (1 - u1[b, mp, 2])
                     )
@@ -112,12 +105,7 @@ def test_profile_alternate_imp(M, batch_size, substitute):
                     expected_a0[b, kp] = (
                         (1 - r1[b, m + 1 - g, g])
                         * u1[b, m + 1 - g, g]
-                        * simpleprod(
-                            [
-                                (1 - r1[b, mpp, 2]) * u1[b, mpp, 2]
-                                for mpp in range(m + 2 - g, mp)
-                            ]
-                        )
+                        * simpleprod([(1 - r1[b, mpp, 2]) * u1[b, mpp, 2] for mpp in range(m + 2 - g, mp)])
                         * r1[b, mp, 2]
                     )
         for g in range(2):
@@ -127,19 +115,12 @@ def test_profile_alternate_imp(M, batch_size, substitute):
                     for mp in range(M + gp):
                         kp = mg2k(mp, gp, M)
                         if m + 1 - g == mp and gp == 0:
-                            expected_a[b, k, kp] = (1 - r1[b, m + 1 - g, g]) * (
-                                1 - u1[b, m + 1 - g, g]
-                            )
+                            expected_a[b, k, kp] = (1 - r1[b, m + 1 - g, g]) * (1 - u1[b, m + 1 - g, g])
                         elif m + 1 - g < mp and gp == 0:
                             expected_a[b, k, kp] = (
                                 (1 - r1[b, m + 1 - g, g])
                                 * u1[b, m + 1 - g, g]
-                                * simpleprod(
-                                    [
-                                        (1 - r1[b, mpp, 2]) * u1[b, mpp, 2]
-                                        for mpp in range(m + 2 - g, mp)
-                                    ]
-                                )
+                                * simpleprod([(1 - r1[b, mpp, 2]) * u1[b, mpp, 2] for mpp in range(m + 2 - g, mp)])
                                 * (1 - r1[b, mp, 2])
                                 * (1 - u1[b, mp, 2])
                             )
@@ -149,12 +130,7 @@ def test_profile_alternate_imp(M, batch_size, substitute):
                             expected_a[b, k, kp] = (
                                 (1 - r1[b, m + 1 - g, g])
                                 * u1[b, m + 1 - g, g]
-                                * simpleprod(
-                                    [
-                                        (1 - r1[b, mpp, 2]) * u1[b, mpp, 2]
-                                        for mpp in range(m + 2 - g, mp)
-                                    ]
-                                )
+                                * simpleprod([(1 - r1[b, mpp, 2]) * u1[b, mpp, 2] for mpp in range(m + 2 - g, mp)])
                                 * r1[b, mp, 2]
                             )
                         elif m == M and mp == M and g == 0 and gp == 0:
@@ -176,9 +152,7 @@ def test_profile_alternate_imp(M, batch_size, substitute):
         expected_a0 = expected_a0.squeeze()
         expected_e = expected_e.squeeze()
 
-        assert torch.allclose(
-            torch.sum(torch.exp(a0ln)), torch.tensor(1.0), atol=1e-3, rtol=1e-3
-        )
+        assert torch.allclose(torch.sum(torch.exp(a0ln)), torch.tensor(1.0), atol=1e-3, rtol=1e-3)
         assert torch.allclose(
             torch.sum(torch.exp(aln), axis=1),
             torch.ones(2 * M + 1),
@@ -195,9 +169,7 @@ def test_profile_alternate_imp(M, batch_size, substitute):
 @pytest.mark.parametrize("batch_insert", [False, True])
 @pytest.mark.parametrize("batch_delete", [False, True])
 @pytest.mark.parametrize("batch_substitute", [False, True])
-def test_profile_shapes(
-    batch_ancestor_seq, batch_insert_seq, batch_insert, batch_delete, batch_substitute
-):
+def test_profile_shapes(batch_ancestor_seq, batch_insert_seq, batch_insert, batch_delete, batch_substitute):
     M, D, B = 5, 2, 3
     K = 2 * M + 1
     batch_size = 6

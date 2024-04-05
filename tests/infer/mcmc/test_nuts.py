@@ -82,17 +82,12 @@ TEST_CASES = [
 ]
 
 
-TEST_IDS = [
-    t[0].id_fn() if type(t).__name__ == "TestExample" else t[0][0].id_fn()
-    for t in TEST_CASES
-]
+TEST_IDS = [t[0].id_fn() if type(t).__name__ == "TestExample" else t[0][0].id_fn() for t in TEST_CASES]
 
 
 def mark_jit(*args, **kwargs):
     jit_markers = kwargs.pop("marks", [])
-    jit_markers += [
-        pytest.mark.skipif("CI" in os.environ, reason="to reduce running time on CI")
-    ]
+    jit_markers += [pytest.mark.skipif("CI" in os.environ, reason="to reduce running time on CI")]
     kwargs["marks"] = jit_markers
     return pytest.param(*args, **kwargs)
 
@@ -259,9 +254,7 @@ def test_gamma_beta(jit):
 
     true_alpha = torch.tensor(5.0)
     true_beta = torch.tensor(1.0)
-    data = dist.Beta(concentration1=true_alpha, concentration0=true_beta).sample(
-        torch.Size((5000,))
-    )
+    data = dist.Beta(concentration1=true_alpha, concentration0=true_beta).sample(torch.Size((5000,)))
     nuts_kernel = NUTS(model, jit_compile=jit, ignore_jit_warnings=True)
     mcmc = MCMC(nuts_kernel, num_samples=500, warmup_steps=200)
     mcmc.run(data)
@@ -277,9 +270,7 @@ def test_gaussian_mixture_model(jit):
     def gmm(data):
         mix_proportions = pyro.sample("phi", dist.Dirichlet(torch.ones(K)))
         with pyro.plate("num_clusters", K):
-            cluster_means = pyro.sample(
-                "cluster_means", dist.Normal(torch.arange(float(K)), 1.0)
-            )
+            cluster_means = pyro.sample("cluster_means", dist.Normal(torch.arange(float(K)), 1.0))
         with pyro.plate("data", data.shape[0]):
             assignments = pyro.sample("assignments", dist.Categorical(mix_proportions))
             pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.0), obs=data)
@@ -287,20 +278,14 @@ def test_gaussian_mixture_model(jit):
 
     true_cluster_means = torch.tensor([1.0, 5.0, 10.0])
     true_mix_proportions = torch.tensor([0.1, 0.3, 0.6])
-    cluster_assignments = dist.Categorical(true_mix_proportions).sample(
-        torch.Size((N,))
-    )
+    cluster_assignments = dist.Categorical(true_mix_proportions).sample(torch.Size((N,)))
     data = dist.Normal(true_cluster_means[cluster_assignments], 1.0).sample()
-    nuts_kernel = NUTS(
-        gmm, max_plate_nesting=1, jit_compile=jit, ignore_jit_warnings=True
-    )
+    nuts_kernel = NUTS(gmm, max_plate_nesting=1, jit_compile=jit, ignore_jit_warnings=True)
     mcmc = MCMC(nuts_kernel, num_samples=300, warmup_steps=100)
     mcmc.run(data)
     samples = mcmc.get_samples()
     assert_equal(samples["phi"].mean(0).sort()[0], true_mix_proportions, prec=0.05)
-    assert_equal(
-        samples["cluster_means"].mean(0).sort()[0], true_cluster_means, prec=0.2
-    )
+    assert_equal(samples["cluster_means"].mean(0).sort()[0], true_cluster_means, prec=0.2)
 
 
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
@@ -318,9 +303,7 @@ def test_bernoulli_latent_model(jit):
     y = dist.Bernoulli(y_prob).sample(torch.Size((N,)))
     z = dist.Bernoulli(0.65 * y + 0.1).sample()
     data = dist.Normal(2.0 * z, 1.0).sample()
-    nuts_kernel = NUTS(
-        model, max_plate_nesting=1, jit_compile=jit, ignore_jit_warnings=True
-    )
+    nuts_kernel = NUTS(model, max_plate_nesting=1, jit_compile=jit, ignore_jit_warnings=True)
     mcmc = MCMC(nuts_kernel, num_samples=600, warmup_steps=200)
     mcmc.run(data)
     samples = mcmc.get_samples()
@@ -335,12 +318,8 @@ def test_gaussian_hmm(num_steps):
         initialize = pyro.sample("initialize", dist.Dirichlet(torch.ones(dim)))
         with pyro.plate("states", dim):
             transition = pyro.sample("transition", dist.Dirichlet(torch.ones(dim, dim)))
-            emission_loc = pyro.sample(
-                "emission_loc", dist.Normal(torch.zeros(dim), torch.ones(dim))
-            )
-            emission_scale = pyro.sample(
-                "emission_scale", dist.LogNormal(torch.zeros(dim), torch.ones(dim))
-            )
+            emission_loc = pyro.sample("emission_loc", dist.Normal(torch.zeros(dim), torch.ones(dim)))
+            emission_scale = pyro.sample("emission_scale", dist.LogNormal(torch.zeros(dim), torch.ones(dim)))
         x = None
         with ignore_jit_warnings([("Iterating over a tensor", RuntimeWarning)]):
             for t, y in pyro.markov(enumerate(data)):
@@ -359,8 +338,7 @@ def test_gaussian_hmm(num_steps):
         guide = AutoDelta(
             poutine.block(
                 model,
-                expose_fn=lambda msg: not msg["name"].startswith("x")
-                and not msg["name"].startswith("y"),
+                expose_fn=lambda msg: not msg["name"].startswith("x") and not msg["name"].startswith("y"),
             )
         )
         elbo = TraceEnum_ELBO(max_plate_nesting=1)
@@ -381,9 +359,7 @@ def test_gaussian_hmm(num_steps):
         return torch.stack(obs)
 
     data = _generate_data()
-    nuts_kernel = NUTS(
-        model, max_plate_nesting=1, jit_compile=True, ignore_jit_warnings=True
-    )
+    nuts_kernel = NUTS(model, max_plate_nesting=1, jit_compile=True, ignore_jit_warnings=True)
     if num_steps == 30:
         nuts_kernel.initial_trace = _get_initial_trace()
     mcmc = MCMC(nuts_kernel, num_samples=5, warmup_steps=5)
@@ -394,16 +370,8 @@ def test_gaussian_hmm(num_steps):
 def test_beta_binomial(hyperpriors):
     def model(data):
         with pyro.plate("plate_0", data.shape[-1]):
-            alpha = (
-                pyro.sample("alpha", dist.HalfCauchy(1.0))
-                if hyperpriors
-                else torch.tensor([1.0, 1.0])
-            )
-            beta = (
-                pyro.sample("beta", dist.HalfCauchy(1.0))
-                if hyperpriors
-                else torch.tensor([1.0, 1.0])
-            )
+            alpha = pyro.sample("alpha", dist.HalfCauchy(1.0)) if hyperpriors else torch.tensor([1.0, 1.0])
+            beta = pyro.sample("beta", dist.HalfCauchy(1.0)) if hyperpriors else torch.tensor([1.0, 1.0])
             beta_binom = BetaBinomialPair()
             with pyro.plate("plate_1", data.shape[-2]):
                 probs = pyro.sample("probs", beta_binom.latent(alpha, beta))
@@ -417,12 +385,8 @@ def test_beta_binomial(hyperpriors):
     true_probs = torch.tensor([[0.7, 0.4], [0.6, 0.4]])
     total_count = torch.tensor([[1000, 600], [400, 800]])
     num_samples = 80
-    data = dist.Binomial(total_count=total_count, probs=true_probs).sample(
-        sample_shape=(torch.Size((10,)))
-    )
-    hmc_kernel = NUTS(
-        collapse_conjugate(model), jit_compile=True, ignore_jit_warnings=True
-    )
+    data = dist.Binomial(total_count=total_count, probs=true_probs).sample(sample_shape=(torch.Size((10,))))
+    hmc_kernel = NUTS(collapse_conjugate(model), jit_compile=True, ignore_jit_warnings=True)
     mcmc = MCMC(hmc_kernel, num_samples=num_samples, warmup_steps=50)
     mcmc.run(data)
     samples = mcmc.get_samples()
@@ -434,16 +398,8 @@ def test_beta_binomial(hyperpriors):
 def test_gamma_poisson(hyperpriors):
     def model(data):
         with pyro.plate("latent_dim", data.shape[1]):
-            alpha = (
-                pyro.sample("alpha", dist.HalfCauchy(1.0))
-                if hyperpriors
-                else torch.tensor([1.0, 1.0])
-            )
-            beta = (
-                pyro.sample("beta", dist.HalfCauchy(1.0))
-                if hyperpriors
-                else torch.tensor([1.0, 1.0])
-            )
+            alpha = pyro.sample("alpha", dist.HalfCauchy(1.0)) if hyperpriors else torch.tensor([1.0, 1.0])
+            beta = pyro.sample("beta", dist.HalfCauchy(1.0)) if hyperpriors else torch.tensor([1.0, 1.0])
             gamma_poisson = GammaPoissonPair()
             rate = pyro.sample("rate", gamma_poisson.latent(alpha, beta))
             with pyro.plate("data", data.shape[0]):
@@ -452,9 +408,7 @@ def test_gamma_poisson(hyperpriors):
     true_rate = torch.tensor([3.0, 10.0])
     num_samples = 100
     data = dist.Poisson(rate=true_rate).sample(sample_shape=(torch.Size((100,))))
-    hmc_kernel = NUTS(
-        collapse_conjugate(model), jit_compile=True, ignore_jit_warnings=True
-    )
+    hmc_kernel = NUTS(collapse_conjugate(model), jit_compile=True, ignore_jit_warnings=True)
     mcmc = MCMC(hmc_kernel, num_samples=num_samples, warmup_steps=50)
     mcmc.run(data)
     samples = mcmc.get_samples()
@@ -481,14 +435,10 @@ def test_structured_mass():
 
     # smoke tests
     for dense_mass in [True, False]:
-        kernel = NUTS(
-            model, jit_compile=True, ignore_jit_warnings=True, full_mass=dense_mass
-        )
+        kernel = NUTS(model, jit_compile=True, ignore_jit_warnings=True, full_mass=dense_mass)
         mcmc = MCMC(kernel, num_samples=1, warmup_steps=1)
         mcmc.run(cov)
-        assert kernel.inverse_mass_matrix[("w", "x", "y", "z")].dim() == 1 + int(
-            dense_mass
-        )
+        assert kernel.inverse_mass_matrix[("w", "x", "y", "z")].dim() == 1 + int(dense_mass)
 
     kernel = NUTS(
         model,
@@ -521,14 +471,10 @@ def test_arrowhead_mass():
 
     # smoke tests
     for dense_mass in [True, False]:
-        kernel = NUTS(
-            model, jit_compile=True, ignore_jit_warnings=True, full_mass=dense_mass
-        )
+        kernel = NUTS(model, jit_compile=True, ignore_jit_warnings=True, full_mass=dense_mass)
         mcmc = MCMC(kernel, num_samples=1, warmup_steps=1)
         mcmc.run(prec)
-        assert kernel.inverse_mass_matrix[("w", "x", "y", "z")].dim() == 1 + int(
-            dense_mass
-        )
+        assert kernel.inverse_mass_matrix[("w", "x", "y", "z")].dim() == 1 + int(dense_mass)
 
     kernel = NUTS(
         model,

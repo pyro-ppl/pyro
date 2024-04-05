@@ -30,27 +30,21 @@ except ImportError:
 def model_0(data, history, vectorized):
     x_dim = 3
     init = pyro.param("init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
-    trans = pyro.param(
-        "trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex
-    )
+    trans = pyro.param("trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex)
     locs = pyro.param("locs", lambda: torch.rand(x_dim))
 
     with pyro.plate("sequences", data.shape[0], dim=-3) as sequences:
         sequences = sequences[:, None]
         x_prev = None
         markov_loop = (
-            pyro.vectorized_markov(
-                name="time", size=data.shape[1], dim=-2, history=history
-            )
+            pyro.vectorized_markov(name="time", size=data.shape[1], dim=-2, history=history)
             if vectorized
             else pyro.markov(range(data.shape[1]), history=history)
         )
         for i in markov_loop:
             x_curr = pyro.sample(
                 "x_{}".format(i),
-                dist.Categorical(
-                    init if isinstance(i, int) and i < 1 else trans[x_prev]
-                ),
+                dist.Categorical(init if isinstance(i, int) and i < 1 else trans[x_prev]),
             )
             with pyro.plate("tones", data.shape[2], dim=-1):
                 pyro.sample(
@@ -68,9 +62,7 @@ def model_0(data, history, vectorized):
 def model_1(data, history, vectorized):
     x_dim = 3
     init = pyro.param("init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
-    trans = pyro.param(
-        "trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex
-    )
+    trans = pyro.param("trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex)
     locs = pyro.param("locs", lambda: torch.rand(x_dim))
 
     x_prev = None
@@ -99,15 +91,9 @@ def model_1(data, history, vectorized):
 #     y[t-1] --> y[t] --> y[t+1]
 def model_2(data, history, vectorized):
     x_dim, y_dim = 3, 2
-    x_init = pyro.param(
-        "x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex
-    )
-    x_trans = pyro.param(
-        "x_trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex
-    )
-    y_init = pyro.param(
-        "y_init", lambda: torch.rand(x_dim, y_dim), constraint=constraints.simplex
-    )
+    x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
+    x_trans = pyro.param("x_trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex)
+    y_init = pyro.param("y_init", lambda: torch.rand(x_dim, y_dim), constraint=constraints.simplex)
     y_trans = pyro.param(
         "y_trans",
         lambda: torch.rand((x_dim, y_dim, y_dim)),
@@ -123,18 +109,12 @@ def model_2(data, history, vectorized):
     for i in markov_loop:
         x_curr = pyro.sample(
             "x_{}".format(i),
-            dist.Categorical(
-                x_init if isinstance(i, int) and i < 1 else x_trans[x_prev]
-            ),
+            dist.Categorical(x_init if isinstance(i, int) and i < 1 else x_trans[x_prev]),
         )
         with pyro.plate("tones", data.shape[-1], dim=-1):
             y_curr = pyro.sample(
                 "y_{}".format(i),
-                dist.Categorical(
-                    y_init[x_curr]
-                    if isinstance(i, int) and i < 1
-                    else Vindex(y_trans)[x_curr, y_prev]
-                ),
+                dist.Categorical(y_init[x_curr] if isinstance(i, int) and i < 1 else Vindex(y_trans)[x_curr, y_prev]),
                 obs=data[i],
             )
         x_prev, y_prev = x_curr, y_curr
@@ -147,18 +127,10 @@ def model_2(data, history, vectorized):
 #        y[t-1]      y[t]      y[t+1]
 def model_3(data, history, vectorized):
     w_dim, x_dim, y_dim = 2, 3, 2
-    w_init = pyro.param(
-        "w_init", lambda: torch.rand(w_dim), constraint=constraints.simplex
-    )
-    w_trans = pyro.param(
-        "w_trans", lambda: torch.rand((w_dim, w_dim)), constraint=constraints.simplex
-    )
-    x_init = pyro.param(
-        "x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex
-    )
-    x_trans = pyro.param(
-        "x_trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex
-    )
+    w_init = pyro.param("w_init", lambda: torch.rand(w_dim), constraint=constraints.simplex)
+    w_trans = pyro.param("w_trans", lambda: torch.rand((w_dim, w_dim)), constraint=constraints.simplex)
+    x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
+    x_trans = pyro.param("x_trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex)
     y_probs = pyro.param(
         "y_probs",
         lambda: torch.rand(w_dim, x_dim, y_dim),
@@ -174,15 +146,11 @@ def model_3(data, history, vectorized):
     for i in markov_loop:
         w_curr = pyro.sample(
             "w_{}".format(i),
-            dist.Categorical(
-                w_init if isinstance(i, int) and i < 1 else w_trans[w_prev]
-            ),
+            dist.Categorical(w_init if isinstance(i, int) and i < 1 else w_trans[w_prev]),
         )
         x_curr = pyro.sample(
             "x_{}".format(i),
-            dist.Categorical(
-                x_init if isinstance(i, int) and i < 1 else x_trans[x_prev]
-            ),
+            dist.Categorical(x_init if isinstance(i, int) and i < 1 else x_trans[x_prev]),
         )
         with pyro.plate("tones", data.shape[-1], dim=-1):
             pyro.sample(
@@ -201,15 +169,9 @@ def model_3(data, history, vectorized):
 #     y[t-1]       y[t]      y[t+1]
 def model_4(data, history, vectorized):
     w_dim, x_dim, y_dim = 2, 3, 2
-    w_init = pyro.param(
-        "w_init", lambda: torch.rand(w_dim), constraint=constraints.simplex
-    )
-    w_trans = pyro.param(
-        "w_trans", lambda: torch.rand((w_dim, w_dim)), constraint=constraints.simplex
-    )
-    x_init = pyro.param(
-        "x_init", lambda: torch.rand(w_dim, x_dim), constraint=constraints.simplex
-    )
+    w_init = pyro.param("w_init", lambda: torch.rand(w_dim), constraint=constraints.simplex)
+    w_trans = pyro.param("w_trans", lambda: torch.rand((w_dim, w_dim)), constraint=constraints.simplex)
+    x_init = pyro.param("x_init", lambda: torch.rand(w_dim, x_dim), constraint=constraints.simplex)
     x_trans = pyro.param(
         "x_trans",
         lambda: torch.rand((w_dim, x_dim, x_dim)),
@@ -230,17 +192,11 @@ def model_4(data, history, vectorized):
     for i in markov_loop:
         w_curr = pyro.sample(
             "w_{}".format(i),
-            dist.Categorical(
-                w_init if isinstance(i, int) and i < 1 else w_trans[w_prev]
-            ),
+            dist.Categorical(w_init if isinstance(i, int) and i < 1 else w_trans[w_prev]),
         )
         x_curr = pyro.sample(
             "x_{}".format(i),
-            dist.Categorical(
-                x_init[w_curr]
-                if isinstance(i, int) and i < 1
-                else x_trans[w_curr, x_prev]
-            ),
+            dist.Categorical(x_init[w_curr] if isinstance(i, int) and i < 1 else x_trans[w_curr, x_prev]),
         )
         with pyro.plate("tones", data.shape[-1], dim=-1):
             pyro.sample(
@@ -260,20 +216,14 @@ def model_4(data, history, vectorized):
 #     y[t-1]     y[t]     y[t+1]     y[t+2]
 def model_5(data, history, vectorized):
     x_dim, y_dim = 3, 2
-    x_init = pyro.param(
-        "x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex
-    )
-    x_init_2 = pyro.param(
-        "x_init_2", lambda: torch.rand(x_dim, x_dim), constraint=constraints.simplex
-    )
+    x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
+    x_init_2 = pyro.param("x_init_2", lambda: torch.rand(x_dim, x_dim), constraint=constraints.simplex)
     x_trans = pyro.param(
         "x_trans",
         lambda: torch.rand((x_dim, x_dim, x_dim)),
         constraint=constraints.simplex,
     )
-    y_probs = pyro.param(
-        "y_probs", lambda: torch.rand(x_dim, y_dim), constraint=constraints.simplex
-    )
+    y_probs = pyro.param("y_probs", lambda: torch.rand(x_dim, y_dim), constraint=constraints.simplex)
 
     x_prev = x_prev_2 = None
     markov_loop = (
@@ -291,9 +241,7 @@ def model_5(data, history, vectorized):
 
         x_curr = pyro.sample("x_{}".format(i), dist.Categorical(x_probs))
         with pyro.plate("tones", data.shape[-1], dim=-1):
-            pyro.sample(
-                "y_{}".format(i), dist.Categorical(Vindex(y_probs)[x_curr]), obs=data[i]
-            )
+            pyro.sample("y_{}".format(i), dist.Categorical(Vindex(y_probs)[x_curr]), obs=data[i])
         x_prev_2, x_prev = x_prev, x_curr
 
 
@@ -305,9 +253,7 @@ def model_5(data, history, vectorized):
 #     y[t-1]     y[t]     y[t+1]
 def model_6(data, history, vectorized):
     x_dim = 3
-    x_init = pyro.param(
-        "x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex
-    )
+    x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
     x_trans = pyro.param(
         "x_trans",
         lambda: torch.rand((len(data) - 1, x_dim, x_dim)),
@@ -349,18 +295,10 @@ def model_6(data, history, vectorized):
 #     x[t-1]      x[t]      x[t+1]
 def model_7(data, history, vectorized):
     w_dim, x_dim, y_dim = 2, 3, 2
-    w_init = pyro.param(
-        "w_init", lambda: torch.rand(w_dim), constraint=constraints.simplex
-    )
-    w_trans = pyro.param(
-        "w_trans", lambda: torch.rand((x_dim, w_dim)), constraint=constraints.simplex
-    )
-    x_init = pyro.param(
-        "x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex
-    )
-    x_trans = pyro.param(
-        "x_trans", lambda: torch.rand((w_dim, x_dim)), constraint=constraints.simplex
-    )
+    w_init = pyro.param("w_init", lambda: torch.rand(w_dim), constraint=constraints.simplex)
+    w_trans = pyro.param("w_trans", lambda: torch.rand((x_dim, w_dim)), constraint=constraints.simplex)
+    x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
+    x_trans = pyro.param("x_trans", lambda: torch.rand((w_dim, x_dim)), constraint=constraints.simplex)
     y_probs = pyro.param(
         "y_probs",
         lambda: torch.rand(w_dim, x_dim, y_dim),
@@ -376,15 +314,11 @@ def model_7(data, history, vectorized):
     for i in markov_loop:
         w_curr = pyro.sample(
             "w_{}".format(i),
-            dist.Categorical(
-                w_init if isinstance(i, int) and i < 1 else w_trans[x_prev]
-            ),
+            dist.Categorical(w_init if isinstance(i, int) and i < 1 else w_trans[x_prev]),
         )
         x_curr = pyro.sample(
             "x_{}".format(i),
-            dist.Categorical(
-                x_init if isinstance(i, int) and i < 1 else x_trans[w_prev]
-            ),
+            dist.Categorical(x_init if isinstance(i, int) and i < 1 else x_trans[w_prev]),
         )
         with pyro.plate("tones", data.shape[-1], dim=-1):
             pyro.sample(
@@ -432,16 +366,12 @@ def test_enumeration(model, data, var, history, use_replay):
             trace = handlers.trace(enum_model).get_trace(data, history, False)
             # vectorized trace
             if use_replay:
-                guide_trace = handlers.trace(_guide_from_model(model)).get_trace(
+                guide_trace = handlers.trace(_guide_from_model(model)).get_trace(data, history, True)
+                vectorized_trace = handlers.trace(handlers.replay(model, trace=guide_trace)).get_trace(
                     data, history, True
                 )
-                vectorized_trace = handlers.trace(
-                    handlers.replay(model, trace=guide_trace)
-                ).get_trace(data, history, True)
             else:
-                vectorized_trace = handlers.trace(enum_model).get_trace(
-                    data, history, True
-                )
+                vectorized_trace = handlers.trace(enum_model).get_trace(data, history, True)
 
         # sequential factors
         factors = list()
@@ -453,23 +383,17 @@ def test_enumeration(model, data, var, history, use_replay):
         vectorized_factors = list()
         for i in range(history):
             for v in var:
-                vectorized_factors.append(
-                    vectorized_trace.nodes["{}_{}".format(v, i)]["funsor"]["log_prob"]
-                )
+                vectorized_factors.append(vectorized_trace.nodes["{}_{}".format(v, i)]["funsor"]["log_prob"])
         for i in range(history, data.shape[-2]):
             for v in var:
                 vectorized_factors.append(
-                    vectorized_trace.nodes[
-                        "{}_{}".format(v, slice(history, data.shape[-2]))
-                    ]["funsor"]["log_prob"](
+                    vectorized_trace.nodes["{}_{}".format(v, slice(history, data.shape[-2]))]["funsor"]["log_prob"](
                         **{"time": i - history},
                         **{
-                            "{}_{}".format(
-                                k, slice(history - j, data.shape[-2] - j)
-                            ): "{}_{}".format(k, i - j)
+                            "{}_{}".format(k, slice(history - j, data.shape[-2] - j)): "{}_{}".format(k, i - j)
                             for j in range(history + 1)
                             for k in var
-                        }
+                        },
                     )
                 )
 
@@ -484,8 +408,7 @@ def test_enumeration(model, data, var, history, use_replay):
         expected_measure_vars = frozenset()
         for v in var[:-1]:
             v_step = tuple("{}_{}".format(v, i) for i in range(history)) + tuple(
-                "{}_{}".format(v, slice(j, data.shape[-2] - history + j))
-                for j in range(history + 1)
+                "{}_{}".format(v, slice(j, data.shape[-2] - history + j)) for j in range(history + 1)
             )
             expected_step |= frozenset({v_step})
             # grab measure_vars, found only at sites that are not replayed
@@ -509,30 +432,16 @@ def test_enumeration(model, data, var, history, use_replay):
 #     z[j-1]     z[j]     z[j+1]
 def model_8(weeks_data, days_data, history, vectorized):
     x_dim, y_dim, w_dim, z_dim = 3, 2, 2, 3
-    x_init = pyro.param(
-        "x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex
-    )
-    x_trans = pyro.param(
-        "x_trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex
-    )
-    y_probs = pyro.param(
-        "y_probs", lambda: torch.rand(x_dim, y_dim), constraint=constraints.simplex
-    )
-    w_init = pyro.param(
-        "w_init", lambda: torch.rand(w_dim), constraint=constraints.simplex
-    )
-    w_trans = pyro.param(
-        "w_trans", lambda: torch.rand((w_dim, w_dim)), constraint=constraints.simplex
-    )
-    z_probs = pyro.param(
-        "z_probs", lambda: torch.rand(w_dim, z_dim), constraint=constraints.simplex
-    )
+    x_init = pyro.param("x_init", lambda: torch.rand(x_dim), constraint=constraints.simplex)
+    x_trans = pyro.param("x_trans", lambda: torch.rand((x_dim, x_dim)), constraint=constraints.simplex)
+    y_probs = pyro.param("y_probs", lambda: torch.rand(x_dim, y_dim), constraint=constraints.simplex)
+    w_init = pyro.param("w_init", lambda: torch.rand(w_dim), constraint=constraints.simplex)
+    w_trans = pyro.param("w_trans", lambda: torch.rand((w_dim, w_dim)), constraint=constraints.simplex)
+    z_probs = pyro.param("z_probs", lambda: torch.rand(w_dim, z_dim), constraint=constraints.simplex)
 
     x_prev = None
     weeks_loop = (
-        pyro.vectorized_markov(
-            name="weeks", size=len(weeks_data), dim=-1, history=history
-        )
+        pyro.vectorized_markov(name="weeks", size=len(weeks_data), dim=-1, history=history)
         if vectorized
         else pyro.markov(range(len(weeks_data)), history=history)
     )
@@ -552,9 +461,7 @@ def model_8(weeks_data, days_data, history, vectorized):
 
     w_prev = None
     days_loop = (
-        pyro.vectorized_markov(
-            name="days", size=len(days_data), dim=-1, history=history
-        )
+        pyro.vectorized_markov(name="days", size=len(days_data), dim=-1, history=history)
         if vectorized
         else pyro.markov(range(len(days_data)), history=history)
     )
@@ -581,31 +488,23 @@ def model_8(weeks_data, days_data, history, vectorized):
         (model_8, torch.ones(30), torch.zeros(50), "xy", "wz", 1),
     ],
 )
-def test_enumeration_multi(
-    model, weeks_data, days_data, vars1, vars2, history, use_replay
-):
+def test_enumeration_multi(model, weeks_data, days_data, vars1, vars2, history, use_replay):
     pyro.clear_param_store()
 
     with pyro_backend("contrib.funsor"):
         with handlers.enum():
             enum_model = infer.config_enumerate(model, default="parallel")
             # sequential factors
-            trace = handlers.trace(enum_model).get_trace(
-                weeks_data, days_data, history, False
-            )
+            trace = handlers.trace(enum_model).get_trace(weeks_data, days_data, history, False)
 
             # vectorized trace
             if use_replay:
-                guide_trace = handlers.trace(_guide_from_model(model)).get_trace(
+                guide_trace = handlers.trace(_guide_from_model(model)).get_trace(weeks_data, days_data, history, True)
+                vectorized_trace = handlers.trace(handlers.replay(model, trace=guide_trace)).get_trace(
                     weeks_data, days_data, history, True
                 )
-                vectorized_trace = handlers.trace(
-                    handlers.replay(model, trace=guide_trace)
-                ).get_trace(weeks_data, days_data, history, True)
             else:
-                vectorized_trace = handlers.trace(enum_model).get_trace(
-                    weeks_data, days_data, history, True
-                )
+                vectorized_trace = handlers.trace(enum_model).get_trace(weeks_data, days_data, history, True)
 
         factors = list()
         # sequential weeks factors
@@ -621,45 +520,33 @@ def test_enumeration_multi(
         # vectorized weeks factors
         for i in range(history):
             for v in vars1:
-                vectorized_factors.append(
-                    vectorized_trace.nodes["{}_{}".format(v, i)]["funsor"]["log_prob"]
-                )
+                vectorized_factors.append(vectorized_trace.nodes["{}_{}".format(v, i)]["funsor"]["log_prob"])
         for i in range(history, len(weeks_data)):
             for v in vars1:
                 vectorized_factors.append(
-                    vectorized_trace.nodes[
-                        "{}_{}".format(v, slice(history, len(weeks_data)))
-                    ]["funsor"]["log_prob"](
+                    vectorized_trace.nodes["{}_{}".format(v, slice(history, len(weeks_data)))]["funsor"]["log_prob"](
                         **{"weeks": i - history},
                         **{
-                            "{}_{}".format(
-                                k, slice(history - j, len(weeks_data) - j)
-                            ): "{}_{}".format(k, i - j)
+                            "{}_{}".format(k, slice(history - j, len(weeks_data) - j)): "{}_{}".format(k, i - j)
                             for j in range(history + 1)
                             for k in vars1
-                        }
+                        },
                     )
                 )
         # vectorized days factors
         for i in range(history):
             for v in vars2:
-                vectorized_factors.append(
-                    vectorized_trace.nodes["{}_{}".format(v, i)]["funsor"]["log_prob"]
-                )
+                vectorized_factors.append(vectorized_trace.nodes["{}_{}".format(v, i)]["funsor"]["log_prob"])
         for i in range(history, len(days_data)):
             for v in vars2:
                 vectorized_factors.append(
-                    vectorized_trace.nodes[
-                        "{}_{}".format(v, slice(history, len(days_data)))
-                    ]["funsor"]["log_prob"](
+                    vectorized_trace.nodes["{}_{}".format(v, slice(history, len(days_data)))]["funsor"]["log_prob"](
                         **{"days": i - history},
                         **{
-                            "{}_{}".format(
-                                k, slice(history - j, len(days_data) - j)
-                            ): "{}_{}".format(k, i - j)
+                            "{}_{}".format(k, slice(history - j, len(days_data) - j)): "{}_{}".format(k, i - j)
                             for j in range(history + 1)
                             for k in vars2
-                        }
+                        },
                     )
                 )
 
@@ -675,8 +562,7 @@ def test_enumeration_multi(
         expected_weeks_step = frozenset()
         for v in vars1[:-1]:
             v_step = tuple("{}_{}".format(v, i) for i in range(history)) + tuple(
-                "{}_{}".format(v, slice(j, len(weeks_data) - history + j))
-                for j in range(history + 1)
+                "{}_{}".format(v, slice(j, len(weeks_data) - history + j)) for j in range(history + 1)
             )
             expected_weeks_step |= frozenset({v_step})
             # grab measure_vars, found only at sites that are not replayed
@@ -688,8 +574,7 @@ def test_enumeration_multi(
         expected_days_step = frozenset()
         for v in vars2[:-1]:
             v_step = tuple("{}_{}".format(v, i) for i in range(history)) + tuple(
-                "{}_{}".format(v, slice(j, len(days_data) - history + j))
-                for j in range(history + 1)
+                "{}_{}".format(v, slice(j, len(days_data) - history + j)) for j in range(history + 1)
             )
             expected_days_step |= frozenset({v_step})
             # grab measure_vars, found only at sites that are not replayed
@@ -731,15 +616,11 @@ def test_model_enumerated_elbo(model, guide, data, history):
         model = infer.config_enumerate(model, default="parallel")
         elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
         expected_loss = elbo.loss_and_grads(model, guide, data, history, False)
-        expected_grads = (
-            value.grad for name, value in pyro.get_param_store().named_parameters()
-        )
+        expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
         vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
         actual_loss = vectorized_elbo.loss_and_grads(model, guide, data, history, True)
-        actual_grads = (
-            value.grad for name, value in pyro.get_param_store().named_parameters()
-        )
+        actual_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
         assert_close(actual_loss, expected_loss)
         for actual_grad, expected_grad in zip(actual_grads, expected_grads):
@@ -764,20 +645,12 @@ def test_model_enumerated_elbo_multi(model, guide, weeks_data, days_data, histor
     with pyro_backend("contrib.funsor"):
         model = infer.config_enumerate(model, default="parallel")
         elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
-        expected_loss = elbo.loss_and_grads(
-            model, guide, weeks_data, days_data, history, False
-        )
-        expected_grads = (
-            value.grad for name, value in pyro.get_param_store().named_parameters()
-        )
+        expected_loss = elbo.loss_and_grads(model, guide, weeks_data, days_data, history, False)
+        expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
         vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
-        actual_loss = vectorized_elbo.loss_and_grads(
-            model, guide, weeks_data, days_data, history, True
-        )
-        actual_grads = (
-            value.grad for name, value in pyro.get_param_store().named_parameters()
-        )
+        actual_loss = vectorized_elbo.loss_and_grads(model, guide, weeks_data, days_data, history, True)
+        actual_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
         assert_close(actual_loss, expected_loss)
         for actual_grad, expected_grad in zip(actual_grads, expected_grads):
@@ -834,15 +707,11 @@ def test_guide_enumerated_elbo(model, guide, data, history):
 
         elbo = infer.TraceEnum_ELBO(max_plate_nesting=4)
         expected_loss = elbo.loss_and_grads(model, guide, data, history, False)
-        expected_grads = (
-            value.grad for name, value in pyro.get_param_store().named_parameters()
-        )
+        expected_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
         vectorized_elbo = infer.TraceMarkovEnum_ELBO(max_plate_nesting=4)
         actual_loss = vectorized_elbo.loss_and_grads(model, guide, data, history, True)
-        actual_grads = (
-            value.grad for name, value in pyro.get_param_store().named_parameters()
-        )
+        actual_grads = (value.grad for name, value in pyro.get_param_store().named_parameters())
 
         assert_close(actual_loss, expected_loss)
         for actual_grad, expected_grad in zip(actual_grads, expected_grads):

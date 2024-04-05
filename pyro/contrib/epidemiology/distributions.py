@@ -120,9 +120,7 @@ def _relaxed_beta_binomial(concentration1, concentration0, total_count):
     a :class:`~pyro.distributions.BetaBinomial` but allowing arbitrary real
     ``total_count`` and lower-bounding variance.
     """
-    concentration1, concentration0, total_count = broadcast_all(
-        concentration1, concentration0, total_count
-    )
+    concentration1, concentration0, total_count = broadcast_all(concentration1, concentration0, total_count)
 
     c = concentration1 + concentration0
     beta_mean = concentration1 / c
@@ -191,9 +189,7 @@ def binomial_dist(total_count, probs, *, overdispersion=0.0):
     return dist.ExtendedBetaBinomial(concentration1, concentration0, total_count)
 
 
-def beta_binomial_dist(
-    concentration1, concentration0, total_count, *, overdispersion=0.0
-):
+def beta_binomial_dist(concentration1, concentration0, total_count, *, overdispersion=0.0):
     """
     Returns a Beta-Binomial distribution that is an overdispersed version of a
     the usual Beta-Binomial distribution, according to an extra parameter
@@ -234,9 +230,7 @@ def poisson_dist(rate, *, overdispersion=0.0):
     raise NotImplementedError("TODO return a NegativeBinomial or GammaPoisson")
 
 
-def negative_binomial_dist(
-    concentration, probs=None, *, logits=None, overdispersion=0.0
-):
+def negative_binomial_dist(concentration, probs=None, *, logits=None, overdispersion=0.0):
     _validate_overdispersion(overdispersion)
     if _is_zero(overdispersion):
         return dist.NegativeBinomial(concentration, probs=probs, logits=logits)
@@ -250,7 +244,7 @@ def infection_dist(
     num_susceptible=math.inf,
     population=math.inf,
     concentration=math.inf,
-    overdispersion=0.0
+    overdispersion=0.0,
 ):
     """
     Create a :class:`~pyro.distributions.Distribution` over the number of new
@@ -317,9 +311,7 @@ def infection_dist(
             # Return an overdispersed Negative-Binomial distribution.
             combined_k = k * I
             logits = torch.as_tensor(R / k).log()
-            return negative_binomial_dist(
-                combined_k, logits=logits, overdispersion=overdispersion
-            )
+            return negative_binomial_dist(combined_k, logits=logits, overdispersion=overdispersion)
     else:
         # Compute the probability that any given (susceptible, infectious)
         # pair of individuals results in an infection at this time step.

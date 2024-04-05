@@ -200,17 +200,12 @@ def get_dependencies(
 
     # Collect observations.
     observed = {msg["name"] for msg in sample_sites if msg["is_observed"]}
-    plates = {
-        msg["name"]: {f.name for f in msg["cond_indep_stack"] if f.vectorized}
-        for msg in sample_sites
-    }
+    plates = {msg["name"]: {f.name for f in msg["cond_indep_stack"] if f.vectorized} for msg in sample_sites}
 
     # Find direct prior dependencies among latent and observed sites.
     prior_dependencies = {n: {n: set()} for n in plates}  # no deps yet
     for i, downstream in enumerate(sample_sites):
-        upstreams = [
-            u for u in sample_sites[:i] if not u["is_observed"] if u["value"].numel()
-        ]
+        upstreams = [u for u in sample_sites[:i] if not u["is_observed"] if u["value"].numel()]
         if not upstreams:
             continue
         log_prob = downstream["fn"].log_prob(downstream["value"])
@@ -324,9 +319,7 @@ def get_model_relations(
             else site["fn"].base_dist.log_prob(site["value"])
         )
         sample_sample[name] = [
-            upstream
-            for upstream in provenance
-            if upstream != name and _get_type_from_frozenname(upstream) == "sample"
+            upstream for upstream in provenance if upstream != name and _get_type_from_frozenname(upstream) == "sample"
         ]
 
         sample_param[name] = [
@@ -335,11 +328,7 @@ def get_model_relations(
             if upstream != name and _get_type_from_frozenname(upstream) == "param"
         ]
 
-        sample_dist[name] = (
-            _get_dist_name(site["fn"])
-            if not site_is_deterministic(site)
-            else "Deterministic"
-        )
+        sample_dist[name] = _get_dist_name(site["fn"]) if not site_is_deterministic(site) else "Deterministic"
         for frame in site["cond_indep_stack"]:
             plate_sample[frame.name].append(name)
         if site["is_observed"]:
@@ -379,16 +368,12 @@ def get_model_relations(
 
 
 def _get_dist_name(fn):
-    while isinstance(
-        fn, (dist.Independent, dist.ExpandedDistribution, dist.MaskedDistribution)
-    ):
+    while isinstance(fn, (dist.Independent, dist.ExpandedDistribution, dist.MaskedDistribution)):
         fn = fn.base_dist
     return type(fn).__name__
 
 
-def generate_graph_specification(
-    model_relations: dict, render_params: bool = False
-) -> dict:
+def generate_graph_specification(model_relations: dict, render_params: bool = False) -> dict:
     """
     Convert model relations into data structure which can be readily
     converted into a network.
@@ -494,9 +479,7 @@ def _deep_merge(things: list):
     return things[0]
 
 
-def render_graph(
-    graph_specification: dict, render_distributions: bool = False
-) -> "graphviz.Digraph":
+def render_graph(graph_specification: dict, render_distributions: bool = False) -> "graphviz.Digraph":
     """
     Create a graphviz object given a graph specification.
 
@@ -520,11 +503,7 @@ def render_graph(
     graph = graphviz.Digraph()
 
     # add plates
-    plate_graph_dict = {
-        plate: graphviz.Digraph(name=f"cluster_{plate}")
-        for plate in plate_groups
-        if plate is not None
-    }
+    plate_graph_dict = {plate: graphviz.Digraph(name=f"cluster_{plate}") for plate in plate_groups if plate is not None}
     for plate, plate_graph in plate_graph_dict.items():
         plate_graph.attr(label=plate.split("__CLONE")[0], labeljust="r", labelloc="b")
 
@@ -549,14 +528,8 @@ def render_graph(
                 rv_label = rv.replace("$params", "")
 
             # use different symbol for Deterministic site
-            node_style = (
-                "filled,dashed"
-                if node_data[rv]["distribution"] == "Deterministic"
-                else "filled"
-            )
-            cur_graph.node(
-                rv, label=rv_label, shape=shape, style=node_style, fillcolor=color
-            )
+            node_style = "filled,dashed" if node_data[rv]["distribution"] == "Deterministic" else "filled"
+            cur_graph.node(rv, label=rv_label, shape=shape, style=node_style, fillcolor=color)
 
     # add leaf nodes first
     while len(plate_data) >= 1:
@@ -642,16 +615,12 @@ def render_model(
             model_args = [model_args] * len(model_kwargs)
         assert len(model_args) == len(model_kwargs)
         relations = [
-            get_model_relations(
-                model, args, kwargs, include_deterministic=render_deterministic
-            )
+            get_model_relations(model, args, kwargs, include_deterministic=render_deterministic)
             for args, kwargs in zip(model_args, model_kwargs)
         ]
 
     # Get graph specifications.
-    graph_specs = [
-        generate_graph_specification(r, render_params=render_params) for r in relations
-    ]
+    graph_specs = [generate_graph_specification(r, render_params=render_params) for r in relations]
     graph_spec = _deep_merge(graph_specs)
 
     # Render.

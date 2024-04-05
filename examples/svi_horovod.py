@@ -99,9 +99,7 @@ def main(args):
     dataset = torch.utils.data.TensorDataset(covariates, data)
     if args.horovod:
         # Horovod requires a distributed sampler.
-        sampler = torch.utils.data.distributed.DistributedSampler(
-            dataset, hvd.size(), hvd.rank()
-        )
+        sampler = torch.utils.data.distributed.DistributedSampler(dataset, hvd.size(), hvd.rank())
     else:
         sampler = torch.utils.data.RandomSampler(dataset)
     config = {"batch_size": args.batch_size, "sampler": sampler}
@@ -109,11 +107,7 @@ def main(args):
         config["num_workers"] = 1
         config["pin_memory"] = True
         # Try to use forkserver to spawn workers instead of fork.
-        if (
-            hasattr(mp, "_supports_context")
-            and mp._supports_context
-            and "forkserver" in mp.get_all_start_methods()
-        ):
+        if hasattr(mp, "_supports_context") and mp._supports_context and "forkserver" in mp.get_all_start_methods():
             config["multiprocessing_context"] = "forkserver"
     dataloader = torch.utils.data.DataLoader(dataset, **config)
 

@@ -219,7 +219,7 @@ def xfail_jit(*args, **kwargs):
         marks=[
             pytest.mark.xfail(reason=reason),
             pytest.mark.skipif("CI" in os.environ, reason="slow test"),
-        ]
+        ],
     )
 
 
@@ -250,18 +250,10 @@ JIT_EXAMPLES = [
     "hmm.py --num-steps=1 --truncate=10 --model=4 --jit",
     "hmm.py --num-steps=1 --truncate=10 --model=5 --jit",
     "hmm.py --num-steps=1 --truncate=10 --model=7 --jit",
-    xfail_jit(
-        "hmm.py --num-steps=1 --truncate=10 --model=1 --tmc --tmc-num-samples=2 --jit"
-    ),
-    xfail_jit(
-        "hmm.py --num-steps=1 --truncate=10 --model=2 --tmc --tmc-num-samples=2 --jit"
-    ),
-    xfail_jit(
-        "hmm.py --num-steps=1 --truncate=10 --model=3 --tmc --tmc-num-samples=2 --jit"
-    ),
-    xfail_jit(
-        "hmm.py --num-steps=1 --truncate=10 --model=4 --tmc --tmc-num-samples=2 --jit"
-    ),
+    xfail_jit("hmm.py --num-steps=1 --truncate=10 --model=1 --tmc --tmc-num-samples=2 --jit"),
+    xfail_jit("hmm.py --num-steps=1 --truncate=10 --model=2 --tmc --tmc-num-samples=2 --jit"),
+    xfail_jit("hmm.py --num-steps=1 --truncate=10 --model=3 --tmc --tmc-num-samples=2 --jit"),
+    xfail_jit("hmm.py --num-steps=1 --truncate=10 --model=4 --tmc --tmc-num-samples=2 --jit"),
     "lda.py --num-steps=2 --num-words=100 --num-docs=100 --num-words-per-doc=8 --jit",
     "minipyro.py --backend=pyro --jit",
     "minipyro.py --jit",
@@ -285,9 +277,7 @@ JIT_EXAMPLES = [
 
 HOROVOD_EXAMPLES = [
     "svi_horovod.py --num-epochs=2 --size=400",
-    pytest.param(
-        "svi_horovod.py --num-epochs=2 --size=400 --cuda", marks=[requires_cuda]
-    ),
+    pytest.param("svi_horovod.py --num-epochs=2 --size=400 --cuda", marks=[requires_cuda]),
 ]
 
 FUNSOR_EXAMPLES = [
@@ -325,15 +315,9 @@ FUNSOR_EXAMPLES = [
 
 
 def test_coverage():
-    cpu_tests = set(
-        (e if isinstance(e, str) else e.values[0]).split()[0] for e in CPU_EXAMPLES
-    )
-    cuda_tests = set(
-        (e if isinstance(e, str) else e.values[0]).split()[0] for e in CUDA_EXAMPLES
-    )
-    jit_tests = set(
-        (e if isinstance(e, str) else e.values[0]).split()[0] for e in JIT_EXAMPLES
-    )
+    cpu_tests = set((e if isinstance(e, str) else e.values[0]).split()[0] for e in CPU_EXAMPLES)
+    cuda_tests = set((e if isinstance(e, str) else e.values[0]).split()[0] for e in CUDA_EXAMPLES)
+    jit_tests = set((e if isinstance(e, str) else e.values[0]).split()[0] for e in JIT_EXAMPLES)
     for root, dirs, files in os.walk(EXAMPLES_DIR):
         for basename in files:
             if not basename.endswith(".py"):
@@ -344,17 +328,11 @@ def test_coverage():
             example = os.path.relpath(path, EXAMPLES_DIR)
             if "__main__" in text:
                 if example not in cpu_tests:
-                    pytest.fail(
-                        "Example: {} not covered in CPU_EXAMPLES.".format(example)
-                    )
+                    pytest.fail("Example: {} not covered in CPU_EXAMPLES.".format(example))
                 if "--cuda" in text and example not in cuda_tests:
-                    pytest.fail(
-                        "Example: {} not covered by CUDA_EXAMPLES.".format(example)
-                    )
+                    pytest.fail("Example: {} not covered by CUDA_EXAMPLES.".format(example))
                 if "--jit" in text and example not in jit_tests:
-                    pytest.fail(
-                        "Example: {} not covered by JIT_EXAMPLES.".format(example)
-                    )
+                    pytest.fail("Example: {} not covered by JIT_EXAMPLES.".format(example))
 
 
 @pytest.mark.parametrize("example", CPU_EXAMPLES)

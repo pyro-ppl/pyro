@@ -23,13 +23,7 @@ def test_nested_iplate():
     def model(means, stds):
         a_plate = pyro.plate("a", len(means), mean_batch_size)
         b_plate = pyro.plate("b", len(stds), std_batch_size)
-        return [
-            [
-                pyro.sample("x_{}{}".format(i, j), dist.Normal(means[i], stds[j]))
-                for j in b_plate
-            ]
-            for i in a_plate
-        ]
+        return [[pyro.sample("x_{}{}".format(i, j), dist.Normal(means[i], stds[j])) for j in b_plate] for i in a_plate]
 
     xs = model(means, stds)
     assert len(xs) == mean_batch_size
@@ -86,9 +80,7 @@ def test_cond_indep_stack(model, subsample_size):
     tr = poutine.trace(model).get_trace(subsample_size)
     for name, node in tr.nodes.items():
         if name.startswith("x"):
-            assert node[
-                "cond_indep_stack"
-            ], "missing cond_indep_stack at node {}".format(name)
+            assert node["cond_indep_stack"], "missing cond_indep_stack at node {}".format(name)
 
 
 @pytest.mark.parametrize("subsample_size", [5, 20])
@@ -124,9 +116,7 @@ def iplate_custom_model(subsample):
     return result
 
 
-@pytest.mark.parametrize(
-    "model", [plate_custom_model, iplate_custom_model], ids=["plate", "iplate"]
-)
+@pytest.mark.parametrize("model", [plate_custom_model, iplate_custom_model], ids=["plate", "iplate"])
 def test_custom_subsample(model):
     pyro.set_rng_seed(0)
 
@@ -151,9 +141,7 @@ def iplate_cuda_model(subsample_size):
 
 @requires_cuda
 @pytest.mark.parametrize("subsample_size", [5, 20])
-@pytest.mark.parametrize(
-    "model", [plate_cuda_model, iplate_cuda_model], ids=["plate", "iplate"]
-)
+@pytest.mark.parametrize("model", [plate_cuda_model, iplate_cuda_model], ids=["plate", "iplate"])
 def test_cuda(model, subsample_size):
     tr = poutine.trace(model).get_trace(subsample_size)
     assert tr.log_prob_sum().is_cuda

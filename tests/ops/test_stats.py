@@ -51,9 +51,7 @@ def test_quantile():
     y = torch.rand(2000)
     z = torch.randn(2000)
 
-    assert_equal(
-        quantile(x, probs=[0.0, 0.4, 0.5, 1.0]), torch.tensor([0.0, 0.8, 1.0, 2.0])
-    )
+    assert_equal(quantile(x, probs=[0.0, 0.4, 0.5, 1.0]), torch.tensor([0.0, 0.8, 1.0, 2.0]))
     assert_equal(quantile(y, probs=0.2), torch.tensor(0.2), prec=0.02)
     assert_equal(quantile(z, probs=0.8413), torch.tensor(1.0), prec=0.02)
 
@@ -159,9 +157,7 @@ def test_autocovariance():
         actual = autocovariance(x)
     assert_equal(
         actual,
-        torch.tensor(
-            [8.25, 6.42, 4.25, 1.75, -1.08, -4.25, -7.75, -11.58, -15.75, -20.25]
-        ),
+        torch.tensor([8.25, 6.42, 4.25, 1.75, -1.08, -4.25, -7.75, -11.58, -15.75, -20.25]),
         prec=0.01,
     )
 
@@ -223,9 +219,7 @@ def test_effective_sample_size():
         assert_equal(effective_sample_size(x).item(), 52.64, prec=0.01)
 
 
-@pytest.mark.parametrize(
-    "diagnostics", [gelman_rubin, split_gelman_rubin, effective_sample_size]
-)
+@pytest.mark.parametrize("diagnostics", [gelman_rubin, split_gelman_rubin, effective_sample_size])
 @pytest.mark.parametrize("sample_shape", [(), (3,), (2, 3)])
 def test_diagnostics_ok_with_sample_shape(diagnostics, sample_shape):
     sample_shape = torch.Size(sample_shape)
@@ -320,7 +314,5 @@ def test_crps_empirical(num_samples, event_shape):
     actual = crps_empirical(pred, truth)
     assert actual.shape == truth.shape
 
-    expected = (pred - truth).abs().mean(0) - 0.5 * (
-        pred - pred.unsqueeze(1)
-    ).abs().mean([0, 1])
+    expected = (pred - truth).abs().mean(0) - 0.5 * (pred - pred.unsqueeze(1)).abs().mean([0, 1])
     assert_close(actual, expected)

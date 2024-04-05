@@ -30,9 +30,7 @@ class Jit_ELBO(ELBO):
             # build a closure for differentiable_loss
             superself = super()
 
-            @pyro.ops.jit.trace(
-                ignore_warnings=self.ignore_jit_warnings, jit_options=self.jit_options
-            )
+            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings, jit_options=self.jit_options)
             def differentiable_loss(*args, **kwargs):
                 kwargs.pop("_model_id")
                 kwargs.pop("_guide_id")

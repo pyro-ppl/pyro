@@ -118,9 +118,7 @@ def einsum_backward_sample(operands, sample1, sample2):
             yield x._pyro_backward, sample
             continue
         x_sample_dims = "".join(sorted(x_sample_dims))
-        x_sample = sample[
-            [sample._pyro_sample_dims.index(dim) for dim in x_sample_dims]
-        ]
+        x_sample = sample[[sample._pyro_sample_dims.index(dim) for dim in x_sample_dims]]
         x_sample._pyro_dims = sample._pyro_dims
         x_sample._pyro_sample_dims = x_sample_dims
         assert x_sample.dim() == len(x_sample._pyro_dims)

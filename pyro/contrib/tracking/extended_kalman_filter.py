@@ -124,9 +124,7 @@ class EKFState:
         pred_cov = F.mm(self._cov).mm(F.transpose(-1, -2)) + Q
 
         if destination_time is None and destination_frame_num is None:
-            raise ValueError(
-                "destination_time or destination_frame_num must be specified!"
-            )
+            raise ValueError("destination_time or destination_frame_num must be specified!")
 
         return EKFState(
             self._dynamic_model,
@@ -147,9 +145,7 @@ class EKFState:
         :return: Innovation mean and covariance of hypothetical update.
         :rtype: tuple(``torch.Tensor``, ``torch.Tensor``)
         """
-        assert (
-            self._time == measurement.time
-        ), "State time and measurement time must be aligned!"
+        assert self._time == measurement.time, "State time and measurement time must be aligned!"
 
         # Compute innovation.
         x_pv = self._dynamic_model.mean2pv(self._mean)
@@ -173,9 +169,7 @@ class EKFState:
         :return: Likelihood of hypothetical update.
         """
         dz, S = self.innovation(measurement)
-        return dist.MultivariateNormal(
-            torch.zeros(S.size(-1), dtype=S.dtype, device=S.device), S
-        ).log_prob(dz)
+        return dist.MultivariateNormal(torch.zeros(S.size(-1), dtype=S.dtype, device=S.device), S).log_prob(dz)
 
     def update(self, measurement):
         """
@@ -188,13 +182,9 @@ class EKFState:
         :returns: EKF State, Innovation mean and covariance.
         """
         if self._time is not None:
-            assert (
-                self._time == measurement.time
-            ), "State time and measurement time must be aligned!"
+            assert self._time == measurement.time, "State time and measurement time must be aligned!"
         if self._frame_num is not None:
-            assert (
-                self._frame_num == measurement.frame_num
-            ), "State time and measurement time must be aligned!"
+            assert self._frame_num == measurement.frame_num, "State time and measurement time must be aligned!"
 
         x = self._mean
         x_pv = self._dynamic_model.mean2pv(x)
@@ -220,8 +210,6 @@ class EKFState:
 
         pred_mean = x
         pred_cov = P
-        state = EKFState(
-            self._dynamic_model, pred_mean, pred_cov, self._time, self._frame_num
-        )
+        state = EKFState(self._dynamic_model, pred_mean, pred_cov, self._time, self._frame_num)
 
         return state, (dz, S)

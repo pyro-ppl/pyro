@@ -16,9 +16,7 @@ logger = logging.getLogger(__name__)
 TEST_EXAMPLES = []
 EXAMPLE_IDS = []
 
-ModelArgs = namedtuple(
-    "model_args", ["step_size", "num_steps", "q_i", "p_i", "q_f", "p_f", "prec"]
-)
+ModelArgs = namedtuple("model_args", ["step_size", "num_steps", "q_i", "p_i", "q_f", "p_f", "prec"])
 Example = namedtuple("test_case", ["model", "args"])
 
 
@@ -84,11 +82,7 @@ class CircularPlanetaryMotion:
 
     @staticmethod
     def energy(q, p):
-        return (
-            0.5 * p["x"] ** 2
-            + 0.5 * p["y"] ** 2
-            - 1.0 / torch.pow(q["x"] ** 2 + q["y"] ** 2, 0.5)
-        )
+        return 0.5 * p["x"] ** 2 + 0.5 * p["y"] ** 2 - 1.0 / torch.pow(q["x"] ** 2 + q["y"] ** 2, 0.5)
 
     @staticmethod
     def potential_fn(q):

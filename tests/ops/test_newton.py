@@ -60,9 +60,7 @@ def test_newton_step(batch_shape, trust_radius, dims):
     )
     actual_eye = torch.bmm(flat_cov, flat_hessian)
     expected_eye = torch.eye(dims).expand(actual_eye.shape)
-    assert_equal(
-        actual_eye, expected_eye, prec=1e-4, msg="bad covariance {}".format(actual_eye)
-    )
+    assert_equal(actual_eye, expected_eye, prec=1e-4, msg="bad covariance {}".format(actual_eye))
 
     # check gradients
     for i in itertools.product(*map(range, mode.shape)):
@@ -108,9 +106,7 @@ def test_newton_step_trust(trust_radius, dims):
     if trust_radius is None:
         assert ((x - x_updated).pow(2).sum(-1) > 1.0).any(), "test is too weak"
     else:
-        assert (
-            (x - x_updated).pow(2).sum(-1) <= 1e-8 + trust_radius**2
-        ).all(), "trust region violated"
+        assert ((x - x_updated).pow(2).sum(-1) <= 1e-8 + trust_radius**2).all(), "trust region violated"
 
 
 @pytest.mark.parametrize("trust_radius", [None, 0.1, 1.0, 10.0])

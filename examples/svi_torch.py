@@ -98,9 +98,7 @@ def main(args):
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith("1.9.0")
-    parser = argparse.ArgumentParser(
-        description="Using vanilla PyTorch to perform optimization in SVI"
-    )
+    parser = argparse.ArgumentParser(description="Using vanilla PyTorch to perform optimization in SVI")
     parser.add_argument("--size", default=10000, type=int)
     parser.add_argument("--batch-size", default=100, type=int)
     parser.add_argument("--learning-rate", default=0.01, type=float)

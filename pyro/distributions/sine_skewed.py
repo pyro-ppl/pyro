@@ -83,9 +83,7 @@ class SineSkewed(TorchDistribution):
     :param torch.tensor skewness: skewness of the distribution.
     """
 
-    arg_constraints = {
-        "skewness": constraints.independent(constraints.interval(-1.0, 1.0), 1)
-    }
+    arg_constraints = {"skewness": constraints.independent(constraints.interval(-1.0, 1.0), 1)}
 
     support = constraints.independent(constraints.real, 1)
 
@@ -104,44 +102,27 @@ class SineSkewed(TorchDistribution):
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
 
         if self._validate_args and base_dist.mean.device != skewness.device:
-            raise ValueError(
-                f"base_density: {base_dist.__class__.__name__} and SineSkewed "
-                f"must be on same device."
-            )
+            raise ValueError(f"base_density: {base_dist.__class__.__name__} and SineSkewed " f"must be on same device.")
 
     def __repr__(self):
         args_string = ", ".join(
             [
                 "{}: {}".format(
                     p,
-                    (
-                        getattr(self, p)
-                        if getattr(self, p).numel() == 1
-                        else getattr(self, p).size()
-                    ),
+                    (getattr(self, p) if getattr(self, p).numel() == 1 else getattr(self, p).size()),
                 )
                 for p in self.arg_constraints.keys()
             ]
         )
-        return (
-            self.__class__.__name__
-            + "("
-            + f"base_density: {str(self.base_dist)}, "
-            + args_string
-            + ")"
-        )
+        return self.__class__.__name__ + "(" + f"base_density: {str(self.base_dist)}, " + args_string + ")"
 
     def sample(self, sample_shape=torch.Size()):
         bd = self.base_dist
         ys = bd.sample(sample_shape)
-        u = Uniform(0.0, self.skewness.new_ones(())).sample(
-            sample_shape + self.batch_shape
-        )
+        u = Uniform(0.0, self.skewness.new_ones(())).sample(sample_shape + self.batch_shape)
 
         # Section 2.3 step 3 in [1]
-        mask = u <= 0.5 + 0.5 * (
-            self.skewness * torch.sin((ys - bd.mean) % (2 * pi))
-        ).sum(-1)
+        mask = u <= 0.5 + 0.5 * (self.skewness * torch.sin((ys - bd.mean) % (2 * pi))).sum(-1)
         mask = mask[..., None]
         samples = (torch.where(mask, ys, -ys + 2 * bd.mean) + pi) % (2 * pi) - pi
         return samples
@@ -151,11 +132,7 @@ class SineSkewed(TorchDistribution):
             self._validate_sample(value)
 
         # Eq. 2.1 in [1]
-        skew_prob = torch.log1p(
-            (self.skewness * torch.sin((value - self.base_dist.mean) % (2 * pi))).sum(
-                -1
-            )
-        )
+        skew_prob = torch.log1p((self.skewness * torch.sin((value - self.base_dist.mean) % (2 * pi))).sum(-1))
         return self.base_dist.log_prob(value) + skew_prob
 
     def expand(self, batch_shape, _instance=None):
@@ -164,8 +141,6 @@ class SineSkewed(TorchDistribution):
         base_dist = self.base_dist.expand(batch_shape)
         new.base_dist = base_dist
         new.skewness = self.skewness.expand(batch_shape + (-1,))
-        super(SineSkewed, new).__init__(
-            batch_shape, self.event_shape, validate_args=False
-        )
+        super(SineSkewed, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new

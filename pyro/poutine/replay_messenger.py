@@ -83,8 +83,6 @@ class ReplayMessenger(Messenger):
     def _pyro_param(self, msg: "Message") -> None:
         name = msg["name"]
         if self.params is not None and name in self.params:
-            assert hasattr(
-                self.params[name], "unconstrained"
-            ), "param {} must be constrained value".format(name)
+            assert hasattr(self.params[name], "unconstrained"), "param {} must be constrained value".format(name)
             msg["done"] = True
             msg["value"] = self.params[name]

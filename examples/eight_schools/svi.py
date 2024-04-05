@@ -46,9 +46,7 @@ def guide(data):
     m_mu_param = pyro.param("loc_mu", loc_mu)
     s_mu_param = pyro.param("scale_mu", scale_mu, constraint=constraints.positive)
     m_logtau_param = pyro.param("loc_logtau", loc_logtau)
-    s_logtau_param = pyro.param(
-        "scale_logtau", scale_logtau, constraint=constraints.positive
-    )
+    s_logtau_param = pyro.param("scale_logtau", scale_logtau, constraint=constraints.positive)
 
     # guide distributions
     dist_eta = dist.Normal(m_eta_param, s_eta_param)
@@ -83,12 +81,8 @@ def main(args):
 if __name__ == "__main__":
     assert pyro.__version__.startswith("1.9.0")
     parser = argparse.ArgumentParser(description="Eight Schools SVI")
-    parser.add_argument(
-        "--lr", type=float, default=0.01, help="learning rate (default: 0.01)"
-    )
-    parser.add_argument(
-        "--num-epochs", type=int, default=1000, help="number of epochs (default: 1000)"
-    )
+    parser.add_argument("--lr", type=float, default=0.01, help="learning rate (default: 0.01)")
+    parser.add_argument("--num-epochs", type=int, default=1000, help="number of epochs (default: 1000)")
     parser.add_argument("--jit", action="store_true", default=False)
     args = parser.parse_args()
 

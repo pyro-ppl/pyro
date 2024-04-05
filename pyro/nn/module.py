@@ -12,6 +12,7 @@ the :class:`PyroSample` struct::
     my_module.y = PyroSample(dist.Normal(0, 1))
 
 """
+
 import functools
 import inspect
 import warnings
@@ -20,9 +21,7 @@ import weakref
 try:
     from torch._jit_internal import _copy_to_script_wrapper
 except ImportError:
-    warnings.warn(
-        "Cannot find torch._jit_internal._copy_to_script_wrapper", ImportWarning
-    )
+    warnings.warn("Cannot find torch._jit_internal._copy_to_script_wrapper", ImportWarning)
 
     # Fall back to trivial decorator.
     def _copy_to_script_wrapper(fn):
@@ -127,9 +126,7 @@ class PyroParam(NamedTuple):
     event_dim: Optional[int] = None
 
     # Support use as a decorator.
-    def __get__(
-        self, obj: Optional["PyroModule"], obj_type: Type["PyroModule"]
-    ) -> "PyroParam":
+    def __get__(self, obj: Optional["PyroModule"], obj_type: Type["PyroModule"]) -> "PyroParam":
         assert issubclass(obj_type, PyroModule)
         if obj is None:
             return self
@@ -144,9 +141,7 @@ class PyroParam(NamedTuple):
         return value
 
     # Support decoration with optional kwargs, e.g. @PyroParam(event_dim=0).
-    def __call__(
-        self, init_value: Union[torch.Tensor, Callable[[], torch.Tensor]]
-    ) -> "PyroParam":
+    def __call__(self, init_value: Union[torch.Tensor, Callable[[], torch.Tensor]]) -> "PyroParam":
         assert self.init_value is None
         return PyroParam(init_value, self.constraint, self.event_dim)
 
@@ -183,16 +178,12 @@ class PyroSample:
         object.
     """
 
-    prior: Union[
-        "TorchDistributionMixin", Callable[["PyroModule"], "TorchDistributionMixin"]
-    ]
+    prior: Union["TorchDistributionMixin", Callable[["PyroModule"], "TorchDistributionMixin"]]
 
     def __post_init__(self) -> None:
         if not hasattr(self.prior, "sample"):  # if not a distribution
             assert 1 == sum(
-                1
-                for p in inspect.signature(self.prior).parameters.values()
-                if p.default is inspect.Parameter.empty
+                1 for p in inspect.signature(self.prior).parameters.values() if p.default is inspect.Parameter.empty
             ), "prior should take the single argument 'self'"
             object.__setattr__(self, "name", getattr(self.prior, "__name__", None))
             self.name: Optional[str]
@@ -204,9 +195,7 @@ class PyroSample:
                 self.prior.__qualname__ = ".".join(qualname)
 
     # Support use as a decorator.
-    def __get__(
-        self, obj: Optional["PyroModule"], obj_type: Type["PyroModule"]
-    ) -> "PyroSample":
+    def __get__(self, obj: Optional["PyroModule"], obj_type: Type["PyroModule"]) -> "PyroSample":
         assert issubclass(obj_type, PyroModule)
         if obj is None:
             return self
@@ -288,10 +277,7 @@ def _get_pyro_params(
     for name in module._parameters:
         if name.endswith("_unconstrained"):
             constrained_name = name[: -len("_unconstrained")]
-            if (
-                isinstance(module, PyroModule)
-                and constrained_name in module._pyro_params
-            ):
+            if isinstance(module, PyroModule) and constrained_name in module._pyro_params:
                 yield constrained_name, getattr(module, constrained_name)
                 continue
         yield name, module._parameters[name]
@@ -314,9 +300,7 @@ class _PyroModuleMeta(type):
             return PyroModule
         if Module in _PyroModuleMeta._pyro_mixin_cache:
             return _PyroModuleMeta._pyro_mixin_cache[Module]
-        bases = [
-            PyroModule[b] for b in Module.__bases__ if issubclass(b, torch.nn.Module)
-        ]
+        bases = [PyroModule[b] for b in Module.__bases__ if issubclass(b, torch.nn.Module)]
 
         class result(Module, *bases):  # type: ignore[valid-type, misc]
             # Unpickling helper to load an object of type PyroModule[Module].
@@ -466,9 +450,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
     def __init__(self, name: str = "") -> None:
         self._pyro_name = name
         self._pyro_context = _Context()  # shared among sub-PyroModules
-        self._pyro_params: OrderedDict[
-            str, Tuple[constraints.Constraint, Optional[int]]
-        ] = OrderedDict()
+        self._pyro_params: OrderedDict[str, Tuple[constraints.Constraint, Optional[int]]] = OrderedDict()
         self._pyro_samples: OrderedDict[str, PyroSample] = OrderedDict()
         super().__init__()
 
@@ -477,14 +459,10 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         Adds a child module to the current module.
         """
         if isinstance(module, PyroModule):
-            module._pyro_set_supermodule(
-                _make_name(self._pyro_name, name), self._pyro_context
-            )
+            module._pyro_set_supermodule(_make_name(self._pyro_name, name), self._pyro_context)
         super().add_module(name, module)
 
-    def named_pyro_params(
-        self, prefix: str = "", recurse: bool = True
-    ) -> Iterator[Tuple[str, torch.nn.Parameter]]:
+    def named_pyro_params(self, prefix: str = "", recurse: bool = True) -> Iterator[Tuple[str, torch.nn.Parameter]]:
         """
         Returns an iterator over PyroModule parameters, yielding both the
         name of the parameter as well as the parameter itself.
@@ -506,9 +484,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         self._pyro_context = context
         for key, value in self._modules.items():
             if isinstance(value, PyroModule):
-                assert (
-                    not value._pyro_context.used
-                ), "submodule {} has executed outside of supermodule".format(name)
+                assert not value._pyro_context.used, "submodule {} has executed outside of supermodule".format(name)
                 value._pyro_set_supermodule(_make_name(name, key), context)
 
     def _pyro_get_fullname(self, name: str) -> str:
@@ -518,11 +494,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         with self._pyro_context:
             result = super().__call__(*args, **kwargs)
-        if (
-            pyro.settings.get("validate_poutine")
-            and not self._pyro_context.active
-            and _is_module_local_param_enabled()
-        ):
+        if pyro.settings.get("validate_poutine") and not self._pyro_context.active and _is_module_local_param_enabled():
             self._check_module_local_param_usage()
         return result
 
@@ -548,26 +520,15 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 if self._pyro_context.active and not _is_module_local_param_enabled():
                     fullname = self._pyro_get_fullname(name)
                     if fullname in _PYRO_PARAM_STORE:
-                        if (
-                            _PYRO_PARAM_STORE._params[fullname]
-                            is not unconstrained_value
-                        ):
+                        if _PYRO_PARAM_STORE._params[fullname] is not unconstrained_value:
                             # Update PyroModule <--- ParamStore.
                             unconstrained_value = _PYRO_PARAM_STORE._params[fullname]
                             if not isinstance(unconstrained_value, torch.nn.Parameter):
                                 # Update PyroModule ---> ParamStore (type only; data is preserved).
-                                unconstrained_value = torch.nn.Parameter(
-                                    unconstrained_value
-                                )
-                                _PYRO_PARAM_STORE._params[fullname] = (
-                                    unconstrained_value
-                                )
-                                _PYRO_PARAM_STORE._param_to_name[
-                                    unconstrained_value
-                                ] = fullname
-                            super().__setattr__(
-                                name + "_unconstrained", unconstrained_value
-                            )
+                                unconstrained_value = torch.nn.Parameter(unconstrained_value)
+                                _PYRO_PARAM_STORE._params[fullname] = unconstrained_value
+                                _PYRO_PARAM_STORE._param_to_name[unconstrained_value] = fullname
+                            super().__setattr__(name + "_unconstrained", unconstrained_value)
                     else:
                         # Update PyroModule ---> ParamStore.
                         _PYRO_PARAM_STORE._constraints[fullname] = constraint
@@ -580,9 +541,9 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                     fullname = self._pyro_get_fullname(name)
                     constrained_value = transform_to(constraint)(unconstrained_value)
                     constrained_value.unconstrained = weakref.ref(unconstrained_value)
-                    return pyro.poutine.runtime.effectful(type="param")(
-                        lambda *_, **__: constrained_value
-                    )(fullname, event_dim=event_dim, name=fullname)
+                    return pyro.poutine.runtime.effectful(type="param")(lambda *_, **__: constrained_value)(
+                        fullname, event_dim=event_dim, name=fullname
+                    )
                 else:  # Cannot determine supermodule and hence cannot compute fullname.
                     constrained_value = transform_to(constraint)(unconstrained_value)
                     constrained_value.unconstrained = weakref.ref(unconstrained_value)
@@ -611,26 +572,20 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         result = super().__getattr__(name)
 
         # Regular nn.Parameters trigger pyro.param statements.
-        if isinstance(result, torch.nn.Parameter) and not name.endswith(
-            "_unconstrained"
-        ):
+        if isinstance(result, torch.nn.Parameter) and not name.endswith("_unconstrained"):
             if self._pyro_context.active and not _is_module_local_param_enabled():
                 pyro.param(self._pyro_get_fullname(name), result)
             elif self._pyro_context.active and _is_module_local_param_enabled():
                 # fake param statement to ensure any handlers of pyro.param are applied,
                 # even though we don't use the contents of the local parameter store
                 fullname = self._pyro_get_fullname(name)
-                pyro.poutine.runtime.effectful(type="param")(lambda *_, **__: result)(
-                    fullname, result, name=fullname
-                )
+                pyro.poutine.runtime.effectful(type="param")(lambda *_, **__: result)(fullname, result, name=fullname)
 
         if isinstance(result, torch.nn.Module):
             if isinstance(result, PyroModule):
                 if not result._pyro_name:
                     # Update sub-PyroModules that were converted from nn.Modules in-place.
-                    result._pyro_set_supermodule(
-                        _make_name(self._pyro_name, name), self._pyro_context
-                    )
+                    result._pyro_set_supermodule(_make_name(self._pyro_name, name), self._pyro_context)
             else:
                 # Regular nn.Modules trigger pyro.module statements.
                 if self._pyro_context.active and not _is_module_local_param_enabled():
@@ -640,12 +595,10 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                     # even though we don't use the contents of the local parameter store
                     fullname_module = self._pyro_get_fullname(name)
                     for param_name, param_value in result.named_parameters():
-                        fullname_param = pyro.params.param_store.param_with_module_name(
-                            fullname_module, param_name
+                        fullname_param = pyro.params.param_store.param_with_module_name(fullname_module, param_name)
+                        pyro.poutine.runtime.effectful(type="param")(lambda *_, **__: param_value)(
+                            fullname_param, param_value, name=fullname_param
                         )
-                        pyro.poutine.runtime.effectful(type="param")(
-                            lambda *_, **__: param_value
-                        )(fullname_param, param_value, name=fullname_param)
 
         return result
 
@@ -693,11 +646,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 fullname = self._pyro_get_fullname(name)
                 constrained_value = detach_provenance(
                     pyro.poutine.runtime.effectful(type="param")(
-                        lambda *_, **__: (
-                            constrained_value()
-                            if callable(constrained_value)
-                            else constrained_value
-                        )
+                        lambda *_, **__: (constrained_value() if callable(constrained_value) else constrained_value)
                     )(
                         fullname,
                         constraint=constraint,
@@ -730,9 +679,9 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 # even though we don't use the contents of the local parameter store
                 fullname = self._pyro_get_fullname(name)
                 value = detach_provenance(
-                    pyro.poutine.runtime.effectful(type="param")(
-                        lambda *_, **__: value
-                    )(fullname, value, constraint=constraints.real, name=fullname)
+                    pyro.poutine.runtime.effectful(type="param")(lambda *_, **__: value)(
+                        fullname, value, constraint=constraints.real, name=fullname
+                    )
                 )
             super().__setattr__(name, value)
             return
@@ -743,9 +692,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 constraint, event_dim = self._pyro_params[name]
                 unconstrained_value = getattr(self, name + "_unconstrained")
                 with torch.no_grad():
-                    unconstrained_value.data = transform_to(constraint).inv(
-                        value.detach()
-                    )
+                    unconstrained_value.data = transform_to(constraint).inv(value.detach())
                 return
 
         if isinstance(value, PyroSample):
@@ -802,9 +749,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         return getattr(super(), "__getstate__", self.__dict__.copy)()
 
 
-def pyro_method(
-    fn: Callable[Concatenate[_PyroModule, _P], _T]
-) -> Callable[Concatenate[_PyroModule, _P], _T]:
+def pyro_method(fn: Callable[Concatenate[_PyroModule, _P], _T]) -> Callable[Concatenate[_PyroModule, _P], _T]:
     """
     Decorator for top-level methods of a :class:`PyroModule` to enable pyro
     effects and cache ``pyro.sample`` statements.
@@ -934,9 +879,7 @@ class PyroModuleList(torch.nn.ModuleList, PyroModule):
         super().__init__(modules)
 
     @_copy_to_script_wrapper
-    def __getitem__(
-        self, idx: Union[int, slice]
-    ) -> Union[torch.nn.Module, "PyroModuleList"]:
+    def __getitem__(self, idx: Union[int, slice]) -> Union[torch.nn.Module, "PyroModuleList"]:
         if isinstance(idx, slice):
             # return self.__class__(list(self._modules.values())[idx])
             return torch.nn.ModuleList(list(self._modules.values())[idx])

@@ -45,9 +45,7 @@ class HorovodOptimizer(PyroOptim):
             )
             return hvd_optim  # type: ignore
 
-        super().__init__(
-            optim_constructor, pyro_optim.pt_optim_args, pyro_optim.pt_clip_args
-        )
+        super().__init__(optim_constructor, pyro_optim.pt_optim_args, pyro_optim.pt_clip_args)
 
     def __call__(self, params: Union[List, ValuesView], *args, **kwargs) -> None:
         # Sort by name to ensure deterministic processing order.

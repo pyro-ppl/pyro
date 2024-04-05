@@ -34,9 +34,7 @@ def einsum(equation, *operands):
     inputs, output = equation.split("->")
     any_requires_backward = any(hasattr(x, "_pyro_backward") for x in operands)
 
-    contract_dims = "".join(
-        sorted(set().union(*(x._pyro_dims for x in operands)) - set(output))
-    )
+    contract_dims = "".join(sorted(set().union(*(x._pyro_dims for x in operands)) - set(output)))
     dims = output + contract_dims
     result = reduce(operator.add, packed.broadcast_all(*operands, dims=dims))
     argmax = None  # work around lack of pytorch support for zero-sized tensors

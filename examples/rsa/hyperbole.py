@@ -42,9 +42,7 @@ def approx(x, b=None):
 
 def price_prior():
     values = [50, 51, 500, 501, 1000, 1001, 5000, 5001, 10000, 10001]
-    probs = torch.tensor(
-        [0.4205, 0.3865, 0.0533, 0.0538, 0.0223, 0.0211, 0.0112, 0.0111, 0.0083, 0.0120]
-    )
+    probs = torch.tensor([0.4205, 0.3865, 0.0533, 0.0538, 0.0223, 0.0211, 0.0112, 0.0111, 0.0083, 0.0120])
     ix = pyro.sample("price", dist.Categorical(probs=probs))
     return values[ix]
 
@@ -74,17 +72,13 @@ qud_fns = {
     "valence": lambda state: State(price=None, valence=state.valence),
     "priceValence": lambda state: State(price=state.price, valence=state.valence),
     "approxPrice": lambda state: State(price=approx(state.price), valence=None),
-    "approxPriceValence": lambda state: State(
-        price=approx(state.price), valence=state.valence
-    ),
+    "approxPriceValence": lambda state: State(price=approx(state.price), valence=state.valence),
 }
 
 
 def qud_prior():
     values = ["price", "valence", "priceValence", "approxPrice", "approxPriceValence"]
-    ix = pyro.sample(
-        "qud", dist.Categorical(probs=torch.ones(len(values)) / len(values))
-    )
+    ix = pyro.sample("qud", dist.Categorical(probs=torch.ones(len(values)) / len(values)))
     return values[ix]
 
 
@@ -95,9 +89,7 @@ def utterance_cost(numberUtt):
 
 def utterance_prior():
     utterances = [50, 51, 500, 501, 1000, 1001, 5000, 5001, 10000, 10001]
-    utteranceLogits = -torch.tensor(
-        list(map(utterance_cost, utterances)), dtype=torch.float64
-    )
+    utteranceLogits = -torch.tensor(list(map(utterance_cost, utterances)), dtype=torch.float64)
     ix = pyro.sample("utterance", dist.Categorical(logits=utteranceLogits))
     return utterances[ix]
 
@@ -207,12 +199,7 @@ def main(args):
     pragmatic_marginal = pragmatic_listener(args.price)
 
     pd, pv = pragmatic_marginal._dist_and_values()
-    print(
-        [
-            (s, pragmatic_marginal.log_prob(s).exp().item())
-            for s in pragmatic_marginal.enumerate_support()
-        ]
-    )
+    print([(s, pragmatic_marginal.log_prob(s).exp().item()) for s in pragmatic_marginal.enumerate_support()])
 
 
 if __name__ == "__main__":

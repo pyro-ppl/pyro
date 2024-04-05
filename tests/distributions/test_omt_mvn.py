@@ -24,14 +24,10 @@ def analytic_grad(L11=1.0, L22=1.0, L21=1.0, omega1=1.0, omega2=1.0):
 @pytest.mark.parametrize("L21", [0.4, 1.1])
 @pytest.mark.parametrize("L11", [0.6])
 @pytest.mark.parametrize("omega1", [0.5])
-@pytest.mark.parametrize(
-    "sample_shape", [torch.Size([1000, 2000]), torch.Size([200000])]
-)
+@pytest.mark.parametrize("sample_shape", [torch.Size([1000, 2000]), torch.Size([200000])])
 @pytest.mark.parametrize("k", [1])
 @pytest.mark.parametrize("mvn_dist", ["OMTMultivariateNormal", "AVFMultivariateNormal"])
-def test_mean_gradient(
-    mvn_dist, k, sample_shape, L21, omega1, L11, L22=0.8, L33=0.9, omega2=0.75
-):
+def test_mean_gradient(mvn_dist, k, sample_shape, L21, omega1, L11, L22=0.8, L33=0.9, omega2=0.75):
     if mvn_dist == "OMTMultivariateNormal" and k > 1:
         return
 
@@ -59,8 +55,7 @@ def test_mean_gradient(
         analytic,
         computed_grad,
         prec=0.005,
-        msg="bad cholesky grad for %s (expected %.5f, got %.5f)"
-        % (mvn_dist, analytic, computed_grad),
+        msg="bad cholesky grad for %s (expected %.5f, got %.5f)" % (mvn_dist, analytic, computed_grad),
     )
 
 
@@ -70,9 +65,7 @@ def test_mean_gradient(
 @pytest.mark.parametrize("omega1", [0.5, 0.9])
 @pytest.mark.parametrize("k", [3])
 @pytest.mark.parametrize("mvn_dist", ["OMTMultivariateNormal", "AVFMultivariateNormal"])
-def test_mean_single_gradient(
-    mvn_dist, k, L21, omega1, L11, L22=0.8, L33=0.9, omega2=0.75, n_samples=20000
-):
+def test_mean_single_gradient(mvn_dist, k, L21, omega1, L11, L22=0.8, L33=0.9, omega2=0.75, n_samples=20000):
     omega = torch.tensor([omega1, omega2, 0.0])
     loc = torch.zeros(3, requires_grad=True)
     zero_vec = [0.0, 0.0, 0.0]
@@ -105,8 +98,7 @@ def test_mean_single_gradient(
         analytic,
         computed_grad,
         prec=0.01,
-        msg="bad cholesky grad for %s (expected %.5f, got %.5f)"
-        % (mvn_dist, analytic, computed_grad),
+        msg="bad cholesky grad for %s (expected %.5f, got %.5f)" % (mvn_dist, analytic, computed_grad),
     )
 
 

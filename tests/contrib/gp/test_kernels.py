@@ -96,9 +96,7 @@ def test_kernel_forward(kernel, X, Z, K_sum):
     if K_sum is not None:
         assert_equal(K.sum().item(), K_sum)
     assert_equal(kernel(X).diag(), kernel(X, diag=True))
-    if not isinstance(
-        kernel, WhiteNoise
-    ):  # WhiteNoise avoids computing a delta function by assuming X != Z
+    if not isinstance(kernel, WhiteNoise):  # WhiteNoise avoids computing a delta function by assuming X != Z
         assert_equal(kernel(X), kernel(X, X))
     if Z is not None:
         assert_equal(kernel(X, Z), kernel(Z, X).t())

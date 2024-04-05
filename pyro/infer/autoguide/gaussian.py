@@ -141,9 +141,7 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
         # Trace model dependencies.
         model = self._original_model[0]
         self._original_model = None
-        self.dependencies = poutine.block(get_dependencies)(model, args, kwargs)[
-            "prior_dependencies"
-        ]
+        self.dependencies = poutine.block(get_dependencies)(model, args, kwargs)["prior_dependencies"]
 
         # Eliminate observations with no upstream latents.
         for d, upstreams in list(self.dependencies.items()):
@@ -164,15 +162,10 @@ class AutoGaussian(AutoGuide, metaclass=AutoGaussianMeta):
             self._factors[d] = self._compress_site(site)
             plates = frozenset(site["cond_indep_stack"])
             if site["fn"].batch_shape != _plates_to_shape(plates):
-                raise ValueError(
-                    f"Shape mismatch at site '{d}'. "
-                    "Are you missing a pyro.plate() or .to_event()?"
-                )
+                raise ValueError(f"Shape mismatch at site '{d}'. " "Are you missing a pyro.plate() or .to_event()?")
             if site["is_observed"]:
                 # Break irrelevant observation plates.
-                plates &= frozenset().union(
-                    *(self._plates[u] for u in self.dependencies[d] if u != d)
-                )
+                plates &= frozenset().union(*(self._plates[u] for u in self.dependencies[d] if u != d))
             self._plates[d] = plates
 
             # Create location-scale parameters, one per latent variable.
@@ -342,9 +335,7 @@ class AutoGaussianDense(AutoGaussian):
             index2 = torch.zeros(precision_shape, dtype=torch.long)
 
             # Collect local offsets and create index1 for info_vec blockwise.
-            upstreams = [
-                u for u in self.dependencies[d] if not self._factors[u]["is_observed"]
-            ]
+            upstreams = [u for u in self.dependencies[d] if not self._factors[u]["is_observed"]]
             local_offsets = {}
             pos = 0
             for u in upstreams:
@@ -375,9 +366,9 @@ class AutoGaussianDense(AutoGaussian):
                 u_stop = u_start + u_index.size(-1)
                 v_start = local_offsets[v]
                 v_stop = v_start + v_index.size(-1)
-                index2[..., u_start:u_stop, v_start:v_stop] = (
-                    self._dense_size * u_index.unsqueeze(-1) + v_index.unsqueeze(-2)
-                )
+                index2[..., u_start:u_stop, v_start:v_stop] = self._dense_size * u_index.unsqueeze(
+                    -1
+                ) + v_index.unsqueeze(-2)
 
             self._dense_scatter[d] = index1.reshape(-1), index2.reshape(-1)
 
@@ -388,9 +379,7 @@ class AutoGaussianDense(AutoGaussian):
             flat_samples = mvn.mean
         elif temperature == 1:
             # Sample from a dense joint Gaussian over flattened variables.
-            flat_samples = pyro.sample(
-                f"_{self._pyro_name}_latent", mvn, infer={"is_auxiliary": True}
-            )
+            flat_samples = pyro.sample(f"_{self._pyro_name}_latent", mvn, infer={"is_auxiliary": True})
         else:
             raise NotImplementedError(f"Invalid temperature: {temperature}")
         samples = self._dense_unflatten(flat_samples)
@@ -406,9 +395,7 @@ class AutoGaussianDense(AutoGaussian):
             flat_sample = flat_samples[..., pos:end]
             pos = end
             # Assumes sample shapes are left of batch shapes.
-            samples[d] = flat_sample.reshape(
-                torch.broadcast_shapes(sample_shape, batch_shape) + event_shape
-            )
+            samples[d] = flat_sample.reshape(torch.broadcast_shapes(sample_shape, batch_shape) + event_shape)
         return samples
 
     def _dense_flatten(self, samples: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -434,9 +421,7 @@ class AutoGaussianDense(AutoGaussian):
         info_vec = flat_info_vec
         precision = flat_precision.reshape(self._dense_size, self._dense_size)
         scale_tril = _precision_to_scale_tril(precision)
-        loc = (
-            scale_tril @ (scale_tril.transpose(-1, -2) @ info_vec.unsqueeze(-1))
-        ).squeeze(-1)
+        loc = (scale_tril @ (scale_tril.transpose(-1, -2) @ info_vec.unsqueeze(-1))).squeeze(-1)
         return dist.MultivariateNormal(loc, scale_tril=scale_tril)
 
 
@@ -502,9 +487,7 @@ class AutoGaussianFunsor(AutoGaussian):
         plate_to_dim.update({f.name: f.dim for f in particle_plates})
         factors = {}
         for d, inputs in self._funsor_factor_inputs.items():
-            batch_shape = torch.Size(
-                p.size for p in sorted(self._plates[d], key=lambda p: p.dim)
-            )
+            batch_shape = torch.Size(p.size for p in sorted(self._plates[d], key=lambda p: p.dim))
             white_vec = deep_getattr(self.white_vecs, d)
             prec_sqrt = deep_getattr(self.prec_sqrts, d)
             factors[d] = funsor.gaussian.Gaussian(
@@ -544,9 +527,7 @@ class AutoGaussianFunsor(AutoGaussian):
         if am_i_wrapped() and poutine.get_mask() is not False:
             log_prob = funsor.to_data(log_prob, name_to_dim=plate_to_dim)
             pyro.factor(f"_{self._pyro_name}_latent", log_prob, has_rsample=True)
-        samples = {
-            k: funsor.to_data(v, name_to_dim=plate_to_dim) for k, v in samples.items()
-        }
+        samples = {k: funsor.to_data(v, name_to_dim=plate_to_dim) for k, v in samples.items()}
         return samples
 
 
@@ -554,9 +535,7 @@ def _precision_to_scale_tril(P):
     # Ref: https://nbviewer.jupyter.org/gist/fehiepsi/5ef8e09e61604f10607380467eb82006#Precision-to-scale_tril
     Lf = torch.linalg.cholesky(torch.flip(P, (-2, -1)))
     L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
-    L = torch.linalg.solve_triangular(
-        L_inv, torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), upper=False
-    )
+    L = torch.linalg.solve_triangular(L_inv, torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), upper=False)
     return L
 
 
@@ -617,8 +596,7 @@ def _import_funsor():
         import funsor
     except ImportError as e:
         raise ImportError(
-            'AutoGaussian(..., backend="funsor") requires funsor. '
-            "Try installing via: pip install pyro-ppl[funsor]"
+            'AutoGaussian(..., backend="funsor") requires funsor. ' "Try installing via: pip install pyro-ppl[funsor]"
         ) from e
     funsor.set_backend("torch")
     return funsor

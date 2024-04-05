@@ -152,9 +152,7 @@ class MatrixExponential(ConditionedMatrixExponential, TransformModule):
     bijective = True
 
     def __init__(self, input_dim, iterations=8, normalization="none", bound=None):
-        super().__init__(
-            iterations=iterations, normalization=normalization, bound=bound
-        )
+        super().__init__(iterations=iterations, normalization=normalization, bound=bound)
 
         self.weights = nn.Parameter(torch.Tensor(input_dim, input_dim))
         self.reset_parameters()
@@ -284,9 +282,7 @@ def matrix_exponential(input_dim, iterations=8, normalization="none", bound=None
 
     """
 
-    return MatrixExponential(
-        input_dim, iterations=iterations, normalization=normalization, bound=bound
-    )
+    return MatrixExponential(input_dim, iterations=iterations, normalization=normalization, bound=bound)
 
 
 def conditional_matrix_exponential(
@@ -329,6 +325,4 @@ def conditional_matrix_exponential(
     if hidden_dims is None:
         hidden_dims = [input_dim * 10, input_dim * 10]
     nn = DenseNN(context_dim, hidden_dims, param_dims=[input_dim * input_dim])
-    return ConditionalMatrixExponential(
-        input_dim, nn, iterations=iterations, normalization=normalization, bound=bound
-    )
+    return ConditionalMatrixExponential(input_dim, nn, iterations=iterations, normalization=normalization, bound=bound)

@@ -158,9 +158,7 @@ class AutoNormalMessenger(AutoMessenger):
         self._init_scale = init_scale
         self._computing_median = False
 
-    def get_posterior(
-        self, name: str, prior: Distribution
-    ) -> Union[Distribution, torch.Tensor]:
+    def get_posterior(self, name: str, prior: Distribution) -> Union[Distribution, torch.Tensor]:
         if self._computing_median:
             return self._get_posterior_median(name, prior)
 
@@ -264,9 +262,7 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
         self._hierarchical_sites = hierarchical_sites
         self._computing_median = False
 
-    def get_posterior(
-        self, name: str, prior: Distribution
-    ) -> Union[Distribution, torch.Tensor]:
+    def get_posterior(self, name: str, prior: Distribution) -> Union[Distribution, torch.Tensor]:
         if self._computing_median:
             return self._get_posterior_median(name, prior)
 
@@ -411,18 +407,12 @@ class AutoRegressiveMessenger(AutoMessenger):
         self.init_loc_fn = init_loc_fn
         self._init_scale = init_scale
 
-    def get_posterior(
-        self, name: str, prior: Distribution
-    ) -> Union[Distribution, torch.Tensor]:
+    def get_posterior(self, name: str, prior: Distribution) -> Union[Distribution, torch.Tensor]:
         with helpful_support_errors({"name": name, "fn": prior}):
             transform = biject_to(prior.support)
         loc, scale = self._get_params(name, prior)
-        affine = dist.transforms.AffineTransform(
-            loc, scale, event_dim=transform.domain.event_dim, cache_size=1
-        )
-        posterior = dist.TransformedDistribution(
-            prior, [transform.inv.with_cache(), affine, transform.with_cache()]
-        )
+        affine = dist.transforms.AffineTransform(loc, scale, event_dim=transform.domain.event_dim, cache_size=1)
+        posterior = dist.TransformedDistribution(prior, [transform.inv.with_cache(), affine, transform.with_cache()])
         return posterior
 
     def _get_params(self, name: str, prior: Distribution):

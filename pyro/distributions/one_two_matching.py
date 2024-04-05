@@ -159,9 +159,7 @@ class OneTwoMatching(TorchDistribution):
             return d[sample]
 
         if sample_shape:
-            return torch.stack(
-                [self.sample(sample_shape[1:]) for _ in range(sample_shape[0])]
-            )
+            return torch.stack([self.sample(sample_shape[1:]) for _ in range(sample_shape[0])])
         # TODO initialize via .mode(), then perform a small number of MCMC steps
         # https://www.cc.gatech.edu/~vigoda/Permanent.pdf
         # https://papers.nips.cc/paper/2012/file/4c27cea8526af8cfee3be5e183ac9605-Paper.pdf
@@ -181,9 +179,7 @@ def enumerate_one_two_matchings(num_destins):
     num_sources = num_destins * 2
     subproblem = enumerate_one_two_matchings(num_destins - 1)
     subsize = subproblem.size(0)
-    result = torch.empty(
-        subsize * num_sources * (num_sources - 1) // 2, num_sources, dtype=torch.long
-    )
+    result = torch.empty(subsize * num_sources * (num_sources - 1) // 2, num_sources, dtype=torch.long)
 
     # Iterate over pairs of sources s0<s1 matching the last destination d.
     d = num_destins - 1

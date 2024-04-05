@@ -27,12 +27,8 @@ logger = logging.getLogger(__name__)
 def test_iteration():
     def testing():
         for i in pyro.markov(range(5)):
-            v1 = pyro.to_data(
-                Tensor(torch.ones(2), OrderedDict([(str(i), funsor.Bint[2])]), "real")
-            )
-            v2 = pyro.to_data(
-                Tensor(torch.zeros(2), OrderedDict([("a", funsor.Bint[2])]), "real")
-            )
+            v1 = pyro.to_data(Tensor(torch.ones(2), OrderedDict([(str(i), funsor.Bint[2])]), "real"))
+            v2 = pyro.to_data(Tensor(torch.zeros(2), OrderedDict([("a", funsor.Bint[2])]), "real"))
             fv1 = pyro.to_funsor(v1, funsor.Real)
             fv2 = pyro.to_funsor(v2, funsor.Real)
             print(i, v1.shape)  # shapes should alternate
@@ -52,18 +48,12 @@ def test_iteration():
 def test_nesting():
     def testing():
         with pyro.markov():
-            v1 = pyro.to_data(
-                Tensor(torch.ones(2), OrderedDict([(str(1), funsor.Bint[2])]), "real")
-            )
+            v1 = pyro.to_data(Tensor(torch.ones(2), OrderedDict([(str(1), funsor.Bint[2])]), "real"))
             print(1, v1.shape)  # shapes should alternate
             assert v1.shape == (2,)
 
             with pyro.markov():
-                v2 = pyro.to_data(
-                    Tensor(
-                        torch.ones(2), OrderedDict([(str(2), funsor.Bint[2])]), "real"
-                    )
-                )
+                v2 = pyro.to_data(Tensor(torch.ones(2), OrderedDict([(str(2), funsor.Bint[2])]), "real"))
                 print(2, v2.shape)  # shapes should alternate
                 assert v2.shape == (2, 1)
 
@@ -98,9 +88,7 @@ def test_staggered():
     def testing():
         for i in pyro.markov(range(12)):
             if i % 4 == 0:
-                v2 = pyro.to_data(
-                    Tensor(torch.zeros(2), OrderedDict([("a", funsor.Bint[2])]), "real")
-                )
+                v2 = pyro.to_data(Tensor(torch.zeros(2), OrderedDict([("a", funsor.Bint[2])]), "real"))
                 fv2 = pyro.to_funsor(v2, funsor.Real)
                 assert v2.shape == (2,)
                 print("a", v2.shape)
@@ -114,9 +102,7 @@ def test_fresh_inputs_to_funsor():
     def testing():
         x = pyro.to_funsor(torch.tensor([0.0, 1.0]), funsor.Real, dim_to_name={-1: "x"})
         assert set(x.inputs) == {"x"}
-        px = pyro.to_funsor(
-            torch.ones(2, 3), funsor.Real, dim_to_name={-2: "x", -1: "y"}
-        )
+        px = pyro.to_funsor(torch.ones(2, 3), funsor.Real, dim_to_name={-2: "x", -1: "y"})
         assert px.inputs["x"].dtype == 2 and px.inputs["y"].dtype == 3
 
     with pyro_backend("contrib.funsor"), NamedMessenger():

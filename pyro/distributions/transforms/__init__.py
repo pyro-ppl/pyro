@@ -118,9 +118,7 @@ def _transform_to_sphere(constraint):
 @biject_to.register(constraints.corr_matrix)
 @transform_to.register(constraints.corr_matrix)
 def _transform_to_corr_matrix(constraint):
-    return ComposeTransform(
-        [CorrCholeskyTransform(), CorrMatrixCholeskyTransform().inv]
-    )
+    return ComposeTransform([CorrCholeskyTransform(), CorrMatrixCholeskyTransform().inv])
 
 
 @biject_to.register(constraints.ordered_vector)

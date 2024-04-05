@@ -67,9 +67,7 @@ def make_lfire_classifier(n_theta_samples):
     def lfire_classifier(design, trace, observation_labels, target_labels):
         y_dict = {l: trace.nodes[l]["value"] for l in observation_labels}
         y = torch.cat(list(y_dict.values()), dim=-1)
-        a, b = pyro.param("a", torch.zeros(n_theta_samples)), pyro.param(
-            "b", torch.zeros(n_theta_samples)
-        )
+        a, b = pyro.param("a", torch.zeros(n_theta_samples)), pyro.param("b", torch.zeros(n_theta_samples))
 
         return a + b * y
 
@@ -152,9 +150,7 @@ def test_marginal_finite_space_model(finite_space_model, one_point_design, true_
     assert_equal(estimated_eig, true_eig, prec=1e-2)
 
 
-def test_marginal_likelihood_finite_space_model(
-    finite_space_model, one_point_design, true_eig
-):
+def test_marginal_likelihood_finite_space_model(finite_space_model, one_point_design, true_eig):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
     # Pre-train (large learning rate)
@@ -186,8 +182,7 @@ def test_marginal_likelihood_finite_space_model(
 
 
 @pytest.mark.xfail(
-    reason="Bernoullis are not reparametrizable and current VNMC implementation "
-    "assumes reparametrization"
+    reason="Bernoullis are not reparametrizable and current VNMC implementation " "assumes reparametrization"
 )
 def test_vnmc_finite_space_model(finite_space_model, one_point_design, true_eig):
     pyro.set_rng_seed(42)
@@ -221,9 +216,7 @@ def test_vnmc_finite_space_model(finite_space_model, one_point_design, true_eig)
 def test_nmc_eig_finite_space_model(finite_space_model, one_point_design, true_eig):
     pyro.set_rng_seed(42)
     pyro.clear_param_store()
-    estimated_eig = nmc_eig(
-        finite_space_model, one_point_design, "y", "theta", M=40, N=40 * 40
-    )
+    estimated_eig = nmc_eig(finite_space_model, one_point_design, "y", "theta", M=40, N=40 * 40)
     assert_equal(estimated_eig, true_eig, prec=1e-2)
 
 

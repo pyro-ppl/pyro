@@ -67,13 +67,9 @@ class GPRegression(GPModel):
     """
 
     def __init__(self, X, y, kernel, noise=None, mean_function=None, jitter=1e-6):
-        assert isinstance(
-            X, torch.Tensor
-        ), "X needs to be a torch Tensor instead of a {}".format(type(X))
+        assert isinstance(X, torch.Tensor), "X needs to be a torch Tensor instead of a {}".format(type(X))
         if y is not None:
-            assert isinstance(
-                y, torch.Tensor
-            ), "y needs to be a torch Tensor instead of a {}".format(type(y))
+            assert isinstance(y, torch.Tensor), "y needs to be a torch Tensor instead of a {}".format(type(y))
         super().__init__(X, y, kernel, mean_function, jitter)
 
         noise = self.X.new_tensor(1.0) if noise is None else noise
@@ -96,9 +92,7 @@ class GPRegression(GPModel):
         else:
             return pyro.sample(
                 self._pyro_get_fullname("y"),
-                dist.MultivariateNormal(f_loc, scale_tril=Lff)
-                .expand_by(self.y.shape[:-1])
-                .to_event(self.y.dim() - 1),
+                dist.MultivariateNormal(f_loc, scale_tril=Lff).expand_by(self.y.shape[:-1]).to_event(self.y.dim() - 1),
                 obs=self.y,
             )
 
@@ -201,15 +195,11 @@ class GPRegression(GPModel):
             y_residual = y - self.mean_function(X)
 
             # Compute conditional mean and variance
-            loc, cov = conditional(
-                xnew, X, self.kernel, y_residual, None, Lff, False, jitter=self.jitter
-            )
+            loc, cov = conditional(xnew, X, self.kernel, y_residual, None, Lff, False, jitter=self.jitter)
             if not noiseless:
                 cov = cov + noise
 
-            ynew = torchdist.Normal(
-                loc + self.mean_function(xnew), cov.sqrt()
-            ).rsample()
+            ynew = torchdist.Normal(loc + self.mean_function(xnew), cov.sqrt()).rsample()
 
             # Update kernel matrix
             N = outside_vars["N"]

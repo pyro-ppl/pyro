@@ -35,14 +35,10 @@ def test_generic_lgssm_forecast(model_class, state_dim, obs_dim, T):
     targets = torch.randn(T, obs_dim)
     filtering_state = model._filter(targets)
 
-    actual_loc, actual_cov = model._forecast(
-        3, filtering_state, include_observation_noise=False
-    )
+    actual_loc, actual_cov = model._forecast(3, filtering_state, include_observation_noise=False)
 
     obs_matrix = model.obs_matrix if model_class == "lgssm" else model.z_obs_matrix
-    trans_matrix = (
-        model.trans_matrix if model_class == "lgssm" else model.z_trans_matrix
-    )
+    trans_matrix = model.trans_matrix if model_class == "lgssm" else model.z_trans_matrix
     trans_matrix_sq = torch.mm(trans_matrix, trans_matrix)
     trans_matrix_cubed = torch.mm(trans_matrix_sq, trans_matrix)
 
@@ -51,11 +47,7 @@ def test_generic_lgssm_forecast(model_class, state_dim, obs_dim, T):
     trans_trans_trans_obs = torch.mm(trans_matrix_cubed, obs_matrix)
 
     # we only compute contributions for the state space portion for lgssmgp
-    fs_loc = (
-        filtering_state.loc
-        if model_class == "lgssm"
-        else filtering_state.loc[-state_dim:]
-    )
+    fs_loc = filtering_state.loc if model_class == "lgssm" else filtering_state.loc[-state_dim:]
 
     predicted_mean1 = torch.mm(fs_loc.unsqueeze(-2), trans_obs).squeeze(-2)
     predicted_mean2 = torch.mm(fs_loc.unsqueeze(-2), trans_trans_obs).squeeze(-2)
@@ -76,9 +68,9 @@ def test_generic_lgssm_forecast(model_class, state_dim, obs_dim, T):
         process_covar = model.trans_noise_scale_sq.diag_embed()
         fs_covar = filtering_state.covariance_matrix[-state_dim:, -state_dim:]
 
-    predicted_covar1 = torch.mm(
-        trans_obs.t(), torch.mm(fs_covar, trans_obs)
-    ) + torch.mm(obs_matrix.t(), torch.mm(process_covar, obs_matrix))
+    predicted_covar1 = torch.mm(trans_obs.t(), torch.mm(fs_covar, trans_obs)) + torch.mm(
+        obs_matrix.t(), torch.mm(process_covar, obs_matrix)
+    )
 
     predicted_covar2 = (
         torch.mm(trans_trans_obs.t(), torch.mm(fs_covar, trans_trans_obs))

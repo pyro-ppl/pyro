@@ -144,9 +144,7 @@ def test_partition_terms(inputs, dims, expected_num_components):
 
 
 def frame(dim, size):
-    return CondIndepStackFrame(
-        name="plate_{}".format(size), dim=dim, size=size, counter=0
-    )
+    return CondIndepStackFrame(name="plate_{}".format(size), dim=dim, size=size, counter=0)
 
 
 EXAMPLES = [
@@ -269,9 +267,7 @@ def test_contract_to_tensor(example):
     target_ordinal = example["target_ordinal"]
     expected_dims = example["expected_dims"]
 
-    actual = assert_immutable(contract_to_tensor)(
-        tensor_tree, sum_dims, target_ordinal, target_dims
-    )
+    actual = assert_immutable(contract_to_tensor)(tensor_tree, sum_dims, target_ordinal, target_dims)
     assert set(actual._pyro_dims) == set(expected_dims)
 
 
@@ -392,9 +388,7 @@ def test_naive_ubersum(equation, plates):
         assert actual_part.shape == expected_shape
         if not plates:
             equation_part = ",".join(inputs) + "->" + output
-            expected_part = opt_einsum.contract(
-                equation_part, *operands, backend="pyro.ops.einsum.torch_log"
-            )
+            expected_part = opt_einsum.contract(equation_part, *operands, backend="pyro.ops.einsum.torch_log")
             assert_equal(
                 expected_part,
                 actual_part,
@@ -434,9 +428,7 @@ def test_einsum_linear(equation, plates):
     operands = [x.exp() for x in log_operands]
 
     try:
-        log_expected = ubersum(
-            equation, *log_operands, plates=plates, modulo_total=True
-        )
+        log_expected = ubersum(equation, *log_operands, plates=plates, modulo_total=True)
         expected = [x.exp() for x in log_expected]
     except NotImplementedError:
         pytest.skip()
@@ -508,9 +500,7 @@ def test_ubersum_total(equation, plates):
     assert_equal(
         expected,
         actual,
-        msg="Expected:\n{}\nActual:\n{}".format(
-            expected.detach().cpu(), actual.detach().cpu()
-        ),
+        msg="Expected:\n{}\nActual:\n{}".format(expected.detach().cpu(), actual.detach().cpu()),
     )
 
 
@@ -637,9 +627,7 @@ def test_ubersum_5(impl):
     q2 = x2 - s2.unsqueeze(-2)
     assert q2.shape == (a, b, i)
 
-    expected = opt_einsum.contract(
-        "a,a,abi,bcij->cij", x, p2, q2, q1, backend="pyro.ops.einsum.torch_log"
-    )
+    expected = opt_einsum.contract("a,a,abi,bcij->cij", x, p2, q2, q1, backend="pyro.ops.einsum.torch_log")
     assert_equal(actual, expected)
 
 
@@ -657,9 +645,7 @@ def test_ubersum_collide_implemented(impl, implemented):
     x = torch.randn(a, c)
     y = torch.randn(b, d)
     z = torch.randn(a, b, c, d)
-    raises = pytest.raises(
-        NotImplementedError, match="Expected tree-structured plate nesting"
-    )
+    raises = pytest.raises(NotImplementedError, match="Expected tree-structured plate nesting")
     with optional(raises, not implemented):
         impl("ac,bd,abcd->", x, y, z, plates="ab", modulo_total=True)
 
@@ -746,9 +732,7 @@ UBERSUM_BATCH_ERRORS = [
 @pytest.mark.parametrize("impl", [naive_ubersum, ubersum])
 def test_ubersum_plate_error(impl, equation, plates):
     inputs, outputs = equation.split("->")
-    operands = [
-        torch.randn(torch.Size((2,) * len(input_))) for input_ in inputs.split(",")
-    ]
+    operands = [torch.randn(torch.Size((2,) * len(input_))) for input_ in inputs.split(",")]
     with pytest.raises(ValueError, match="It is nonsensical to preserve a plated dim"):
         impl(equation, *operands, plates=plates, modulo_total=True)
 
@@ -779,9 +763,7 @@ def test_adjoint_shape(backend, equation, plates):
     # run forward-backward algorithm
     for x in operands:
         require_backward(x)
-    (result,) = ubersum(
-        equation, *operands, plates=plates, modulo_total=True, backend=backend
-    )
+    (result,) = ubersum(equation, *operands, plates=plates, modulo_total=True, backend=backend)
     result._pyro_backward()
 
     for input_, x in zip(inputs, operands):
@@ -804,20 +786,8 @@ def test_adjoint_marginal(equation, plates):
     # check forward pass
     for x in operands:
         require_backward(x)
-    (actual,) = ubersum(
-        equation,
-        *operands,
-        plates=plates,
-        modulo_total=True,
-        backend="pyro.ops.einsum.torch_marginal"
-    )
-    (expected,) = ubersum(
-        equation,
-        *operands,
-        plates=plates,
-        modulo_total=True,
-        backend="pyro.ops.einsum.torch_log"
-    )
+    (actual,) = ubersum(equation, *operands, plates=plates, modulo_total=True, backend="pyro.ops.einsum.torch_marginal")
+    (expected,) = ubersum(equation, *operands, plates=plates, modulo_total=True, backend="pyro.ops.einsum.torch_log")
     assert_equal(expected, actual)
 
     # check backward pass
@@ -825,11 +795,7 @@ def test_adjoint_marginal(equation, plates):
     for input_, operand in zip(inputs, operands):
         marginal_equation = ",".join(inputs) + "->" + input_
         (expected,) = ubersum(
-            marginal_equation,
-            *operands,
-            plates=plates,
-            modulo_total=True,
-            backend="pyro.ops.einsum.torch_log"
+            marginal_equation, *operands, plates=plates, modulo_total=True, backend="pyro.ops.einsum.torch_log"
         )
         actual = operand._pyro_backward_result
         assert_equal(expected, actual)

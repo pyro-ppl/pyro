@@ -26,12 +26,7 @@ def _guess_max_plate_nesting(model, args, kwargs):
         model_trace = poutine.trace(model).get_trace(*args, **kwargs)
     sites = [site for site in model_trace.nodes.values() if site["type"] == "sample"]
 
-    dims = [
-        frame.dim
-        for site in sites
-        for frame in site["cond_indep_stack"]
-        if frame.vectorized
-    ]
+    dims = [frame.dim for site in sites for frame in site["cond_indep_stack"] if frame.vectorized]
     max_plate_nesting = -min(dims) if dims else 0
     return max_plate_nesting
 
@@ -46,22 +41,14 @@ class _predictiveResults:
     trace: Union[Trace, List[Trace]]
 
 
-def _predictive_sequential(
-    model, posterior_samples, model_args, model_kwargs, num_samples, return_site_shapes
-):
+def _predictive_sequential(model, posterior_samples, model_args, model_kwargs, num_samples, return_site_shapes):
     collected_samples = []
     collected_trace = []
-    samples = [
-        {k: v[i] for k, v in posterior_samples.items()} for i in range(num_samples)
-    ]
+    samples = [{k: v[i] for k, v in posterior_samples.items()} for i in range(num_samples)]
     for i in range(num_samples):
-        trace = poutine.trace(poutine.condition(model, samples[i])).get_trace(
-            *model_args, **model_kwargs
-        )
+        trace = poutine.trace(poutine.condition(model, samples[i])).get_trace(*model_args, **model_kwargs)
         collected_trace.append(trace)
-        collected_samples.append(
-            {site: trace.nodes[site]["value"] for site in return_site_shapes}
-        )
+        collected_samples.append({site: trace.nodes[site]["value"] for site in return_site_shapes})
 
     return _predictiveResults(
         trace=collected_trace,
@@ -87,29 +74,19 @@ def _predictive(
 ):
     model = torch.no_grad()(poutine.mask(model, mask=False) if mask else model)
     max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
-    vectorize = pyro.plate(
-        _predictive_vectorize_plate_name, num_samples, dim=-max_plate_nesting - 1
-    )
-    model_trace = prune_subsample_sites(
-        poutine.trace(model).get_trace(*model_args, **model_kwargs)
-    )
+    vectorize = pyro.plate(_predictive_vectorize_plate_name, num_samples, dim=-max_plate_nesting - 1)
+    model_trace = prune_subsample_sites(poutine.trace(model).get_trace(*model_args, **model_kwargs))
     reshaped_samples = {}
 
     for name, sample in posterior_samples.items():
         sample_shape = sample.shape[1:]
-        sample = sample.reshape(
-            (num_samples,)
-            + (1,) * (max_plate_nesting - len(sample_shape))
-            + sample_shape
-        )
+        sample = sample.reshape((num_samples,) + (1,) * (max_plate_nesting - len(sample_shape)) + sample_shape)
         reshaped_samples[name] = sample
 
     return_site_shapes = {}
     for site in model_trace.stochastic_nodes + model_trace.observation_nodes:
         append_ndim = max_plate_nesting - len(model_trace.nodes[site]["fn"].batch_shape)
-        site_shape = (
-            (num_samples,) + (1,) * append_ndim + model_trace.nodes[site]["value"].shape
-        )
+        site_shape = (num_samples,) + (1,) * append_ndim + model_trace.nodes[site]["value"].shape
         # non-empty return-sites
         if return_sites:
             if site in return_sites:
@@ -138,9 +115,7 @@ def _predictive(
             return_site_shapes,
         )
 
-    trace = poutine.trace(
-        poutine.condition(vectorize(model), reshaped_samples)
-    ).get_trace(*model_args, **model_kwargs)
+    trace = poutine.trace(poutine.condition(vectorize(model), reshaped_samples)).get_trace(*model_args, **model_kwargs)
     predictions = {}
     for site, shape in return_site_shapes.items():
         value = trace.nodes[site]["value"]
@@ -193,9 +168,7 @@ class Predictive(torch.nn.Module):
         super().__init__()
         if posterior_samples is None:
             if num_samples is None:
-                raise ValueError(
-                    "Either posterior_samples or num_samples must be specified."
-                )
+                raise ValueError("Either posterior_samples or num_samples must be specified.")
             posterior_samples = {}
 
         for name, sample in posterior_samples.items():
@@ -205,22 +178,16 @@ class Predictive(torch.nn.Module):
             elif num_samples != batch_size:
                 warnings.warn(
                     "Sample's leading dimension size {} is different from the "
-                    "provided {} num_samples argument. Defaulting to {}.".format(
-                        batch_size, num_samples, batch_size
-                    ),
+                    "provided {} num_samples argument. Defaulting to {}.".format(batch_size, num_samples, batch_size),
                     UserWarning,
                 )
                 num_samples = batch_size
 
         if num_samples is None:
-            raise ValueError(
-                "No sample sites in posterior samples to infer `num_samples`."
-            )
+            raise ValueError("No sample sites in posterior samples to infer `num_samples`.")
 
         if guide is not None and posterior_samples:
-            raise ValueError(
-                "`posterior_samples` cannot be provided with the `guide` argument."
-            )
+            raise ValueError("`posterior_samples` cannot be provided with the `guide` argument.")
 
         if return_sites is not None:
             assert isinstance(return_sites, (list, tuple, set))
@@ -420,18 +387,8 @@ class WeighedPredictive(Predictive):
             guide_log_prob = plate_log_prob_sum(guide_trace, plate_symbol)
             model_log_prob = plate_log_prob_sum(model_trace, plate_symbol)
         else:
-            guide_log_prob = torch.Tensor(
-                [
-                    trace_element.log_prob_sum()
-                    for trace_element in guide_predictive.trace
-                ]
-            )
-            model_log_prob = torch.Tensor(
-                [
-                    trace_element.log_prob_sum()
-                    for trace_element in model_predictive.trace
-                ]
-            )
+            guide_log_prob = torch.Tensor([trace_element.log_prob_sum() for trace_element in guide_predictive.trace])
+            model_log_prob = torch.Tensor([trace_element.log_prob_sum() for trace_element in model_predictive.trace])
         return WeighedPredictiveResults(
             samples=(
                 _predictive(

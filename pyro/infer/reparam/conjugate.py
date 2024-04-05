@@ -71,8 +71,7 @@ class ConjugateReparam(Reparam):
             # Note supporting non-reparameterized sites would require more delicate
             # handling of traced sites than the crude _do_not_trace flag below.
             raise NotImplementedError(
-                "ConjugateReparam inference supports only reparameterized "
-                "distributions, but got {}".format(type(fn))
+                "ConjugateReparam inference supports only reparameterized " "distributions, but got {}".format(type(fn))
             )
         value = pyro.sample(
             f"{name}_updated",

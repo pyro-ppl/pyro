@@ -74,12 +74,8 @@ class Polynomial(DotProduct):
         self.bias = PyroParam(bias, constraints.positive)
 
         if not isinstance(degree, int) or degree < 1:
-            raise ValueError(
-                "Degree for Polynomial kernel should be a positive integer."
-            )
+            raise ValueError("Degree for Polynomial kernel should be a positive integer.")
         self.degree = degree
 
     def forward(self, X, Z=None, diag=False):
-        return self.variance * (
-            (self.bias + self._dot_product(X, Z, diag)) ** self.degree
-        )
+        return self.variance * ((self.bias + self._dot_product(X, Z, diag)) ** self.degree)

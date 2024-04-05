@@ -115,11 +115,7 @@ class VAE(object, metaclass=ABCMeta):
         for batch_idx, (x, _) in enumerate(self.train_loader):
             loss = self.compute_loss_and_gradient(x)
             train_loss += loss
-        print(
-            "====> Epoch: {} \nTraining loss: {:.4f}".format(
-                epoch, train_loss / len(self.train_loader.dataset)
-            )
-        )
+        print("====> Epoch: {} \nTraining loss: {:.4f}".format(epoch, train_loss / len(self.train_loader.dataset)))
 
     def test(self, epoch):
         self.set_train(is_train=False)
@@ -130,9 +126,7 @@ class VAE(object, metaclass=ABCMeta):
                 test_loss += self.compute_loss_and_gradient(x)
             if i == 0:
                 n = min(x.size(0), 8)
-                comparison = torch.cat(
-                    [x[:n], recon_x.reshape(self.args.batch_size, 1, 28, 28)[:n]]
-                )
+                comparison = torch.cat([x[:n], recon_x.reshape(self.args.batch_size, 1, 28, 28)[:n]])
                 save_image(
                     comparison.detach().cpu(),
                     os.path.join(OUTPUT_DIR, "reconstruction_" + str(epoch) + ".png"),
@@ -156,9 +150,7 @@ class PyTorchVAEImpl(VAE):
     def compute_loss_and_gradient(self, x):
         self.optimizer.zero_grad()
         recon_x, z_mean, z_var = self.model_eval(x)
-        binary_cross_entropy = functional.binary_cross_entropy(
-            recon_x, x.reshape(-1, 784)
-        )
+        binary_cross_entropy = functional.binary_cross_entropy(recon_x, x.reshape(-1, 784))
         # Uses analytical KL divergence expression for D_kl(q(z|x) || p(z))
         # Refer to Appendix B from VAE paper:
         # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
@@ -172,9 +164,7 @@ class PyTorchVAEImpl(VAE):
         return loss.item()
 
     def initialize_optimizer(self, lr=1e-3):
-        model_params = itertools.chain(
-            self.vae_encoder.parameters(), self.vae_decoder.parameters()
-        )
+        model_params = itertools.chain(self.vae_encoder.parameters(), self.vae_decoder.parameters())
         return torch.optim.Adam(model_params, lr)
 
 

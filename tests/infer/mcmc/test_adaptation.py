@@ -25,9 +25,7 @@ from tests.common import assert_close, assert_equal
     ],
 )
 def test_adaptation_schedule(adapt_step_size, adapt_mass, warmup_steps, expected):
-    adapter = WarmupAdapter(
-        0.1, adapt_step_size=adapt_step_size, adapt_mass_matrix=adapt_mass
-    )
+    adapter = WarmupAdapter(0.1, adapt_step_size=adapt_step_size, adapt_mass_matrix=adapt_mass)
     adapter.configure(warmup_steps, mass_matrix_shape={"z": (5, 5)})
     expected_schedule = [adapt_window(i, j) for i, j in expected]
     assert_equal(adapter.adaptation_schedule, expected_schedule, prec=0)
@@ -49,12 +47,8 @@ def test_arrowhead_mass_matrix(diagonal):
     cov = torch.mm(cov, cov.t())
     if diagonal:
         cov = cov.diag().diag()
-    z_dist = torch.distributions.MultivariateNormal(
-        torch.zeros(size), covariance_matrix=cov
-    )
-    g_dist = torch.distributions.MultivariateNormal(
-        torch.zeros(size), precision_matrix=cov
-    )
+    z_dist = torch.distributions.MultivariateNormal(torch.zeros(size), covariance_matrix=cov)
+    g_dist = torch.distributions.MultivariateNormal(torch.zeros(size), precision_matrix=cov)
     z_samples = z_dist.sample((num_samples,)).reshape((num_samples,) + shape)
     g_samples = g_dist.sample((num_samples,)).reshape((num_samples,) + shape)
 

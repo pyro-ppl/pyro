@@ -44,15 +44,11 @@ def _make_cls(base, static_attrs, instance_attrs, parent_linkage=None):
 
 
 def _latent(base, parent):
-    return _make_cls(
-        base, {"collapsible": True}, {"site_name": None, "parent": parent}, "_latent"
-    )
+    return _make_cls(base, {"collapsible": True}, {"site_name": None, "parent": parent}, "_latent")
 
 
 def _conditional(base, parent):
-    return _make_cls(
-        base, {"marginalize_latent": True}, {"parent": parent}, "_conditional"
-    )
+    return _make_cls(base, {"marginalize_latent": True}, {"parent": parent}, "_conditional")
 
 
 def _compound(base, parent):
@@ -148,9 +144,7 @@ class UncollapseConjugateMessenger(Messenger):
                 if parent is not None and parent._latent.site_name == msg["name"]:
                     conj_node = self.trace.nodes[site_name]
                     break
-            assert (
-                conj_node is not None
-            ), "Collapsible latent site `{}` with no corresponding conjugate site.".format(
+            assert conj_node is not None, "Collapsible latent site `{}` with no corresponding conjugate site.".format(
                 msg["name"]
             )
             msg["fn"] = parent.posterior(conj_node["value"])
@@ -222,21 +216,17 @@ def posterior_replay(model, posterior_samples, *args, **kwargs):
     """
     posterior_samples = posterior_samples.copy()
     num_samples = kwargs.pop("num_samples", None)
-    assert (
-        posterior_samples or num_samples
-    ), "`num_samples` must be provided if `posterior_samples` is empty."
+    assert posterior_samples or num_samples, "`num_samples` must be provided if `posterior_samples` is empty."
     if num_samples is None:
         num_samples = list(posterior_samples.values())[0].shape[0]
 
     return_samples = defaultdict(list)
     for i in range(num_samples):
         conditioned_nodes = {k: v[i] for k, v in posterior_samples.items()}
-        collapsed_trace = poutine.trace(
-            poutine.condition(collapse_conjugate(model), conditioned_nodes)
-        ).get_trace(*args, **kwargs)
-        trace = poutine.trace(uncollapse_conjugate(model, collapsed_trace)).get_trace(
+        collapsed_trace = poutine.trace(poutine.condition(collapse_conjugate(model), conditioned_nodes)).get_trace(
             *args, **kwargs
         )
+        trace = poutine.trace(uncollapse_conjugate(model, collapsed_trace)).get_trace(*args, **kwargs)
         for name, site in trace.iter_stochastic_nodes():
             if not site_is_subsample(site):
                 return_samples[name].append(site["value"])

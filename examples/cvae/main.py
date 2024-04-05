@@ -13,9 +13,7 @@ import pyro
 
 
 def main(args):
-    device = torch.device(
-        "cuda:0" if torch.cuda.is_available() and args.cuda else "cpu"
-    )
+    device = torch.device("cuda:0" if torch.cuda.is_available() and args.cuda else "cpu")
     results = []
     columns = []
 
@@ -23,16 +21,10 @@ def main(args):
         # adds an s in case of plural quadrants
         maybes = "s" if num_quadrant_inputs > 1 else ""
 
-        print(
-            "Training with {} quadrant{} as input...".format(
-                num_quadrant_inputs, maybes
-            )
-        )
+        print("Training with {} quadrant{} as input...".format(num_quadrant_inputs, maybes))
 
         # Dataset
-        datasets, dataloaders, dataset_sizes = get_data(
-            num_quadrant_inputs=num_quadrant_inputs, batch_size=128
-        )
+        datasets, dataloaders, dataset_sizes = get_data(num_quadrant_inputs=num_quadrant_inputs, batch_size=128)
 
         # Train baseline
         baseline_net = baseline.train(
@@ -99,18 +91,10 @@ if __name__ == "__main__":
         default=[1, 2, 3],
         help="num of quadrants to use as inputs",
     )
-    parser.add_argument(
-        "-n", "--num-epochs", default=101, type=int, help="number of training epochs"
-    )
-    parser.add_argument(
-        "-esp", "--early-stop-patience", default=3, type=int, help="early stop patience"
-    )
-    parser.add_argument(
-        "-lr", "--learning-rate", default=1.0e-3, type=float, help="learning rate"
-    )
-    parser.add_argument(
-        "--cuda", action="store_true", default=False, help="whether to use cuda"
-    )
+    parser.add_argument("-n", "--num-epochs", default=101, type=int, help="number of training epochs")
+    parser.add_argument("-esp", "--early-stop-patience", default=3, type=int, help="early stop patience")
+    parser.add_argument("-lr", "--learning-rate", default=1.0e-3, type=float, help="learning rate")
+    parser.add_argument("--cuda", action="store_true", default=False, help="whether to use cuda")
     parser.add_argument(
         "-vi",
         "--num-images",

@@ -18,9 +18,7 @@ from pyro.distributions.spanning_tree import (
 )
 from tests.common import assert_equal, xfail_if_not_implemented
 
-pytestmark = pytest.mark.skipif(
-    "CUDA_TEST" in os.environ, reason="spanning_tree unsupported on CUDA."
-)
+pytestmark = pytest.mark.skipif("CUDA_TEST" in os.environ, reason="spanning_tree unsupported on CUDA.")
 
 
 @pytest.mark.filterwarnings("always")

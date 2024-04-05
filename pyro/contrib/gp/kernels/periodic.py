@@ -48,9 +48,7 @@ class Periodic(Kernel):
     :param torch.Tensor period: Period parameter of this kernel.
     """
 
-    def __init__(
-        self, input_dim, variance=None, lengthscale=None, period=None, active_dims=None
-    ):
+    def __init__(self, input_dim, variance=None, lengthscale=None, period=None, active_dims=None):
         super().__init__(input_dim, active_dims)
 
         variance = torch.tensor(1.0) if variance is None else variance

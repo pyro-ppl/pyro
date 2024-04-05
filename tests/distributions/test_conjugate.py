@@ -21,9 +21,7 @@ from tests.common import assert_close
             torch.tensor([10.0, 12.0]),
         ),
         DirichletMultinomial(torch.tensor([0.5, 1.0, 2.0]), 5),
-        DirichletMultinomial(
-            torch.tensor([[0.5, 1.0, 2.0], [0.2, 0.5, 0.8]]), torch.tensor(10.0)
-        ),
+        DirichletMultinomial(torch.tensor([[0.5, 1.0, 2.0], [0.2, 0.5, 0.8]]), torch.tensor(10.0)),
         GammaPoisson(2.0, 2.0),
         GammaPoisson(torch.tensor([6.0, 2]), torch.tensor([2.0, 8.0])),
     ],
@@ -45,9 +43,7 @@ def test_mean(dist):
             torch.tensor([10.0, 12.0]),
         ),
         DirichletMultinomial(torch.tensor([0.5, 1.0, 2.0]), 5),
-        DirichletMultinomial(
-            torch.tensor([[0.5, 1.0, 2.0], [0.2, 0.5, 0.8]]), torch.tensor(10.0)
-        ),
+        DirichletMultinomial(torch.tensor([[0.5, 1.0, 2.0], [0.2, 0.5, 0.8]]), torch.tensor(10.0)),
         GammaPoisson(2.0, 2.0),
         GammaPoisson(torch.tensor([6.0, 2]), torch.tensor([2.0, 8.0])),
     ],
@@ -98,9 +94,7 @@ def test_dirichlet_multinomial_log_prob(total_count, batch_shape, is_sparse):
     event_shape = (3,)
     concentration = torch.rand(batch_shape + event_shape).exp()
     # test on one-hots
-    value = total_count * torch.eye(3).reshape(
-        event_shape + (1,) * len(batch_shape) + event_shape
-    )
+    value = total_count * torch.eye(3).reshape(event_shape + (1,) * len(batch_shape) + event_shape)
 
     num_samples = 100000
     probs = dist.Dirichlet(concentration).sample((num_samples, 1))

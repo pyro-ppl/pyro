@@ -109,9 +109,7 @@ def test(args, test_loader, gpmodule):
 
 
 def main(args):
-    data_dir = (
-        args.data_dir if args.data_dir is not None else get_data_directory(__file__)
-    )
+    data_dir = args.data_dir if args.data_dir is not None else get_data_directory(__file__)
     train_loader = get_data_loader(
         dataset_name="MNIST",
         data_dir=data_dir,
@@ -185,11 +183,7 @@ def main(args):
         train(args, train_loader, gpmodule, optimizer, loss_fn, epoch)
         with torch.no_grad():
             test(args, test_loader, gpmodule)
-        print(
-            "Amount of time spent for epoch {}: {}s\n".format(
-                epoch, int(time.time() - start_time)
-            )
-        )
+        print("Amount of time spent for epoch {}: {}s\n".format(epoch, int(time.time() - start_time)))
 
 
 if __name__ == "__main__":
@@ -209,9 +203,7 @@ if __name__ == "__main__":
         metavar="N",
         help="number of inducing input (default: 70)",
     )
-    parser.add_argument(
-        "--binary", action="store_true", default=False, help="do binary classification"
-    )
+    parser.add_argument("--binary", action="store_true", default=False, help="do binary classification")
     parser.add_argument(
         "--batch-size",
         type=int,
@@ -240,15 +232,9 @@ if __name__ == "__main__":
         metavar="LR",
         help="learning rate (default: 0.01)",
     )
-    parser.add_argument(
-        "--cuda", action="store_true", default=False, help="enables CUDA training"
-    )
-    parser.add_argument(
-        "--jit", action="store_true", default=False, help="enables PyTorch jit"
-    )
-    parser.add_argument(
-        "--seed", type=int, default=1, metavar="S", help="random seed (default: 1)"
-    )
+    parser.add_argument("--cuda", action="store_true", default=False, help="enables CUDA training")
+    parser.add_argument("--jit", action="store_true", default=False, help="enables PyTorch jit")
+    parser.add_argument("--seed", type=int, default=1, metavar="S", help="random seed (default: 1)")
     parser.add_argument(
         "--log-interval",
         type=int,

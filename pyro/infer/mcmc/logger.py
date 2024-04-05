@@ -69,9 +69,7 @@ class ProgressBar:
         # Disable progress bar in "CI"
         # (see https://github.com/travis-ci/travis-ci/issues/1337).
         disable = disable or "CI" in os.environ or "PYTEST_XDIST_WORKER" in os.environ
-        bar_format = (
-            "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}, {rate_fmt}{postfix}]"
-        )
+        bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}, {rate_fmt}{postfix}]"
         pbar_cls = tqdm_nb if num_bars > 1 and ipython_env else tqdm
         self.progress_bars = []
         for i in range(num_bars):
@@ -217,9 +215,7 @@ class MCMCLoggingHandler(logging.Handler):
     def emit(self, record):
         try:
             if self.progress_bar and record.msg_type == DIAGNOSTIC_MSG:
-                diagnostics = json.loads(
-                    record.getMessage(), object_pairs_hook=OrderedDict
-                )
+                diagnostics = json.loads(record.getMessage(), object_pairs_hook=OrderedDict)
                 self.progress_bar.set_postfix(diagnostics, refresh=False)
                 self.progress_bar.update()
             else:

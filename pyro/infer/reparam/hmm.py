@@ -71,8 +71,7 @@ class LinearHMMReparam(Reparam):
         assert isinstance(fn, (dist.LinearHMM, dist.IndependentHMM))
         if fn.duration is None:
             raise ValueError(
-                "LinearHMMReparam requires duration to be specified "
-                "on targeted LinearHMM distributions"
+                "LinearHMMReparam requires duration to be specified " "on targeted LinearHMM distributions"
             )
 
         # Unwrap IndependentHMM.
@@ -112,9 +111,7 @@ class LinearHMMReparam(Reparam):
         trans_dist = fn.transition_dist
         if self.trans is not None:
             if trans_dist.batch_shape[-1] != fn.duration:
-                trans_dist = trans_dist.expand(
-                    trans_dist.batch_shape[:-1] + (fn.duration,)
-                )
+                trans_dist = trans_dist.expand(trans_dist.batch_shape[:-1] + (fn.duration,))
             msg = self.trans.apply(
                 {
                     "name": f"{name}_trans",

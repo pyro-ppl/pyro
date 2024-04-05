@@ -33,13 +33,8 @@ def identify_dense_edges(trace: Trace) -> None:
                     if past_name == name:
                         break
                     past_node_independent = False
-                    for query, target in zip(
-                        node["cond_indep_stack"], past_node["cond_indep_stack"]
-                    ):
-                        if (
-                            query.name == target.name
-                            and query.counter != target.counter
-                        ):
+                    for query, target in zip(node["cond_indep_stack"], past_node["cond_indep_stack"]):
+                        if query.name == target.name and query.counter != target.counter:
                             past_node_independent = True
                             break
                     if not past_node_independent:
@@ -184,9 +179,7 @@ class TraceHandler(Generic[_P, _T]):
         and returns self.fn's return value
         """
         with self.msngr:
-            self.msngr.trace.add_node(
-                "_INPUT", name="_INPUT", type="args", args=args, kwargs=kwargs
-            )
+            self.msngr.trace.add_node("_INPUT", name="_INPUT", type="args", args=args, kwargs=kwargs)
             try:
                 ret = self.fn(*args, **kwargs)
             except (ValueError, RuntimeError) as e:
@@ -196,9 +189,7 @@ class TraceHandler(Generic[_P, _T]):
                 exc = exc_type("{}\n{}".format(exc_value, shapes))
                 exc = exc.with_traceback(traceback)
                 raise exc from e
-            self.msngr.trace.add_node(
-                "_RETURN", name="_RETURN", type="return", value=ret
-            )
+            self.msngr.trace.add_node("_RETURN", name="_RETURN", type="return", value=ret)
         return ret
 
     @property

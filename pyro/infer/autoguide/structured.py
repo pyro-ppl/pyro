@@ -137,9 +137,7 @@ class AutoStructured(AutoGuide):
     def _auto_config(self, sample_sites, args, kwargs):
         # Instantiate conditionals as dictionaries.
         if not isinstance(self.conditionals, dict):
-            self.conditionals = {
-                name: self.conditionals for name, site in sample_sites.items()
-            }
+            self.conditionals = {name: self.conditionals for name, site in sample_sites.items()}
 
         # Instantiate dependencies as dictionaries.
         if not isinstance(self.dependencies, dict):
@@ -179,13 +177,9 @@ class AutoStructured(AutoGuide):
         numel = {}
         for name, site in sample_sites.items():
             with helpful_support_errors(site):
-                init_loc = (
-                    biject_to(site["fn"].support).inv(site["value"].detach()).detach()
-                )
+                init_loc = biject_to(site["fn"].support).inv(site["value"].detach()).detach()
             self._batch_shapes[name] = site["fn"].batch_shape
-            self._unconstrained_event_shapes[name] = init_loc.shape[
-                len(site["fn"].batch_shape) :
-            ]
+            self._unconstrained_event_shapes[name] = init_loc.shape[len(site["fn"].batch_shape) :]
             numel[name] = init_loc.numel()
             init_locs[name] = init_loc.reshape(-1)
 
@@ -206,9 +200,7 @@ class AutoStructured(AutoGuide):
                     raise ValueError(f"Unsupported conditional type: {conditional}")
                 if conditional in ("normal", "mvn"):
                     init_scale = torch.full_like(init_loc, self._init_scale)
-                    deep_setattr(
-                        self.scales, name, PyroParam(init_scale, self.scale_constraint)
-                    )
+                    deep_setattr(self.scales, name, PyroParam(init_scale, self.scale_constraint))
                 if conditional == "mvn":
                     init_scale_tril = eye_like(init_loc, init_loc.numel())
                     deep_setattr(
@@ -229,9 +221,7 @@ class AutoStructured(AutoGuide):
                     dep = torch.nn.Linear(numel[upstream], numel[name], bias=False)
                     dep.weight.data.zero_()
                 elif not callable(dep):
-                    raise ValueError(
-                        f"Expected either the string 'linear' or a callable, but got {dep}"
-                    )
+                    raise ValueError(f"Expected either the string 'linear' or a callable, but got {dep}")
                 deep_setattr(deps, upstream, dep)
 
         # Topologically sort sites.
@@ -303,9 +293,7 @@ class AutoStructured(AutoGuide):
                 scale_tril = deep_getattr(self.scale_trils, name)
                 aux_value = aux_value @ scale_tril.T * scale
                 if compute_density:
-                    log_density = (
-                        -scale_tril.diagonal(dim1=-2, dim2=-1).log() - scale.log()
-                    ).expand_as(aux_value)
+                    log_density = (-scale_tril.diagonal(dim1=-2, dim2=-1).log() - scale.log()).expand_as(aux_value)
             else:
                 raise ValueError(f"Unsupported conditional type: {conditional}")
 
@@ -325,12 +313,8 @@ class AutoStructured(AutoGuide):
             aux_values[name] = aux_value
 
             # Shift by loc and reshape.
-            batch_shape = torch.broadcast_shapes(
-                aux_value.shape[:-1], self._batch_shapes[name]
-            )
-            unconstrained = (aux_value + loc).reshape(
-                batch_shape + self._unconstrained_event_shapes[name]
-            )
+            batch_shape = torch.broadcast_shapes(aux_value.shape[:-1], self._batch_shapes[name])
+            unconstrained = (aux_value + loc).reshape(batch_shape + self._unconstrained_event_shapes[name])
             if not is_identically_zero(log_density):
                 log_density = log_density.reshape(batch_shape + (-1,)).sum(-1)
 
@@ -339,9 +323,7 @@ class AutoStructured(AutoGuide):
             value = transform(unconstrained)
             if compute_density and conditional != "delta":
                 assert transform.codomain.event_dim == site["fn"].event_dim
-                log_density = log_density + transform.inv.log_abs_det_jacobian(
-                    value, unconstrained
-                )
+                log_density = log_density + transform.inv.log_abs_det_jacobian(value, unconstrained)
 
             # Create a reparametrized Delta distribution.
             deltas[name] = dist.Delta(value, log_density, site["fn"].event_dim)

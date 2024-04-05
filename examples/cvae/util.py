@@ -48,9 +48,7 @@ def visualize(
     image_path=None,
 ):
     # Load sample random data
-    datasets, _, dataset_sizes = get_data(
-        num_quadrant_inputs=num_quadrant_inputs, batch_size=num_images
-    )
+    datasets, _, dataset_sizes = get_data(num_quadrant_inputs=num_quadrant_inputs, batch_size=num_images)
     dataloader = DataLoader(datasets["val"], batch_size=num_images, shuffle=True)
 
     batch = next(iter(dataloader))
@@ -62,9 +60,7 @@ def visualize(
     with torch.no_grad():
         baseline_preds = pre_trained_baseline(inputs).view(outputs.shape)
 
-    predictive = Predictive(
-        pre_trained_cvae.model, guide=pre_trained_cvae.guide, num_samples=num_samples
-    )
+    predictive = Predictive(pre_trained_cvae.model, guide=pre_trained_cvae.guide, num_samples=num_samples)
     cvae_preds = predictive(inputs)["y"].view(num_samples, num_images, 28, 28)
 
     # Predictions are only made in the pixels not masked. This completes
@@ -121,9 +117,7 @@ def generate_table(
     col_name,
 ):
     # Load sample random data
-    datasets, dataloaders, dataset_sizes = get_data(
-        num_quadrant_inputs=num_quadrant_inputs, batch_size=32
-    )
+    datasets, dataloaders, dataset_sizes = get_data(num_quadrant_inputs=num_quadrant_inputs, batch_size=32)
 
     # Load sample data
     criterion = MaskedBCELoss()

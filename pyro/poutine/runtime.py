@@ -216,12 +216,8 @@ class _DimAllocator:
             raise ValueError(
                 "\n".join(
                     [
-                        'at plates "{}" and "{}", collide at dim={}'.format(
-                            name, self._stack[-1 - dim], dim
-                        ),
-                        "\nTry moving the dim of one plate to the left, e.g. dim={}".format(
-                            dim - 1
-                        ),
+                        'at plates "{}" and "{}", collide at dim={}'.format(name, self._stack[-1 - dim], dim),
+                        "\nTry moving the dim of one plate to the left, e.g. dim={}".format(dim - 1),
                     ]
                 )
             )
@@ -284,9 +280,7 @@ class _EnumAllocator:
 
         dim = self.next_available_dim
         if dim == -float("inf"):
-            raise ValueError(
-                "max_plate_nesting must be set to a finite value for parallel enumeration"
-            )
+            raise ValueError("max_plate_nesting must be set to a finite value for parallel enumeration")
         if scope_dims is None:
             # allocate a new global dimension
             self.next_available_dim -= 1
@@ -399,20 +393,14 @@ def am_i_wrapped() -> bool:
 
 
 @overload
-def effectful(
-    fn: None = ..., type: Optional[str] = ...
-) -> Callable[[Callable[_P, _T]], Callable[..., _T]]: ...
+def effectful(fn: None = ..., type: Optional[str] = ...) -> Callable[[Callable[_P, _T]], Callable[..., _T]]: ...
 
 
 @overload
-def effectful(
-    fn: Callable[_P, _T] = ..., type: Optional[str] = ...
-) -> Callable[..., _T]: ...
+def effectful(fn: Callable[_P, _T] = ..., type: Optional[str] = ...) -> Callable[..., _T]: ...
 
 
-def effectful(
-    fn: Optional[Callable[_P, _T]] = None, type: Optional[str] = None
-) -> Callable:
+def effectful(fn: Optional[Callable[_P, _T]] = None, type: Optional[str] = None) -> Callable:
     """
     :param fn: function or callable that performs an effectful computation
     :param str type: the type label of the operation, e.g. `"sample"`

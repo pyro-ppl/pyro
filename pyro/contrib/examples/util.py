@@ -10,9 +10,7 @@ from torchvision import transforms
 
 
 class MNIST(datasets.MNIST):
-    mirrors = [
-        "https://d2hg8soec8ck9v.cloudfront.net/datasets/mnist/"
-    ] + datasets.MNIST.mirrors
+    mirrors = ["https://d2hg8soec8ck9v.cloudfront.net/datasets/mnist/"] + datasets.MNIST.mirrors
 
 
 def get_data_loader(

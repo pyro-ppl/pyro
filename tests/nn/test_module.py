@@ -27,9 +27,7 @@ def test_svi_smoke():
             super().__init__()
             self.loc = nn.Parameter(torch.zeros(2))
             self.scale = PyroParam(torch.ones(2), constraint=constraints.positive)
-            self.z = PyroSample(
-                lambda self: dist.Normal(self.loc, self.scale).to_event(1)
-            )
+            self.z = PyroSample(lambda self: dist.Normal(self.loc, self.scale).to_event(1))
 
         def forward(self, data):
             loc, log_scale = self.z.unbind(-1)
@@ -41,9 +39,7 @@ def test_svi_smoke():
             super().__init__()
             self.loc = nn.Parameter(torch.zeros(2))
             self.scale = PyroParam(torch.ones(2), constraint=constraints.positive)
-            self.z = PyroSample(
-                lambda self: dist.Normal(self.loc, self.scale).to_event(1)
-            )
+            self.z = PyroSample(lambda self: dist.Normal(self.loc, self.scale).to_event(1))
 
         def forward(self, *args, **kwargs):
             return self.z
@@ -73,17 +69,13 @@ def test_svi_smoke():
 @pytest.mark.parametrize("num_particles", [1, 2])
 @pytest.mark.parametrize("vectorize_particles", [True, False])
 @pytest.mark.parametrize("Autoguide", [pyro.infer.autoguide.AutoNormal])
-def test_svi_elbomodule_interface(
-    local_params, num_particles, vectorize_particles, Autoguide
-):
+def test_svi_elbomodule_interface(local_params, num_particles, vectorize_particles, Autoguide):
     class Model(PyroModule):
         def __init__(self):
             super().__init__()
             self.loc = nn.Parameter(torch.zeros(2))
             self.scale = PyroParam(torch.ones(2), constraint=constraints.positive)
-            self.z = PyroSample(
-                lambda self: dist.Normal(self.loc, self.scale).to_event(1)
-            )
+            self.z = PyroSample(lambda self: dist.Normal(self.loc, self.scale).to_event(1))
 
         def forward(self, data):
             loc, log_scale = self.z.unbind(-1)
@@ -98,14 +90,11 @@ def test_svi_elbomodule_interface(
         guide = Autoguide(model)
         guide(data)  # initialize
 
-        elbo = Trace_ELBO(
-            vectorize_particles=vectorize_particles, num_particles=num_particles
-        )
+        elbo = Trace_ELBO(vectorize_particles=vectorize_particles, num_particles=num_particles)
         elbo = elbo(model, guide)
         assert isinstance(elbo, torch.nn.Module)
         assert set(
-            k[: -len("_unconstrained")] if k.endswith("_unconstrained") else k
-            for k, v in elbo.named_parameters()
+            k[: -len("_unconstrained")] if k.endswith("_unconstrained") else k for k, v in elbo.named_parameters()
         ) == set("model." + k for k, v in model.named_pyro_params()) | set(
             "guide." + k for k, v in guide.named_pyro_params()
         )
@@ -121,16 +110,12 @@ def test_svi_elbomodule_interface(
         guide2(data)  # initialize
         if local_params:
             assert set(pyro.get_param_store().keys()) == set()
-            for (name, p), (name2, p2) in zip(
-                guide.named_parameters(), guide2.named_parameters()
-            ):
+            for (name, p), (name2, p2) in zip(guide.named_parameters(), guide2.named_parameters()):
                 assert name == name2
                 assert not torch.allclose(p, p2)
         else:
             assert set(pyro.get_param_store().keys()) != set()
-            for (name, p), (name2, p2) in zip(
-                guide.named_parameters(), guide2.named_parameters()
-            ):
+            for (name, p), (name2, p2) in zip(guide.named_parameters(), guide2.named_parameters()):
                 assert name == name2
                 assert torch.allclose(p, p2)
 
@@ -197,11 +182,7 @@ def test_names(local_params):
         expected = {"x", "y", "m$$$u", "p.v", "p.w"}
         with poutine.trace(param_only=True) as param_capture:
             model()
-        actual = {
-            name
-            for name, site in param_capture.trace.nodes.items()
-            if site["type"] == "param"
-        }
+        actual = {name for name, site in param_capture.trace.nodes.items() if site["type"] == "param"}
         assert actual == expected
         if local_params:
             assert set(pyro.get_param_store().keys()) == set()
@@ -417,21 +398,15 @@ def test_sample():
         def __init__(self, in_features, out_features):
             super().__init__(in_features, out_features)
             self.weight = PyroSample(
-                lambda self: dist.Normal(0, 1)
-                .expand([self.out_features, self.in_features])
-                .to_event(2)
+                lambda self: dist.Normal(0, 1).expand([self.out_features, self.in_features]).to_event(2)
             )
 
     class Guide(nn.Linear, PyroModule):
         def __init__(self, in_features, out_features):
             super().__init__(in_features, out_features)
             self.loc = PyroParam(torch.zeros_like(self.weight))
-            self.scale = PyroParam(
-                torch.ones_like(self.weight), constraint=constraints.positive
-            )
-            self.weight = PyroSample(
-                lambda self: dist.Normal(self.loc, self.scale).to_event(2)
-            )
+            self.scale = PyroParam(torch.ones_like(self.weight), constraint=constraints.positive)
+            self.weight = PyroSample(lambda self: dist.Normal(self.loc, self.scale).to_event(2))
 
     data = torch.randn(8)
     model = Model(8, 2)
@@ -486,9 +461,7 @@ class AttributeModel(PyroModule):
         super().__init__()
         self.x = PyroParam(torch.zeros(size))
         self.y = PyroParam(lambda: torch.randn(size))
-        self.z = PyroParam(
-            torch.ones(size), constraint=constraints.positive, event_dim=1
-        )
+        self.z = PyroParam(torch.ones(size), constraint=constraints.positive, event_dim=1)
         self.s = PyroSample(dist.Normal(0, 1))
         self.t = PyroSample(lambda self: dist.Normal(self.s, self.z))
 
@@ -635,11 +608,7 @@ def test_to_pyro_module_():
                 setattr(
                     m,
                     name,
-                    PyroSample(
-                        prior=dist.Normal(0, 1)
-                        .expand(value.shape)
-                        .to_event(value.dim())
-                    ),
+                    PyroSample(prior=dist.Normal(0, 1).expand(value.shape).to_event(value.dim())),
                 )
 
     randomize(actual)
@@ -774,9 +743,7 @@ def test_bayesian_gru():
     "use_local_params",
     [
         True,
-        xfail_param(
-            False, reason="torch.func not compatible with global parameter store"
-        ),
+        xfail_param(False, reason="torch.func not compatible with global parameter store"),
     ],
 )
 def test_functorch_pyroparam(use_local_params):
@@ -820,32 +787,18 @@ def test_functorch_pyroparam(use_local_params):
         params = dict(model.named_parameters())
 
         # Check that all parameters appear in the trace for SVI compatibility
-        assert len(params) == len(
-            {
-                name: node
-                for name, node in tr.trace.nodes.items()
-                if node["type"] == "param"
-            }
-        )
+        assert len(params) == len({name: node for name, node in tr.trace.nodes.items() if node["type"] == "param"})
 
-        grad_model = torch.func.grad(
-            lambda p, x, y: torch.func.functional_call(model, p, (x, y))
-        )
+        grad_model = torch.func.grad(lambda p, x, y: torch.func.functional_call(model, p, (x, y)))
         grad_params_func = grad_model(params, x, y)
 
         gs = torch.autograd.grad(model(x, y), tuple(params.values()))
         grad_params_autograd = dict(zip(params.keys(), gs))
 
         assert len(grad_params_autograd) == len(grad_params_func) != 0
-        assert (
-            set(grad_params_autograd.keys())
-            == set(grad_params_func.keys())
-            == set(params.keys())
-        )
+        assert set(grad_params_autograd.keys()) == set(grad_params_func.keys()) == set(params.keys())
         for k in grad_params_autograd.keys():
-            assert not torch.allclose(
-                grad_params_func[k], torch.zeros_like(grad_params_func[k])
-            ), k
+            assert not torch.allclose(grad_params_func[k], torch.zeros_like(grad_params_func[k])), k
             assert torch.allclose(grad_params_autograd[k], grad_params_func[k]), k
 
 
@@ -866,10 +819,7 @@ class BNN(PyroModule):
             + [(hidden_layer_sizes[-1], output_size)]
         )
 
-        layers = [
-            pyro.nn.module.PyroModule[torch.nn.Linear](in_size, out_size)
-            for in_size, out_size in layer_sizes
-        ]
+        layers = [pyro.nn.module.PyroModule[torch.nn.Linear](in_size, out_size) for in_size, out_size in layer_sizes]
         if use_new_module_list_type:
             self.layers = pyro.nn.module.PyroModuleList(layers)
         else:
@@ -899,9 +849,7 @@ class BNN(PyroModule):
 
         if obs is not None:
             with pyro.plate("data", x.shape[0]):
-                pyro.sample(
-                    "obs", dist.Normal(mean, 0.1).to_event(self.output_size), obs=obs
-                )
+                pyro.sample("obs", dist.Normal(mean, 0.1).to_event(self.output_size), obs=obs)
 
         return mean
 
@@ -916,9 +864,7 @@ class SliceIndexingModuleListBNN(BNN):
         output_size: int,
         use_new_module_list_type: bool,
     ) -> None:
-        super().__init__(
-            input_size, hidden_layer_sizes, output_size, use_new_module_list_type
-        )
+        super().__init__(input_size, hidden_layer_sizes, output_size, use_new_module_list_type)
 
     def forward(self, x: torch.Tensor, obs=None) -> torch.Tensor:
         for layer in self.layers[:-1]:
@@ -938,9 +884,7 @@ class PositionIndexingModuleListBNN(BNN):
         output_size: int,
         use_new_module_list_type: bool,
     ) -> None:
-        super().__init__(
-            input_size, hidden_layer_sizes, output_size, use_new_module_list_type
-        )
+        super().__init__(input_size, hidden_layer_sizes, output_size, use_new_module_list_type)
 
     def forward(self, x: torch.Tensor, obs=None) -> torch.Tensor:
         for i in range(len(self.layers) - 1):

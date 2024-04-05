@@ -30,9 +30,7 @@ EDGE_SETS = [
 ]
 
 
-@pytest.mark.parametrize(
-    "edges", [perm for edges in EDGE_SETS for perm in itertools.permutations(edges)]
-)
+@pytest.mark.parametrize("edges", [perm for edges in EDGE_SETS for perm in itertools.permutations(edges)])
 def test_topological_sort(edges):
     tr = Trace()
     for n1, n2 in edges:
@@ -50,9 +48,7 @@ def test_topological_sort(edges):
         assert ranks[n1] < ranks[n2]
 
 
-@pytest.mark.parametrize(
-    "edges", [perm for edges in EDGE_SETS for perm in itertools.permutations(edges)]
-)
+@pytest.mark.parametrize("edges", [perm for edges in EDGE_SETS for perm in itertools.permutations(edges)])
 def test_connectivity_on_removal(edges):
     # check that when nodes are removed in reverse topological order
     # connectivity of the DAG is maintained, i.e. remaining nodes

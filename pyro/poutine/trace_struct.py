@@ -95,9 +95,7 @@ class Trace:
     """
 
     def __init__(self, graph_type: Literal["flat", "dense"] = "flat") -> None:
-        assert graph_type in ("flat", "dense"), "{} not a valid graph type".format(
-            graph_type
-        )
+        assert graph_type in ("flat", "dense"), "{} not a valid graph type".format(graph_type)
         self.graph_type = graph_type
         self.nodes: OrderedDict[str, "Message"] = OrderedDict()
         self._succ: OrderedDict[str, Set[str]] = OrderedDict()
@@ -131,14 +129,10 @@ class Trace:
             site = self.nodes[site_name]
             if site["type"] != kwargs["type"]:
                 # Cannot sample or observe after a param statement.
-                raise RuntimeError(
-                    "{} is already in the trace as a {}".format(site_name, site["type"])
-                )
+                raise RuntimeError("{} is already in the trace as a {}".format(site_name, site["type"]))
             elif kwargs["type"] != "param":
                 # Cannot sample after a previous sample statement.
-                raise RuntimeError(
-                    "Multiple {} sites named '{}'".format(kwargs["type"], site_name)
-                )
+                raise RuntimeError("Multiple {} sites named '{}'".format(kwargs["type"], site_name))
 
         # XXX should copy in case site gets mutated, or dont bother?
         self.nodes[site_name] = kwargs  # type: ignore[assignment]
@@ -222,16 +216,12 @@ class Trace:
                     log_p = site["log_prob_sum"]
                 else:
                     try:
-                        log_p = site["fn"].log_prob(
-                            site["value"], *site["args"], **site["kwargs"]
-                        )
+                        log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
                     except ValueError as e:
                         _, exc_value, traceback = sys.exc_info()
                         shapes = self.format_shapes(last_site=site["name"])
                         raise ValueError(
-                            "Error while computing log_prob_sum at site '{}':\n{}\n{}\n".format(
-                                name, exc_value, shapes
-                            )
+                            "Error while computing log_prob_sum at site '{}':\n{}\n{}\n".format(name, exc_value, shapes)
                         ).with_traceback(traceback) from e
                     log_p = scale_and_mask(log_p, site["scale"], site["mask"]).sum()
                     site["log_prob_sum"] = log_p
@@ -261,16 +251,12 @@ class Trace:
                     assert isinstance(site["fn"], Distribution)
                 if "log_prob" not in site:
                     try:
-                        log_p = site["fn"].log_prob(
-                            site["value"], *site["args"], **site["kwargs"]
-                        )
+                        log_p = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
                     except ValueError as e:
                         _, exc_value, traceback = sys.exc_info()
                         shapes = self.format_shapes(last_site=site["name"])
                         raise ValueError(
-                            "Error while computing log_prob at site '{}':\n{}\n{}".format(
-                                name, exc_value, shapes
-                            )
+                            "Error while computing log_prob at site '{}':\n{}\n{}".format(name, exc_value, shapes)
                         ).with_traceback(traceback) from e
                     site["unscaled_log_prob"] = log_p
                     log_p = scale_and_mask(log_p, site["scale"], site["mask"])
@@ -301,16 +287,12 @@ class Trace:
                 # Note that ScoreParts overloads the multiplication operator
                 # to correctly scale each of its three parts.
                 try:
-                    value = site["fn"].score_parts(
-                        site["value"], *site["args"], **site["kwargs"]
-                    )
+                    value = site["fn"].score_parts(site["value"], *site["args"], **site["kwargs"])
                 except ValueError as e:
                     _, exc_value, traceback = sys.exc_info()
                     shapes = self.format_shapes(last_site=site["name"])
                     raise ValueError(
-                        "Error while computing score_parts at site '{}':\n{}\n{}".format(
-                            name, exc_value, shapes
-                        )
+                        "Error while computing score_parts at site '{}':\n{}\n{}".format(name, exc_value, shapes)
                     ).with_traceback(traceback) from e
                 site["unscaled_log_prob"] = value.log_prob
                 value = value.scale_and_mask(site["scale"], site["mask"])
@@ -318,9 +300,7 @@ class Trace:
                 site["log_prob"] = value.log_prob
                 site["log_prob_sum"] = value.log_prob.sum()
                 if is_validation_enabled():
-                    warn_if_nan(
-                        site["log_prob_sum"], "log_prob_sum at site '{}'".format(name)
-                    )
+                    warn_if_nan(site["log_prob_sum"], "log_prob_sum at site '{}'".format(name))
                     warn_if_inf(
                         site["log_prob_sum"],
                         "log_prob_sum at site '{}'".format(name),
@@ -341,11 +321,7 @@ class Trace:
         """
         :return: a list of names of observe sites
         """
-        return [
-            name
-            for name, node in self.nodes.items()
-            if node["type"] == "sample" and node["is_observed"]
-        ]
+        return [name for name, node in self.nodes.items() if node["type"] == "sample" and node["is_observed"]]
 
     @property
     def param_nodes(self) -> List[str]:
@@ -359,11 +335,7 @@ class Trace:
         """
         :return: a list of names of sample sites
         """
-        return [
-            name
-            for name, node in self.nodes.items()
-            if node["type"] == "sample" and not node["is_observed"]
-        ]
+        return [name for name, node in self.nodes.items() if node["type"] == "sample" and not node["is_observed"]]
 
     @property
     def reparameterized_nodes(self) -> List[str]:
@@ -374,9 +346,7 @@ class Trace:
         return [
             name
             for name, node in self.nodes.items()
-            if node["type"] == "sample"
-            and not node["is_observed"]
-            and getattr(node["fn"], "has_rsample", False)
+            if node["type"] == "sample" and not node["is_observed"] and getattr(node["fn"], "has_rsample", False)
         ]
 
     @property
@@ -451,30 +421,20 @@ class Trace:
                     log_prob = pack(log_prob, dim_to_symbol)
                     score_function = pack(score_function, dim_to_symbol)
                     entropy_term = pack(entropy_term, dim_to_symbol)
-                    packed["score_parts"] = ScoreParts(
-                        log_prob, score_function, entropy_term
-                    )
+                    packed["score_parts"] = ScoreParts(log_prob, score_function, entropy_term)
                     packed["log_prob"] = log_prob
-                    packed["unscaled_log_prob"] = pack(
-                        site["unscaled_log_prob"], dim_to_symbol
-                    )
+                    packed["unscaled_log_prob"] = pack(site["unscaled_log_prob"], dim_to_symbol)
                 elif "log_prob" in site:
                     packed["log_prob"] = pack(site["log_prob"], dim_to_symbol)
-                    packed["unscaled_log_prob"] = pack(
-                        site["unscaled_log_prob"], dim_to_symbol
-                    )
+                    packed["unscaled_log_prob"] = pack(site["unscaled_log_prob"], dim_to_symbol)
             except ValueError as e:
                 _, exc_value, traceback = sys.exc_info()
                 shapes = self.format_shapes(last_site=site["name"])
                 raise ValueError(
-                    "Error while packing tensors at site '{}':\n  {}\n{}".format(
-                        site["name"], exc_value, shapes
-                    )
+                    "Error while packing tensors at site '{}':\n  {}\n{}".format(site["name"], exc_value, shapes)
                 ).with_traceback(traceback) from e
 
-    def format_shapes(
-        self, title: str = "Trace Shapes:", last_site: Optional[str] = None
-    ) -> str:
+    def format_shapes(self, title: str = "Trace Shapes:", last_site: Optional[str] = None) -> str:
         """
         Returns a string showing a table of the shapes of all sites in the
         trace.
@@ -520,11 +480,7 @@ class Trace:
                 # log_prob shape
                 if "log_prob" in site:
                     batch_shape = getattr(site["log_prob"], "shape", ())
-                    rows.append(
-                        ["log_prob", None]
-                        + [str(size) for size in batch_shape]
-                        + ["|", None]
-                    )
+                    rows.append(["log_prob", None] + [str(size) for size in batch_shape] + ["|", None])
             if name == last_site:
                 break
 
@@ -559,11 +515,7 @@ def _format_table(rows: List[List[Optional[str]]]) -> str:
             else:
                 cols[j].append(cell)
         cols = [
-            (
-                [""] * (width - len(col)) + col
-                if direction == "r"
-                else col + [""] * (width - len(col))
-            )
+            ([""] * (width - len(col)) + col if direction == "r" else col + [""] * (width - len(col)))
             for width, col, direction in zip(column_widths, cols, "rrl")
         ]
         justified_rows.append(sum(cols, []))

@@ -36,23 +36,17 @@ class IndepMessenger(GlobalNamedMessenger):
         assert dim is None or dim < 0
         super().__init__()
         # without a name or dim, treat as a "vectorize" effect and allocate a non-visible dim
-        self.dim_type = (
-            DimType.GLOBAL if name is None and dim is None else DimType.VISIBLE
-        )
+        self.dim_type = DimType.GLOBAL if name is None and dim is None else DimType.VISIBLE
         self.name = name if name is not None else funsor.interpreter.gensym("PLATE")
         self.size = size
         self.dim = dim
         if not hasattr(self, "_full_size"):
             self._full_size = size
         if indices is None:
-            indices = funsor.ops.new_arange(
-                funsor.tensor.get_default_prototype(), self.size
-            )
+            indices = funsor.ops.new_arange(funsor.tensor.get_default_prototype(), self.size)
         assert len(indices) == size
 
-        self._indices = funsor.Tensor(
-            indices, OrderedDict([(self.name, funsor.Bint[self.size])]), self._full_size
-        )
+        self._indices = funsor.Tensor(indices, OrderedDict([(self.name, funsor.Bint[self.size])]), self._full_size)
 
     def __enter__(self):
         super().__enter__()  # do this first to take care of globals recycling
@@ -101,11 +95,7 @@ class SubsampleMessenger(IndepMessenger):
         msg["scale"] = msg["scale"] * self._scale
 
     def _subsample_site_value(self, value, event_dim=None):
-        if (
-            self.dim is not None
-            and event_dim is not None
-            and self.subsample_size < self._full_size
-        ):
+        if self.dim is not None and event_dim is not None and self.subsample_size < self._full_size:
             event_shape = value.shape[len(value.shape) - event_dim :]
             funsor_value = to_funsor(value, output=funsor.Reals[event_shape])
             if self.name in funsor_value.inputs:
@@ -149,11 +139,7 @@ class PlateMessenger(SubsampleMessenger):
         BroadcastMessenger._pyro_sample(msg)
 
     def __iter__(self):
-        return iter(
-            _SequentialPlateMessenger(
-                self.name, self.size, self._indices.data.squeeze(), self._scale
-            )
-        )
+        return iter(_SequentialPlateMessenger(self.name, self.size, self._indices.data.squeeze(), self._scale))
 
 
 class _SequentialPlateMessenger(Messenger):
@@ -314,12 +300,7 @@ class VectorizedMarkovMessenger(NamedMessenger):
         :return: step information
         :rtype: frozenset
         """
-        chain = frozenset(
-            {
-                tuple("{}{}".format(var, suffix) for suffix in suffixes)
-                for var in markov_vars
-            }
-        )
+        chain = frozenset({tuple("{}{}".format(var, suffix) for suffix in suffixes) for var in markov_vars})
         return chain
 
     def __iter__(self):
@@ -330,20 +311,13 @@ class VectorizedMarkovMessenger(NamedMessenger):
             self._suffixes.append(self._suffix)
             yield self._suffix
         with self:
-            with IndepMessenger(
-                name=self.name, size=self.size - self.history, dim=self.dim
-            ) as time:
+            with IndepMessenger(name=self.name, size=self.size - self.history, dim=self.dim) as time:
                 time_indices = [time.indices + i for i in range(self.history + 1)]
-                time_slices = [
-                    slice(i, self.size - self.history + i)
-                    for i in range(self.history + 1)
-                ]
+                time_slices = [slice(i, self.size - self.history + i) for i in range(self.history + 1)]
                 self._suffixes.extend(time_slices)
                 for self._suffix, self._indices in zip(time_slices, time_indices):
                     yield self._indices
-        self._markov_chain(
-            name=self.name, markov_vars=self._markov_vars, suffixes=self._suffixes
-        )
+        self._markov_chain(name=self.name, markov_vars=self._markov_vars, suffixes=self._suffixes)
 
     def _pyro_sample(self, msg):
         if type(msg["fn"]).__name__ == "_Subsample":

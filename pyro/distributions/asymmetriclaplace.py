@@ -183,9 +183,7 @@ class SoftAsymmetricLaplace(TorchDistribution):
         shape = self._extended_shape(sample_shape)
         z = self.loc.new_empty(shape).normal_()
         u, v = self.loc.new_empty((2,) + shape).exponential_()
-        return (
-            self.loc + self.soft_scale * z - self.left_scale * u + self.right_scale * v
-        )
+        return self.loc + self.soft_scale * z - self.left_scale * u + self.right_scale * v
 
     @property
     def mean(self):

@@ -65,9 +65,9 @@ class NormalNormalTests(TestCase):
         self.data_sum = self.data.sum(0)
         self.analytic_lam_n = self.lam0 + self.n_data.expand_as(self.lam) * self.lam
         self.analytic_log_sig_n = -0.5 * torch.log(self.analytic_lam_n)
-        self.analytic_loc_n = self.data_sum * (
-            self.lam / self.analytic_lam_n
-        ) + self.loc0 * (self.lam0 / self.analytic_lam_n)
+        self.analytic_loc_n = self.data_sum * (self.lam / self.analytic_lam_n) + self.loc0 * (
+            self.lam0 / self.analytic_lam_n
+        )
         self.batch_size = 4
         self.sample_batch_size = 2
 
@@ -88,14 +88,10 @@ class NormalNormalTests(TestCase):
         self.do_elbo_test(False, 15000, Trace_ELBO())
 
     def test_renyi_reparameterized(self):
-        self.do_elbo_test(
-            True, 2500, RenyiELBO(num_particles=3, vectorize_particles=False)
-        )
+        self.do_elbo_test(True, 2500, RenyiELBO(num_particles=3, vectorize_particles=False))
 
     def test_renyi_nonreparameterized(self):
-        self.do_elbo_test(
-            False, 7500, RenyiELBO(num_particles=3, vectorize_particles=True)
-        )
+        self.do_elbo_test(False, 7500, RenyiELBO(num_particles=3, vectorize_particles=True))
 
     def test_rws_reparameterized(self):
         self.do_elbo_test(True, 2500, ReweightedWakeSleep(num_particles=3))
@@ -152,9 +148,7 @@ class NormalNormalTests(TestCase):
 
         def guide():
             loc_q = pyro.param("loc_q", self.analytic_loc_n.detach() + 0.134)
-            log_sig_q = pyro.param(
-                "log_sig_q", self.analytic_log_sig_n.data.detach() - 0.14
-            )
+            log_sig_q = pyro.param("log_sig_q", self.analytic_log_sig_n.data.detach() - 0.14)
             sig_q = torch.exp(log_sig_q)
             Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
             pyro.sample("loc_latent", Normal(loc_q, sig_q).to_event(1))
@@ -180,17 +174,13 @@ class NormalNormalTests(TestCase):
                     "loc_latent",
                     dist.Normal(
                         torch.stack([self.loc0] * self.sample_batch_size, dim=0),
-                        torch.stack(
-                            [torch.pow(self.lam0, -0.5)] * self.sample_batch_size, dim=0
-                        ),
+                        torch.stack([torch.pow(self.lam0, -0.5)] * self.sample_batch_size, dim=0),
                     ).to_event(1),
                 )
 
         def guide():
             loc_q = pyro.param("loc_q", self.loc0.detach() + 0.134)
-            log_sig_q = pyro.param(
-                "log_sig_q", -0.5 * torch.log(self.lam0).data.detach() - 0.14
-            )
+            log_sig_q = pyro.param("log_sig_q", -0.5 * torch.log(self.lam0).data.detach() - 0.14)
             sig_q = torch.exp(log_sig_q)
             Normal = dist.Normal if reparameterized else fakes.NonreparameterizedNormal
             with pyro.plate("samples", self.sample_batch_size):
@@ -219,15 +209,9 @@ class NormalNormalTests(TestCase):
                         ) = loss._differentiable_loss_parts(model, guide)
                         avg_loglikelihood = torch_item(avg_loglikelihood)
                         avg_penalty = torch_item(avg_penalty)
-                    loglikelihood, penalty = loss._differentiable_loss_parts(
-                        model, guide
-                    )
-                    avg_loglikelihood = alpha * avg_loglikelihood + (
-                        1 - alpha
-                    ) * torch_item(loglikelihood)
-                    avg_penalty = alpha * avg_penalty + (1 - alpha) * torch_item(
-                        penalty
-                    )
+                    loglikelihood, penalty = loss._differentiable_loss_parts(model, guide)
+                    avg_loglikelihood = alpha * avg_loglikelihood + (1 - alpha) * torch_item(loglikelihood)
+                    avg_penalty = alpha * avg_penalty + (1 - alpha) * torch_item(penalty)
                 if k % 100 == 0:
                     print(loc_error, log_sig_error)
                     print(avg_loglikelihood, avg_penalty)
@@ -277,17 +261,15 @@ class TestFixedModelGuide(TestCase):
         for _ in range(3):
             svi.step()
 
-        model_unchanged = (
-            torch.equal(pyro.param("alpha_p_log").data, self.alpha_p_log_0)
-        ) and (torch.equal(pyro.param("beta_p_log").data, self.beta_p_log_0))
-        guide_unchanged = (
-            torch.equal(pyro.param("alpha_q_log").data, self.alpha_q_log_0)
-        ) and (torch.equal(pyro.param("beta_q_log").data, self.beta_q_log_0))
+        model_unchanged = (torch.equal(pyro.param("alpha_p_log").data, self.alpha_p_log_0)) and (
+            torch.equal(pyro.param("beta_p_log").data, self.beta_p_log_0)
+        )
+        guide_unchanged = (torch.equal(pyro.param("alpha_q_log").data, self.alpha_q_log_0)) and (
+            torch.equal(pyro.param("beta_q_log").data, self.beta_q_log_0)
+        )
         model_changed = not model_unchanged
         guide_changed = not guide_unchanged
-        error = ("model" in fixed_parts and model_changed) or (
-            "guide" in fixed_parts and guide_changed
-        )
+        error = ("model" in fixed_parts and model_changed) or ("guide" in fixed_parts and guide_changed)
         return not error
 
     def test_model_fixed(self):
@@ -410,12 +392,8 @@ class PoissonGammaTests(TestCase):
                 pyro.sample(
                     "lambda_latent",
                     Gamma(
-                        torch.stack(
-                            [torch.stack([self.alpha0])] * self.sample_batch_size
-                        ),
-                        torch.stack(
-                            [torch.stack([self.beta0])] * self.sample_batch_size
-                        ),
+                        torch.stack([torch.stack([self.alpha0])] * self.sample_batch_size),
+                        torch.stack([torch.stack([self.beta0])] * self.sample_batch_size),
                     ).to_event(1),
                 )
 
@@ -456,15 +434,9 @@ class PoissonGammaTests(TestCase):
                         ) = loss._differentiable_loss_parts(model, guide, (), {})
                         avg_loglikelihood = torch_item(avg_loglikelihood)
                         avg_penalty = torch_item(avg_penalty)
-                    loglikelihood, penalty = loss._differentiable_loss_parts(
-                        model, guide, (), {}
-                    )
-                    avg_loglikelihood = alpha * avg_loglikelihood + (
-                        1 - alpha
-                    ) * torch_item(loglikelihood)
-                    avg_penalty = alpha * avg_penalty + (1 - alpha) * torch_item(
-                        penalty
-                    )
+                    loglikelihood, penalty = loss._differentiable_loss_parts(model, guide, (), {})
+                    avg_loglikelihood = alpha * avg_loglikelihood + (1 - alpha) * torch_item(loglikelihood)
+                    avg_penalty = alpha * avg_penalty + (1 - alpha) * torch_item(penalty)
                 if k % 100 == 0:
                     print(alpha_error, beta_error)
                     print(avg_loglikelihood, avg_penalty)
@@ -533,12 +505,8 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
         return lambda_latent
 
     def guide(alpha0, beta0, alpha_n, beta_n):
-        alpha_q = pyro.param(
-            "alpha_q", alpha_n * math.exp(0.17), constraint=constraints.positive
-        )
-        beta_q = pyro.param(
-            "beta_q", beta_n / math.exp(0.143), constraint=constraints.positive
-        )
+        alpha_q = pyro.param("alpha_q", alpha_n * math.exp(0.17), constraint=constraints.positive)
+        beta_q = pyro.param("beta_q", beta_n / math.exp(0.143), constraint=constraints.positive)
         pyro.sample("lambda_latent", gamma_dist(alpha_q, beta_q))
 
     adam = optim.Adam({"lr": 0.0003, "betas": (0.97, 0.999)})
@@ -551,13 +519,9 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
         )
     elif elbo_impl is ReweightedWakeSleep:
         if gamma_dist is ShapeAugmentedGamma:
-            pytest.xfail(
-                reason="ShapeAugmentedGamma not suported for ReweightedWakeSleep"
-            )
+            pytest.xfail(reason="ShapeAugmentedGamma not suported for ReweightedWakeSleep")
         else:
-            elbo = elbo_impl(
-                num_particles=3, max_plate_nesting=1, strict_enumeration_warning=False
-            )
+            elbo = elbo_impl(num_particles=3, max_plate_nesting=1, strict_enumeration_warning=False)
     else:
         elbo = elbo_impl(max_plate_nesting=1, strict_enumeration_warning=False)
     svi = SVI(model, guide, adam, loss=elbo)
@@ -570,17 +534,13 @@ def test_exponential_gamma(gamma_dist, n_steps, elbo_impl):
         pyro.param("alpha_q"),
         alpha_n,
         prec=prec,
-        msg="{} vs {}".format(
-            pyro.param("alpha_q").detach().cpu().numpy(), alpha_n.detach().cpu().numpy()
-        ),
+        msg="{} vs {}".format(pyro.param("alpha_q").detach().cpu().numpy(), alpha_n.detach().cpu().numpy()),
     )
     assert_equal(
         pyro.param("beta_q"),
         beta_n,
         prec=prec,
-        msg="{} vs {}".format(
-            pyro.param("beta_q").detach().cpu().numpy(), beta_n.detach().cpu().numpy()
-        ),
+        msg="{} vs {}".format(pyro.param("beta_q").detach().cpu().numpy(), beta_n.detach().cpu().numpy()),
     )
 
 
@@ -659,18 +619,14 @@ class BernoulliBetaTests(TestCase):
         self.do_elbo_test(
             True,
             5000,
-            ReweightedWakeSleep(
-                num_particles=2, vectorize_particles=True, max_plate_nesting=1
-            ),
+            ReweightedWakeSleep(num_particles=2, vectorize_particles=True, max_plate_nesting=1),
         )
 
     def test_rws_nonreparameterized_vectorized(self):
         self.do_elbo_test(
             False,
             5000,
-            ReweightedWakeSleep(
-                num_particles=2, vectorize_particles=True, max_plate_nesting=1
-            ),
+            ReweightedWakeSleep(num_particles=2, vectorize_particles=True, max_plate_nesting=1),
         )
 
     def test_mmd_vectorized(self):
@@ -724,12 +680,8 @@ class BernoulliBetaTests(TestCase):
                 pyro.sample(
                     "p_latent",
                     Beta(
-                        torch.stack(
-                            [torch.stack([self.alpha0])] * self.sample_batch_size
-                        ),
-                        torch.stack(
-                            [torch.stack([self.beta0])] * self.sample_batch_size
-                        ),
+                        torch.stack([torch.stack([self.alpha0])] * self.sample_batch_size),
+                        torch.stack([torch.stack([self.beta0])] * self.sample_batch_size),
                     ).to_event(1),
                 )
 
@@ -763,15 +715,9 @@ class BernoulliBetaTests(TestCase):
                         ) = loss._differentiable_loss_parts(model, guide)
                         avg_loglikelihood = torch_item(avg_loglikelihood)
                         avg_penalty = torch_item(avg_penalty)
-                    loglikelihood, penalty = loss._differentiable_loss_parts(
-                        model, guide
-                    )
-                    avg_loglikelihood = alpha * avg_loglikelihood + (
-                        1 - alpha
-                    ) * torch_item(loglikelihood)
-                    avg_penalty = alpha * avg_penalty + (1 - alpha) * torch_item(
-                        penalty
-                    )
+                    loglikelihood, penalty = loss._differentiable_loss_parts(model, guide)
+                    avg_loglikelihood = alpha * avg_loglikelihood + (1 - alpha) * torch_item(loglikelihood)
+                    avg_penalty = alpha * avg_penalty + (1 - alpha) * torch_item(penalty)
                 if k % 100 == 0:
                     print(alpha_error, beta_error)
                     print(avg_loglikelihood, avg_penalty)
@@ -792,9 +738,7 @@ class SafetyTests(TestCase):
 
         def model_obs_dup():
             pyro.sample("loc_q", dist.Normal(torch.zeros(1), torch.ones(1)))
-            pyro.sample(
-                "loc_q", dist.Normal(torch.zeros(1), torch.ones(1)), obs=torch.zeros(1)
-            )
+            pyro.sample("loc_q", dist.Normal(torch.zeros(1), torch.ones(1)), obs=torch.zeros(1))
 
         def model():
             pyro.sample("loc_q", dist.Normal(torch.zeros(1), torch.ones(1)))
@@ -848,13 +792,9 @@ def test_energy_distance_univariate(prior_scale):
 
     def guide(data):
         loc_loc = pyro.param("loc_loc", torch.tensor(0.0))
-        loc_scale = pyro.param(
-            "loc_scale", torch.tensor(1.0), constraint=constraints.positive
-        )
+        loc_scale = pyro.param("loc_scale", torch.tensor(1.0), constraint=constraints.positive)
         log_scale_loc = pyro.param("log_scale_loc", torch.tensor(0.0))
-        log_scale_scale = pyro.param(
-            "log_scale_scale", torch.tensor(1.0), constraint=constraints.positive
-        )
+        log_scale_scale = pyro.param("log_scale_scale", torch.tensor(1.0), constraint=constraints.positive)
         pyro.sample("loc", dist.Normal(loc_loc, loc_scale))
         pyro.sample("scale", dist.LogNormal(log_scale_loc, log_scale_scale))
 
@@ -892,9 +832,7 @@ def test_energy_distance_multivariate(prior_scale):
             pyro.sample("obs", dist.MultivariateNormal(loc, cov), obs=data)
 
     def guide(data):
-        scale_tril = pyro.param(
-            "scale_tril", torch.eye(2), constraint=constraints.lower_cholesky
-        )
+        scale_tril = pyro.param("scale_tril", torch.eye(2), constraint=constraints.lower_cholesky)
         pyro.sample("cov", dist.Delta(scale_tril @ scale_tril.t(), event_dim=2))
 
     cov = torch.tensor([[1, 0.8], [0.8, 1]])
@@ -984,9 +922,7 @@ def test_non_nested_plating_sum():
         # Combine with weights and sample
         with pyro.plate("data_plate_1", data.shape[-1]):
             with pyro.plate("data_plate_2", data.shape[-2]):
-                pyro.sample(
-                    "data", pyro.distributions.Normal(x @ weights, scale), obs=data
-                )
+                pyro.sample("data", pyro.distributions.Normal(x @ weights, scale), obs=data)
 
     def guide(data, weights):
         loc = pyro.param("x_loc", torch.tensor(0.5))

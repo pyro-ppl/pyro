@@ -150,16 +150,11 @@ class ELBO(object, metaclass=ABCMeta):
         # Ignore validation to allow model-enumerated sites absent from the guide.
         with poutine.block():
             guide_trace = poutine.trace(guide).get_trace(*args, **kwargs)
-            model_trace = poutine.trace(
-                poutine.replay(model, trace=guide_trace)
-            ).get_trace(*args, **kwargs)
+            model_trace = poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(*args, **kwargs)
         guide_trace = prune_subsample_sites(guide_trace)
         model_trace = prune_subsample_sites(model_trace)
         sites = [
-            site
-            for trace in (model_trace, guide_trace)
-            for site in trace.nodes.values()
-            if site["type"] == "sample"
+            site for trace in (model_trace, guide_trace) for site in trace.nodes.values() if site["type"] == "sample"
         ]
 
         # Validate shapes now, since shape constraints will be weaker once
@@ -172,12 +167,7 @@ class ELBO(object, metaclass=ABCMeta):
             for site in sites:
                 check_site_shape(site, max_plate_nesting=float("inf"))
 
-        dims = [
-            frame.dim
-            for site in sites
-            for frame in site["cond_indep_stack"]
-            if frame.vectorized
-        ]
+        dims = [frame.dim for site in sites for frame in site["cond_indep_stack"] if frame.vectorized]
         self.max_plate_nesting = -min(dims) if dims else 0
         if self.vectorize_particles and self.num_particles > 1:
             self.max_plate_nesting += 1

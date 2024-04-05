@@ -9,6 +9,7 @@ The standard interface for initialization is a function that inputs a Pyro
 trace ``site`` dict and returns an appropriately sized ``value`` to serve
 as an initial constrained value for a guide estimate.
 """
+
 import functools
 from typing import Callable, Optional
 
@@ -75,9 +76,7 @@ def init_to_median(
         in ``values``.
     """
     if site is None:
-        return functools.partial(
-            init_to_median, num_samples=num_samples, fallback=fallback
-        )
+        return functools.partial(init_to_median, num_samples=num_samples, fallback=fallback)
 
     # The median undefined for multivariate distributions.
     if _is_multivariate(site["fn"]):

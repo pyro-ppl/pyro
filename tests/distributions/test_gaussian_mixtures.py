@@ -58,18 +58,11 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
 
     if cost_function == "cosine":
         analytic1 = torch.cos((omega * locs).sum(-1))
-        analytic2 = torch.exp(
-            -0.5
-            * torch.pow(omega * coord_scale * component_scale.unsqueeze(-1), 2.0).sum(
-                -1
-            )
-        )
+        analytic2 = torch.exp(-0.5 * torch.pow(omega * coord_scale * component_scale.unsqueeze(-1), 2.0).sum(-1))
         analytic = (pis * analytic1 * analytic2).sum()
         analytic.backward()
     elif cost_function == "quadratic":
-        analytic = torch.pow(coord_scale * component_scale.unsqueeze(-1), 2.0).sum(
-            -1
-        ) + torch.pow(locs, 2.0).sum(-1)
+        analytic = torch.pow(coord_scale * component_scale.unsqueeze(-1), 2.0).sum(-1) + torch.pow(locs, 2.0).sum(-1)
         analytic = (pis * analytic).sum()
         analytic.backward()
 
@@ -151,11 +144,7 @@ def test_mean_gradient(K, D, flat_logits, cost_function, mix_dist, batch_mode):
             mix_dist.__name__, analytic.item(), cost.item()
         ),
     )
-    logger.debug(
-        "analytic_grads_logit: {}".format(
-            analytic_grads["component_logits"].detach().cpu().numpy()
-        )
-    )
+    logger.debug("analytic_grads_logit: {}".format(analytic_grads["component_logits"].detach().cpu().numpy()))
 
     for param_name, param in params.items():
         assert_equal(
@@ -206,9 +195,7 @@ def test_gsm_log_prob():
     correct_log_prob += 0.75 * math.exp(-0.50 / (4.0 * 6.25)) / 6.25
     correct_log_prob /= (2.0 * math.pi) * 4.0
     correct_log_prob = math.log(correct_log_prob)
-    assert_equal(
-        log_prob, correct_log_prob, msg="bad log prob for GaussianScaleMixture"
-    )
+    assert_equal(log_prob, correct_log_prob, msg="bad log prob for GaussianScaleMixture")
 
 
 @pytest.mark.parametrize("batch_size", [1, 3])
@@ -231,6 +218,4 @@ def test_mix_of_diag_normals_log_prob(batch_size):
     if batch_size > 1:
         correct_log_prob = [correct_log_prob] * batch_size
     correct_log_prob = torch.tensor(correct_log_prob)
-    assert_equal(
-        log_prob, correct_log_prob, msg="bad log prob for MixtureOfDiagNormals"
-    )
+    assert_equal(log_prob, correct_log_prob, msg="bad log prob for MixtureOfDiagNormals")

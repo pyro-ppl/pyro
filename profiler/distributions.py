@@ -74,10 +74,7 @@ def get_tool_cfg():
 @Profile(
     tool=get_tool,
     tool_cfg=get_tool_cfg,
-    fn_id=lambda dist, batch_size, *args, **kwargs: "sample_"
-    + dist.dist_class.__name__
-    + "_N="
-    + str(batch_size),
+    fn_id=lambda dist, batch_size, *args, **kwargs: "sample_" + dist.dist_class.__name__ + "_N=" + str(batch_size),
 )
 def sample(dist, batch_size):
     return dist.sample(sample_shape=(batch_size,))
@@ -137,22 +134,18 @@ def set_tool_cfg(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Profiling distributions library using various" "tools."
-    )
+    parser = argparse.ArgumentParser(description="Profiling distributions library using various" "tools.")
     parser.add_argument(
         "--tool",
         nargs="?",
         default="timeit",
-        help="Profile using tool. One of following should be specified:"
-        ' ["timeit", "cprofile"]',
+        help="Profile using tool. One of following should be specified:" ' ["timeit", "cprofile"]',
     )
     parser.add_argument(
         "--batch_sizes",
         nargs="*",
         type=int,
-        help="Batch size of tensor - max of 4 values allowed. "
-        "Default = [10000, 100000]",
+        help="Batch size of tensor - max of 4 values allowed. " "Default = [10000, 100000]",
     )
     parser.add_argument(
         "--dists",

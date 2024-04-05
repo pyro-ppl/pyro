@@ -38,11 +38,7 @@ class DiscreteCosineTransform(Transform):
         return hash((type(self), self.dim, self.smooth))
 
     def __eq__(self, other):
-        return (
-            type(self) == type(other)
-            and self.dim == other.dim
-            and self.smooth == other.smooth
-        )
+        return type(self) == type(other) and self.dim == other.dim and self.smooth == other.smooth
 
     @constraints.dependent_property(is_discrete=False)
     def domain(self):

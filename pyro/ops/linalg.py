@@ -58,16 +58,9 @@ def eig_3d(H):
     """
     p1 = H[..., 0, 1].pow(2) + H[..., 0, 2].pow(2) + H[..., 1, 2].pow(2)
     q = (H[..., 0, 0] + H[..., 1, 1] + H[..., 2, 2]) / 3
-    p2 = (
-        (H[..., 0, 0] - q).pow(2)
-        + (H[..., 1, 1] - q).pow(2)
-        + (H[..., 2, 2] - q).pow(2)
-        + 2 * p1
-    )
+    p2 = (H[..., 0, 0] - q).pow(2) + (H[..., 1, 1] - q).pow(2) + (H[..., 2, 2] - q).pow(2) + 2 * p1
     p = torch.sqrt(p2 / 6)
-    B = (1 / p).unsqueeze(-1).unsqueeze(-1) * (
-        H - q.unsqueeze(-1).unsqueeze(-1) * torch.eye(3)
-    )
+    B = (1 / p).unsqueeze(-1).unsqueeze(-1) * (H - q.unsqueeze(-1).unsqueeze(-1) * torch.eye(3))
     r = determinant_3d(B) / 2
     phi = (r.acos() / 3).unsqueeze(-1).unsqueeze(-1).expand(r.shape + (3, 3)).clone()
     phi[r < -1 + 1e-6] = math.pi / 3

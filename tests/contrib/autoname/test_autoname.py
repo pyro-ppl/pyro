@@ -365,8 +365,6 @@ def test_no_param():
 
     expected_names = ["a", "model/b"]
     tr = poutine.trace(model).get_trace()
-    actual_names = [
-        name for name, node in tr.nodes.items() if node["type"] in ("param", "sample")
-    ]
+    actual_names = [name for name, node in tr.nodes.items() if node["type"] in ("param", "sample")]
 
     assert expected_names == actual_names

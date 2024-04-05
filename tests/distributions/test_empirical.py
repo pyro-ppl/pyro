@@ -40,9 +40,7 @@ def test_unweighted_samples(batch_shape, event_shape, sample_shape, dtype):
     dim_ordering = list(range(len(batch_shape + event_shape) + 1))  # +1 for agg dim
     dim_ordering.insert(len(batch_shape), dim_ordering.pop())
     emp_samples = (
-        torch.arange(agg_dim_size, dtype=dtype)
-        .expand(batch_shape + event_shape + [agg_dim_size])
-        .permute(dim_ordering)
+        torch.arange(agg_dim_size, dtype=dtype).expand(batch_shape + event_shape + [agg_dim_size]).permute(dim_ordering)
     )
     # initial weight assignment
     weights = torch.ones(batch_shape + [agg_dim_size])
@@ -129,9 +127,7 @@ def test_weighted_sample_coherence(event_shape, dtype):
     samples = empirical_dist.sample(sample_shape=torch.Size((1000,)))
     zeros = torch.zeros(event_shape, dtype=dtype)
     ones = torch.ones(event_shape, dtype=dtype)
-    num_zeros = (
-        samples.eq(zeros).contiguous().view(1000, -1).min(dim=-1)[0].float().sum()
-    )
+    num_zeros = samples.eq(zeros).contiguous().view(1000, -1).min(dim=-1)[0].float().sum()
     num_ones = samples.eq(ones).contiguous().view(1000, -1).min(dim=-1)[0].float().sum()
     assert_equal(num_zeros.item() / 1000, 0.75, prec=0.02)
     assert_equal(num_ones.item() / 1000, 0.25, prec=0.02)

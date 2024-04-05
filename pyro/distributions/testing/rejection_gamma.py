@@ -20,17 +20,13 @@ class RejectionStandardGamma(Rejector):
         if concentration.data.min() < 1:
             raise NotImplementedError("concentration < 1 is not supported")
         self.concentration = concentration
-        self._standard_gamma = Gamma(
-            concentration, concentration.new([1.0]).squeeze().expand_as(concentration)
-        )
+        self._standard_gamma = Gamma(concentration, concentration.new([1.0]).squeeze().expand_as(concentration))
         # The following are Marsaglia & Tsang's variable names.
         self._d = self.concentration - 1.0 / 3.0
         self._c = 1.0 / torch.sqrt(9.0 * self._d)
         # Compute log scale using Gamma.log_prob().
         x = self._d.detach()  # just an arbitrary x.
-        log_scale = (
-            self.propose_log_prob(x) + self.log_prob_accept(x) - self.log_prob(x)
-        )
+        log_scale = self.propose_log_prob(x) + self.log_prob_accept(x) - self.log_prob(x)
         super().__init__(
             self.propose,
             self.log_prob_accept,
@@ -78,9 +74,7 @@ class RejectionStandardGamma(Rejector):
         result -= torch.log(3 * y**2)
         x = (y - 1) / self._c
         result -= self._c.log()
-        result += Normal(
-            torch.zeros_like(self.concentration), torch.ones_like(self.concentration)
-        ).log_prob(x)
+        result += Normal(torch.zeros_like(self.concentration), torch.ones_like(self.concentration)).log_prob(x)
         return result
 
     @weakmethod
@@ -182,17 +176,13 @@ class ShapeAugmentedDirichlet(Dirichlet):
 
     def __init__(self, concentration, boost=1, validate_args=None):
         super().__init__(concentration, validate_args=validate_args)
-        self._gamma = ShapeAugmentedGamma(
-            concentration, torch.ones_like(concentration), boost
-        )
+        self._gamma = ShapeAugmentedGamma(concentration, torch.ones_like(concentration), boost)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(ShapeAugmentedDirichlet, _instance)
         new = super().expand(batch_shape, new)
         batch_shape = torch.Size(batch_shape)
-        new._gamma = self._gamma.expand(
-            batch_shape + self._gamma.concentration.shape[-1:]
-        )
+        new._gamma = self._gamma.expand(batch_shape + self._gamma.concentration.shape[-1:])
         new._validate_args = self._validate_args
         return new
 
@@ -213,17 +203,13 @@ class ShapeAugmentedBeta(Beta):
     def __init__(self, concentration1, concentration0, boost=1, validate_args=None):
         super().__init__(concentration1, concentration0, validate_args=validate_args)
         alpha_beta = torch.stack([concentration1, concentration0], -1)
-        self._gamma = ShapeAugmentedGamma(
-            alpha_beta, torch.ones_like(alpha_beta), boost
-        )
+        self._gamma = ShapeAugmentedGamma(alpha_beta, torch.ones_like(alpha_beta), boost)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(ShapeAugmentedBeta, _instance)
         new = super().expand(batch_shape, new)
         batch_shape = torch.Size(batch_shape)
-        new._gamma = self._gamma.expand(
-            batch_shape + self._gamma.concentration.shape[-1:]
-        )
+        new._gamma = self._gamma.expand(batch_shape + self._gamma.concentration.shape[-1:])
         new._validate_args = self._validate_args
         return new
 

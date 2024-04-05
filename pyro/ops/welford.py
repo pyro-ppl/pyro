@@ -72,15 +72,10 @@ class WelfordArrowheadCovariance:
         self._mean = self._mean + delta_pre / self.n_samples
         delta_post = sample - self._mean
         if self.head_size > 0:
-            self._m2_top = self._m2_top + torch.ger(
-                delta_post[: self.head_size], delta_pre
-            )
+            self._m2_top = self._m2_top + torch.ger(delta_post[: self.head_size], delta_pre)
         else:
             self._m2_top = sample.new_empty(0, sample.size(0))
-        self._m2_bottom_diag = (
-            self._m2_bottom_diag
-            + delta_post[self.head_size :] * delta_pre[self.head_size :]
-        )
+        self._m2_bottom_diag = self._m2_bottom_diag + delta_post[self.head_size :] * delta_pre[self.head_size :]
 
     def get_covariance(self, regularize=True):
         """

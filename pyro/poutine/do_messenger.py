@@ -56,10 +56,7 @@ class DoMessenger(Messenger):
 
     def _pyro_sample(self, msg: Message) -> None:
         assert isinstance(msg["name"], str)
-        if (
-            msg.get("_intervener_id") != self._intervener_id
-            and self.data.get(msg["name"]) is not None
-        ):
+        if msg.get("_intervener_id") != self._intervener_id and self.data.get(msg["name"]) is not None:
             if msg.get("_intervener_id") is not None:
                 warnings.warn(
                     "Attempting to intervene on variable {} multiple times,"
@@ -87,8 +84,4 @@ class DoMessenger(Messenger):
                 msg["is_observed"] = True
                 msg["stop"] = True
             else:
-                raise NotImplementedError(
-                    "Interventions of type {} not implemented (yet)".format(
-                        type(intervention)
-                    )
-                )
+                raise NotImplementedError("Interventions of type {} not implemented (yet)".format(type(intervention)))

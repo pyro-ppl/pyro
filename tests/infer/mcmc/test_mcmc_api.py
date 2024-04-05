@@ -34,9 +34,7 @@ class PriorKernel(MCMCKernel):
 
     def setup(self, warmup_steps, data):
         self.data = data
-        init_params, potential_fn, transforms, model_trace = initialize_model(
-            self.model, model_args=(data,)
-        )
+        init_params, potential_fn, transforms, model_trace = initialize_model(self.model, model_args=(data,))
         if self._initial_params is None:
             self._initial_params = init_params
         if self.transforms is None:
@@ -158,9 +156,7 @@ def run_streaming_mcmc(
 def test_mcmc_interface(run_mcmc_cls, num_draws, group_by_chain, num_chains):
     num_samples = 2000
     data = torch.tensor([1.0])
-    initial_params, _, transforms, _ = initialize_model(
-        normal_normal_model, model_args=(data,), num_chains=num_chains
-    )
+    initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,), num_chains=num_chains)
     kernel = PriorKernel(normal_normal_model)
     samples, mcmc_num_chains = run_mcmc_cls(
         data,
@@ -207,9 +203,7 @@ def test_mcmc_interface(run_mcmc_cls, num_draws, group_by_chain, num_chains):
 def test_num_chains(num_chains, cpu_count, default_init_params, monkeypatch):
     monkeypatch.setattr(torch.multiprocessing, "cpu_count", lambda: cpu_count)
     data = torch.tensor([1.0])
-    initial_params, _, transforms, _ = initialize_model(
-        normal_normal_model, model_args=(data,), num_chains=num_chains
-    )
+    initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,), num_chains=num_chains)
     if default_init_params:
         initial_params = None
     kernel = PriorKernel(normal_normal_model)
@@ -255,9 +249,7 @@ def _hook(iters, kernel, samples, stage, i):
 @pytest.mark.filterwarnings("ignore:num_chains")
 def test_null_model_with_hook(run_mcmc_cls, kernel, model, jit, num_chains):
     num_warmup, num_samples = 10, 10
-    initial_params, potential_fn, transforms, _ = initialize_model(
-        model, num_chains=num_chains
-    )
+    initial_params, potential_fn, transforms, _ = initialize_model(model, num_chains=num_chains)
 
     iters = []
     hook = partial(_hook, iters)
@@ -277,9 +269,7 @@ def test_null_model_with_hook(run_mcmc_cls, kernel, model, jit, num_chains):
     )
     assert samples == {}
     if num_chains == 1:
-        expected = [("Warmup", i) for i in range(num_warmup)] + [
-            ("Sample", i) for i in range(num_samples)
-        ]
+        expected = [("Warmup", i) for i in range(num_warmup)] + [("Sample", i) for i in range(num_samples)]
         assert iters == expected
 
 
@@ -288,9 +278,7 @@ def test_null_model_with_hook(run_mcmc_cls, kernel, model, jit, num_chains):
 @pytest.mark.filterwarnings("ignore:num_chains")
 def test_mcmc_diagnostics(run_mcmc_cls, num_chains):
     data = torch.tensor([2.0]).repeat(3)
-    initial_params, _, transforms, _ = initialize_model(
-        normal_normal_model, model_args=(data,), num_chains=num_chains
-    )
+    initial_params, _, transforms, _ = initialize_model(normal_normal_model, model_args=(data,), num_chains=num_chains)
     kernel = PriorKernel(normal_normal_model)
     if run_mcmc_cls == run_default_mcmc:
         mcmc = MCMC(
@@ -318,9 +306,7 @@ def test_mcmc_diagnostics(run_mcmc_cls, num_chains):
     if run_mcmc_cls == run_default_mcmc:  # TODO n_eff for streaming MCMC
         assert diagnostics["y"]["n_eff"].shape == data.shape
     assert diagnostics["y"]["r_hat"].shape == data.shape
-    assert diagnostics["dummy_key"] == {
-        "chain {}".format(i): "dummy_value" for i in range(num_chains)
-    }
+    assert diagnostics["dummy_key"] == {"chain {}".format(i): "dummy_value" for i in range(num_chains)}
 
 
 @pytest.mark.parametrize("run_mcmc_cls", [run_default_mcmc, run_streaming_mcmc])

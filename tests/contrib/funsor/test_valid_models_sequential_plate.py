@@ -31,9 +31,7 @@ def test_enum_discrete_iplate_plate_dependency_ok(subsampling, enumerate_):
     def model():
         pyro.sample("w", dist.Bernoulli(0.5), infer={"enumerate": "parallel"})
         inner_plate = pyro.plate("plate", 10, subsample_size=4 if subsampling else None)
-        for i in pyro.plate(
-            "iplate", 10, subsample=torch.arange(3) if subsampling else None
-        ):
+        for i in pyro.plate("iplate", 10, subsample=torch.arange(3) if subsampling else None):
             pyro.sample("y_{}".format(i), dist.Bernoulli(0.5))
             with inner_plate:
                 pyro.sample(
@@ -56,12 +54,8 @@ def test_enum_iplate_iplate_ok():
         b_axis = pyro.plate("b_axis", 2)
         c_axis = pyro.plate("c_axis", 2)
         a = pyro.sample("a", dist.Categorical(probs_a))
-        b = [
-            pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis
-        ]
-        c = [
-            pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis
-        ]
+        b = [pyro.sample("b_{}".format(i), dist.Categorical(probs_b[a])) for i in b_axis]
+        c = [pyro.sample("c_{}".format(j), dist.Categorical(probs_c[a])) for j in c_axis]
         for i in b_axis:
             for j in c_axis:
                 pyro.sample(

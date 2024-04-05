@@ -22,9 +22,7 @@ class Poisson(Likelihood):
 
     def __init__(self, response_function=None):
         super().__init__()
-        self.response_function = (
-            torch.exp if response_function is None else response_function
-        )
+        self.response_function = torch.exp if response_function is None else response_function
 
     def forward(self, f_loc, f_var, y=None):
         r"""

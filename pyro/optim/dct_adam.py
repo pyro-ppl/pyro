@@ -188,17 +188,10 @@ class DCTAdam(Optimizer):
         state["step"].masked_scatter_(mask, state_step)
 
         # Decay the first and second moment running average coefficient
-        exp_avg = (
-            state["exp_avg"].masked_select(mask).mul_(beta1).add_(grad, alpha=1 - beta1)
-        )
+        exp_avg = state["exp_avg"].masked_select(mask).mul_(beta1).add_(grad, alpha=1 - beta1)
         state["exp_avg"].masked_scatter_(mask, exp_avg)
 
-        exp_avg_sq = (
-            state["exp_avg_sq"]
-            .masked_select(mask)
-            .mul_(beta2)
-            .addcmul_(grad, grad, value=1 - beta2)
-        )
+        exp_avg_sq = state["exp_avg_sq"].masked_select(mask).mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
         state["exp_avg_sq"].masked_scatter_(mask, exp_avg_sq)
 
         denom = exp_avg_sq.sqrt_().add_(group["eps"])

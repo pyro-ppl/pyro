@@ -18,9 +18,7 @@ def checker_mask(shape):
     return mask.fmod(2).bool()
 
 
-@pytest.mark.parametrize(
-    "batch_dim,mask_dim", [(b, m) for b in range(3) for m in range(1 + b)]
-)
+@pytest.mark.parametrize("batch_dim,mask_dim", [(b, m) for b in range(3) for m in range(1 + b)])
 @pytest.mark.parametrize("event_dim", [0, 1, 2])
 def test_mask(batch_dim, event_dim, mask_dim):
     # Construct base distribution.
@@ -43,9 +41,7 @@ def test_mask(batch_dim, event_dim, mask_dim):
     # Check values.
     assert_equal(dist.mean, base_dist.mean)
     assert_equal(dist.variance, base_dist.variance)
-    assert_equal(
-        dist.log_prob(sample), scale_and_mask(base_dist.log_prob(sample), mask=mask)
-    )
+    assert_equal(dist.log_prob(sample), scale_and_mask(base_dist.log_prob(sample), mask=mask))
     assert_equal(
         dist.score_parts(sample),
         base_dist.score_parts(sample).scale_and_mask(mask=mask),
@@ -104,18 +100,14 @@ def test_kl_divergence():
     p = Normal(torch.randn(2, 2), torch.randn(2, 2).exp())
     q = Normal(torch.randn(2, 2), torch.randn(2, 2).exp())
     expected = kl_divergence(p.to_event(2), q.to_event(2))
-    actual = kl_divergence(
-        p.mask(mask).to_event(2), q.mask(mask).to_event(2)
-    ) + kl_divergence(p.mask(~mask).to_event(2), q.mask(~mask).to_event(2))
+    actual = kl_divergence(p.mask(mask).to_event(2), q.mask(mask).to_event(2)) + kl_divergence(
+        p.mask(~mask).to_event(2), q.mask(~mask).to_event(2)
+    )
     assert_equal(actual, expected)
 
 
-@pytest.mark.parametrize(
-    "p_mask", [False, True, torch.tensor(False), torch.tensor(True)]
-)
-@pytest.mark.parametrize(
-    "q_mask", [False, True, torch.tensor(False), torch.tensor(True)]
-)
+@pytest.mark.parametrize("p_mask", [False, True, torch.tensor(False), torch.tensor(True)])
+@pytest.mark.parametrize("q_mask", [False, True, torch.tensor(False), torch.tensor(True)])
 def test_kl_divergence_type(p_mask, q_mask):
     p = Normal(torch.randn(2, 2), torch.randn(2, 2).exp())
     q = Normal(torch.randn(2, 2), torch.randn(2, 2).exp())

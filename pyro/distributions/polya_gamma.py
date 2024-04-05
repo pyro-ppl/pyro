@@ -40,23 +40,17 @@ class TruncatedPolyaGamma(TorchDistribution):
 
     def __init__(self, prototype, validate_args=None):
         self.prototype = prototype
-        super(TruncatedPolyaGamma, self).__init__(
-            batch_shape=(), event_shape=(), validate_args=validate_args
-        )
+        super(TruncatedPolyaGamma, self).__init__(batch_shape=(), event_shape=(), validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(TruncatedPolyaGamma, _instance)
-        super(TruncatedPolyaGamma, new).__init__(
-            batch_shape, self.event_shape, validate_args=False
-        )
+        super(TruncatedPolyaGamma, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get("_validate_args")
         new.prototype = self.prototype
         return new
 
     def sample(self, sample_shape=()):
-        denom = torch.arange(
-            0.5, self.num_gamma_variates, device=self.prototype.device
-        ).pow(2.0)
+        denom = torch.arange(0.5, self.num_gamma_variates, device=self.prototype.device).pow(2.0)
         ones = self.prototype.new_ones((self.num_gamma_variates))
         x = Exponential(ones).sample(self.batch_shape + sample_shape)
         x = (x / denom).sum(-1)
@@ -64,15 +58,8 @@ class TruncatedPolyaGamma(TorchDistribution):
 
     def log_prob(self, value):
         value = value.unsqueeze(-1)
-        two_n_plus_one = (
-            2.0 * torch.arange(0, self.num_log_prob_terms, device=self.prototype.device)
-            + 1.0
-        )
-        log_terms = (
-            two_n_plus_one.log()
-            - 1.5 * value.log()
-            - 0.125 * two_n_plus_one.pow(2.0) / value
-        )
+        two_n_plus_one = 2.0 * torch.arange(0, self.num_log_prob_terms, device=self.prototype.device) + 1.0
+        log_terms = two_n_plus_one.log() - 1.5 * value.log() - 0.125 * two_n_plus_one.pow(2.0) / value
         even_terms = log_terms[..., ::2]
         odd_terms = log_terms[..., 1::2]
         sum_even = torch.logsumexp(even_terms, dim=-1).exp()

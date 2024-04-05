@@ -90,20 +90,14 @@ class GPModel(Parameterized):
     """
 
     def __init__(self, X, y, kernel, mean_function=None, jitter=1e-6):
-        assert isinstance(
-            X, torch.Tensor
-        ), "X needs to be a torch Tensor instead of a {}".format(type(X))
+        assert isinstance(X, torch.Tensor), "X needs to be a torch Tensor instead of a {}".format(type(X))
         if y is not None:
-            assert isinstance(
-                y, torch.Tensor
-            ), "y needs to be a torch Tensor instead of a {}".format(type(y))
+            assert isinstance(y, torch.Tensor), "y needs to be a torch Tensor instead of a {}".format(type(y))
 
         super().__init__()
         self.set_data(X, y)
         self.kernel = kernel
-        self.mean_function = (
-            mean_function if mean_function is not None else _zero_mean_function
-        )
+        self.mean_function = mean_function if mean_function is not None else _zero_mean_function
         self.jitter = jitter
 
     def model(self):
@@ -197,9 +191,7 @@ class GPModel(Parameterized):
         if y is not None and X.size(0) != y.size(-1):
             raise ValueError(
                 "Expected the number of input data points equal to the "
-                "number of output data points, but got {} and {}.".format(
-                    X.size(0), y.size(-1)
-                )
+                "number of output data points, but got {} and {}.".format(X.size(0), y.size(-1))
             )
         self.X = X
         self.y = y
@@ -213,15 +205,13 @@ class GPModel(Parameterized):
         """
         if Xnew.dim() != self.X.dim():
             raise ValueError(
-                "Train data and test data should have the same "
-                "number of dimensions, but got {} and {}.".format(
+                "Train data and test data should have the same " "number of dimensions, but got {} and {}.".format(
                     self.X.dim(), Xnew.dim()
                 )
             )
         if self.X.shape[1:] != Xnew.shape[1:]:
             raise ValueError(
-                "Train data and test data should have the same "
-                "shape of features, but got {} and {}.".format(
+                "Train data and test data should have the same " "shape of features, but got {} and {}.".format(
                     self.X.shape[1:], Xnew.shape[1:]
                 )
             )

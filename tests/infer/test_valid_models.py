@@ -61,9 +61,7 @@ def assert_ok(model, guide, elbo, **kwargs):
         if hasattr(elbo, "differentiable_loss"):
             try:
                 pyro.set_rng_seed(0)
-                differentiable_loss = torch_item(
-                    elbo.differentiable_loss(model, guide, **kwargs)
-                )
+                differentiable_loss = torch_item(elbo.differentiable_loss(model, guide, **kwargs))
             except ValueError:
                 pass  # Ignore cases where elbo cannot be differentiated
             else:
@@ -154,9 +152,7 @@ def test_nonempty_model_empty_guide_error(Elbo, strict_enumeration_warning):
     assert_error(model, guide, elbo)
 
 
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 @pytest.mark.parametrize("strict_enumeration_warning", [True, False])
 def test_empty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
     def model():
@@ -172,9 +168,7 @@ def test_empty_model_empty_guide_ok(Elbo, strict_enumeration_warning):
         assert_ok(model, guide, elbo)
 
 
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_variable_clash_in_model_error(Elbo):
     def model():
         p = torch.tensor(0.5)
@@ -188,9 +182,7 @@ def test_variable_clash_in_model_error(Elbo):
     assert_error(model, guide, Elbo(), match="Multiple sample sites named")
 
 
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_model_guide_dim_mismatch_error(Elbo):
     def model():
         loc = torch.zeros(2)
@@ -210,9 +202,7 @@ def test_model_guide_dim_mismatch_error(Elbo):
     )
 
 
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_model_guide_shape_mismatch_error(Elbo):
     def model():
         loc = torch.zeros(1, 2)
@@ -247,9 +237,7 @@ def test_variable_clash_in_guide_error(Elbo):
 
 
 @pytest.mark.parametrize("has_rsample", [False, True])
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_set_has_rsample_ok(has_rsample, Elbo):
     # This model has sparse gradients, so users may want to disable
     # reparametrized sampling to reduce variance of gradient estimates.
@@ -271,9 +259,7 @@ def test_set_has_rsample_ok(has_rsample, Elbo):
     assert_ok(model, guide, Elbo(strict_enumeration_warning=False))
 
 
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_not_has_rsample_ok(Elbo):
     def model():
         z = pyro.sample("z", dist.Normal(0, 1))
@@ -293,9 +279,7 @@ def test_not_has_rsample_ok(Elbo):
 
 
 @pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_iplate_ok(subsample_size, Elbo):
     def model():
         p = torch.tensor(0.5)
@@ -315,9 +299,7 @@ def test_iplate_ok(subsample_size, Elbo):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_iplate_variable_clash_error(Elbo):
     def model():
         p = torch.tensor(0.5)
@@ -340,9 +322,7 @@ def test_iplate_variable_clash_error(Elbo):
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_plate_ok(subsample_size, Elbo):
     def model():
         p = torch.tensor(0.5)
@@ -363,9 +343,7 @@ def test_plate_ok(subsample_size, Elbo):
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_plate_subsample_param_ok(subsample_size, Elbo):
     def model():
         p = torch.tensor(0.5)
@@ -389,9 +367,7 @@ def test_plate_subsample_param_ok(subsample_size, Elbo):
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_plate_subsample_primitive_ok(subsample_size, Elbo):
     def model():
         p = torch.tensor(0.5)
@@ -417,9 +393,7 @@ def test_plate_subsample_primitive_ok(subsample_size, Elbo):
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 @pytest.mark.parametrize(
     "shape,ok",
     [
@@ -455,9 +429,7 @@ def test_plate_param_size_mismatch_error(subsample_size, Elbo, shape, ok):
         assert_error(model, guide, Elbo(), match="invalid shape of pyro.param")
 
 
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_plate_no_size_ok(Elbo):
     def model():
         p = torch.tensor(0.5)
@@ -479,9 +451,7 @@ def test_plate_no_size_ok(Elbo):
 
 @pytest.mark.parametrize("max_plate_nesting", [0, float("inf")])
 @pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_iplate_iplate_ok(subsample_size, Elbo, max_plate_nesting):
     def model():
         p = torch.tensor(0.5)
@@ -509,9 +479,7 @@ def test_iplate_iplate_ok(subsample_size, Elbo, max_plate_nesting):
 
 @pytest.mark.parametrize("max_plate_nesting", [0, float("inf")])
 @pytest.mark.parametrize("subsample_size", [None, 2], ids=["full", "subsample"])
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_iplate_iplate_swap_ok(subsample_size, Elbo, max_plate_nesting):
     def model():
         p = torch.tensor(0.5)
@@ -538,9 +506,7 @@ def test_iplate_iplate_swap_ok(subsample_size, Elbo, max_plate_nesting):
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_iplate_in_model_not_guide_ok(subsample_size, Elbo):
     def model():
         p = torch.tensor(0.5)
@@ -561,9 +527,7 @@ def test_iplate_in_model_not_guide_ok(subsample_size, Elbo):
 
 
 @pytest.mark.parametrize("subsample_size", [None, 5], ids=["full", "subsample"])
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 @pytest.mark.parametrize("is_validate", [True, False])
 def test_iplate_in_guide_not_model_error(subsample_size, Elbo, is_validate):
     def model():
@@ -598,9 +562,7 @@ def test_plate_broadcast_error(Elbo):
     assert_error(model, model, Elbo(), match="Shape mismatch inside plate")
 
 
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_plate_iplate_ok(Elbo):
     def model():
         p = torch.tensor(0.5)
@@ -622,9 +584,7 @@ def test_plate_iplate_ok(Elbo):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_iplate_plate_ok(Elbo):
     def model():
         p = torch.tensor(0.5)
@@ -648,9 +608,7 @@ def test_iplate_plate_ok(Elbo):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 @pytest.mark.parametrize("sizes", [(3,), (3, 4), (3, 4, 5)])
 def test_plate_stack_ok(Elbo, sizes):
     def model():
@@ -671,9 +629,7 @@ def test_plate_stack_ok(Elbo, sizes):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 @pytest.mark.parametrize("sizes", [(3,), (3, 4), (3, 4, 5)])
 def test_plate_stack_and_plate_ok(Elbo, sizes):
     def model():
@@ -707,18 +663,14 @@ def test_plate_stack_sizes(sizes):
     model()
 
 
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_nested_plate_plate_ok(Elbo):
     def model():
         p = torch.tensor(0.5, requires_grad=True)
         with pyro.plate("plate_outer", 10, 5) as ind_outer:
             pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind_outer)]))
             with pyro.plate("plate_inner", 11, 6) as ind_inner:
-                pyro.sample(
-                    "y", dist.Bernoulli(p).expand_by([len(ind_inner), len(ind_outer)])
-                )
+                pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner), len(ind_outer)]))
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(model)
@@ -730,9 +682,7 @@ def test_nested_plate_plate_ok(Elbo):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_plate_reuse_ok(Elbo):
     def model():
         p = torch.tensor(0.5, requires_grad=True)
@@ -743,9 +693,7 @@ def test_plate_reuse_ok(Elbo):
         with plate_inner as ind_inner:
             pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner), 1]))
         with plate_outer as ind_outer, plate_inner as ind_inner:
-            pyro.sample(
-                "z", dist.Bernoulli(p).expand_by([len(ind_inner), len(ind_outer)])
-            )
+            pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_inner), len(ind_outer)]))
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(model)
@@ -757,21 +705,15 @@ def test_plate_reuse_ok(Elbo):
     assert_ok(model, guide, Elbo())
 
 
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO]
-)
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO, TraceTMC_ELBO])
 def test_nested_plate_plate_dim_error_1(Elbo):
     def model():
         p = torch.tensor([0.5], requires_grad=True)
         with pyro.plate("plate_outer", 10, 5) as ind_outer:
-            pyro.sample(
-                "x", dist.Bernoulli(p).expand_by([len(ind_outer)])
-            )  # error here
+            pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind_outer)]))  # error here
             with pyro.plate("plate_inner", 11, 6) as ind_inner:
                 pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner)]))
-                pyro.sample(
-                    "z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_inner)])
-                )
+                pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_inner)]))
 
     if Elbo is TraceEnum_ELBO:
         guide = config_enumerate(model)
@@ -790,12 +732,8 @@ def test_nested_plate_plate_dim_error_2(Elbo):
         with pyro.plate("plate_outer", 10, 5) as ind_outer:
             pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind_outer), 1]))
             with pyro.plate("plate_inner", 11, 6) as ind_inner:
-                pyro.sample(
-                    "y", dist.Bernoulli(p).expand_by([len(ind_outer)])
-                )  # error here
-                pyro.sample(
-                    "z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_inner)])
-                )
+                pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_outer)]))  # error here
+                pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_inner)]))
 
     guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
     assert_error(model, guide, Elbo(), match="Shape mismatch inside plate")
@@ -809,9 +747,7 @@ def test_nested_plate_plate_dim_error_3(Elbo):
             pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind_outer), 1]))
             with pyro.plate("plate_inner", 11, 6) as ind_inner:
                 pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner)]))
-                pyro.sample(
-                    "z", dist.Bernoulli(p).expand_by([len(ind_inner), 1])
-                )  # error here
+                pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_inner), 1]))  # error here
 
     guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
     assert_error(model, guide, Elbo(), match="invalid log_prob shape|shape mismatch")
@@ -825,9 +761,7 @@ def test_nested_plate_plate_dim_error_4(Elbo):
             pyro.sample("x", dist.Bernoulli(p).expand_by([len(ind_outer), 1]))
             with pyro.plate("plate_inner", 11, 6) as ind_inner:
                 pyro.sample("y", dist.Bernoulli(p).expand_by([len(ind_inner)]))
-                pyro.sample(
-                    "z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_outer)])
-                )  # error here
+                pyro.sample("z", dist.Bernoulli(p).expand_by([len(ind_outer), len(ind_outer)]))  # error here
 
     guide = config_enumerate(model) if Elbo is TraceEnum_ELBO else model
     assert_error(model, guide, Elbo(), match="hape mismatch inside plate")
@@ -1101,9 +1035,7 @@ def test_no_plate_enum_discrete_batch_error():
         p = pyro.param("p", torch.tensor(0.5, requires_grad=True))
         pyro.sample("x", dist.Bernoulli(p).expand_by([5]))
 
-    assert_error(
-        model, config_enumerate(guide), TraceEnum_ELBO(), match="invalid log_prob shape"
-    )
+    assert_error(model, config_enumerate(guide), TraceEnum_ELBO(), match="invalid log_prob shape")
 
 
 @pytest.mark.parametrize("max_plate_nesting", [0, 1, 2, float("inf")])
@@ -1217,15 +1149,11 @@ def test_enumerate_parallel_plate_ok(enumerate_, expand, num_samples):
 @pytest.mark.parametrize("max_plate_nesting", [1, float("inf")])
 @pytest.mark.parametrize("enumerate_", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("is_validate", [True, False])
-def test_enum_discrete_plate_dependency_warning(
-    enumerate_, is_validate, max_plate_nesting
-):
+def test_enum_discrete_plate_dependency_warning(enumerate_, is_validate, max_plate_nesting):
     def model():
         pyro.sample("w", dist.Bernoulli(0.5), infer={"enumerate": "parallel"})
         with pyro.plate("plate", 10, 5):
-            x = pyro.sample(
-                "x", dist.Bernoulli(0.5).expand_by([5]), infer={"enumerate": enumerate_}
-            )
+            x = pyro.sample("x", dist.Bernoulli(0.5).expand_by([5]), infer={"enumerate": enumerate_})
         pyro.sample("y", dist.Bernoulli(x.mean()))  # user should move this line up
 
     with pyro.validation_enabled(is_validate):
@@ -1257,9 +1185,7 @@ def test_enum_discrete_iplate_plate_dependency_ok(enumerate_, max_plate_nesting)
 @pytest.mark.parametrize("max_plate_nesting", [1, float("inf")])
 @pytest.mark.parametrize("enumerate_", [None, "sequential", "parallel"])
 @pytest.mark.parametrize("is_validate", [True, False])
-def test_enum_discrete_iplates_plate_dependency_warning(
-    enumerate_, is_validate, max_plate_nesting
-):
+def test_enum_discrete_iplates_plate_dependency_warning(enumerate_, is_validate, max_plate_nesting):
     def model():
         pyro.sample("w", dist.Bernoulli(0.5), infer={"enumerate": "parallel"})
         inner_plate = pyro.plate("plate", 10, 5)
@@ -1307,16 +1233,12 @@ def test_enum_discrete_non_enumerated_plate_ok(enumerate_):
         pyro.sample("w", dist.Bernoulli(0.5), infer={"enumerate": "parallel"})
 
         with pyro.plate("non_enum", 2):
-            a = pyro.sample(
-                "a", dist.Bernoulli(0.5).expand_by([2]), infer={"enumerate": None}
-            )
+            a = pyro.sample("a", dist.Bernoulli(0.5).expand_by([2]), infer={"enumerate": None})
 
         p = (1.0 + a.sum(-1)) / (2.0 + a.size(0))  # introduce dependency of b on a
 
         with pyro.plate("enum_1", 3):
-            pyro.sample(
-                "b", dist.Bernoulli(p).expand_by([3]), infer={"enumerate": enumerate_}
-            )
+            pyro.sample("b", dist.Bernoulli(p).expand_by([3]), infer={"enumerate": enumerate_})
 
     with pyro.validation_enabled():
         assert_ok(model, model, TraceEnum_ELBO(max_plate_nesting=1))
@@ -1396,12 +1318,8 @@ def test_enum_discrete_plate_shape_broadcasting_ok(enumerate_, expand, num_sampl
             assert c.shape == (50, 6, 1)
             assert d.shape == (50, 6, 5)
 
-    guide = config_enumerate(
-        model, default=enumerate_, expand=expand, num_samples=num_samples
-    )
-    elbo = TraceEnum_ELBO(
-        max_plate_nesting=3, strict_enumeration_warning=(enumerate_ == "parallel")
-    )
+    guide = config_enumerate(model, default=enumerate_, expand=expand, num_samples=num_samples)
+    elbo = TraceEnum_ELBO(max_plate_nesting=3, strict_enumeration_warning=(enumerate_ == "parallel"))
     assert_ok(model, guide, elbo)
 
 
@@ -1443,9 +1361,7 @@ def test_dim_allocation_ok(Elbo, expand):
             assert z.shape == (5, 7, 6)
             assert q.shape == (8, 5, 7, 6)
 
-    guide = (
-        config_enumerate(model, "sequential", expand=expand) if enumerate_ else model
-    )
+    guide = config_enumerate(model, "sequential", expand=expand) if enumerate_ else model
     assert_ok(model, guide, Elbo(max_plate_nesting=4))
 
 
@@ -1698,9 +1614,7 @@ def test_vectorized_num_particles(Elbo):
     ],
 )
 @pytest.mark.parametrize("num_particles", [1, 50])
-def test_enum_discrete_vectorized_num_particles(
-    enumerate_, expand, num_samples, num_particles
-):
+def test_enum_discrete_vectorized_num_particles(enumerate_, expand, num_samples, num_particles):
     @config_enumerate(default=enumerate_, expand=expand, num_samples=num_samples)
     def model():
         x_plate = pyro.plate("x_plate", 10, 5, dim=-1)
@@ -1836,9 +1750,7 @@ def test_enum_recycling_dbn(markov, use_vindex):
             else:
                 z_ind = torch.arange(4, dtype=torch.long)
                 probs = r[x.unsqueeze(-1), y.unsqueeze(-1), z_ind]
-            pyro.sample(
-                "z_{}".format(t), dist.Categorical(probs), obs=torch.tensor(0.0)
-            )
+            pyro.sample("z_{}".format(t), dist.Categorical(probs), obs=torch.tensor(0.0))
 
     def guide():
         pass
@@ -2171,9 +2083,7 @@ def test_markov_history(history):
                 x_curr,
                 pyro.sample("x_{}".format(t), dist.Bernoulli(probs)).long(),
             )
-            pyro.sample(
-                "y_{}".format(t), dist.Bernoulli(q[x_curr]), obs=torch.tensor(0.0)
-            )
+            pyro.sample("y_{}".format(t), dist.Bernoulli(q[x_curr]), obs=torch.tensor(0.0))
 
     def guide():
         pass
@@ -2440,9 +2350,7 @@ def test_obs_mask_multivariate_ok(Elbo, mask, num_particles):
     def model():
         x = pyro.sample("x", dist.MultivariateNormal(torch.zeros(3), torch.eye(3)))
         with pyro.plate("plate", len(data)):
-            y = pyro.sample(
-                "y", dist.MultivariateNormal(x, torch.eye(3)), obs=data, obs_mask=mask
-            )
+            y = pyro.sample("y", dist.MultivariateNormal(x, torch.eye(3)), obs=data, obs_mask=mask)
             assert ((y == data).all(-1) == mask).all()
 
     def guide():
@@ -2478,9 +2386,7 @@ def test_obs_mask_multivariate_error(Elbo):
     def model():
         x = pyro.sample("x", dist.MultivariateNormal(torch.zeros(2), torch.eye(2)))
         with pyro.plate("plate", len(data)):
-            pyro.sample(
-                "y", dist.MultivariateNormal(x, torch.eye(2)), obs=data, obs_mask=mask
-            )
+            pyro.sample("y", dist.MultivariateNormal(x, torch.eye(2)), obs=data, obs_mask=mask)
 
     def guide():
         loc = pyro.param("loc", torch.zeros(2))
@@ -2567,9 +2473,7 @@ def test_no_log_prob_ok(Elbo):
 
     def guide(data):
         map_loc = pyro.param("map_loc", torch.tensor(0.0))
-        map_scale = pyro.param(
-            "map_scale", torch.tensor(1.0), constraint=constraints.positive
-        )
+        map_scale = pyro.param("map_scale", torch.tensor(1.0), constraint=constraints.positive)
         pyro.sample("loc", dist.Delta(map_loc))
         pyro.sample("scale", dist.Delta(map_scale))
 
@@ -2633,9 +2537,7 @@ def test_collapse_normal_normal_plate(num_particles):
         scale = pyro.param("scale", torch.tensor(1.0), constraint=constraints.positive)
         pyro.sample("x", dist.Normal(loc, scale))
 
-    elbo = Trace_ELBO(
-        num_particles=num_particles, vectorize_particles=True, max_plate_nesting=1
-    )
+    elbo = Trace_ELBO(num_particles=num_particles, vectorize_particles=True, max_plate_nesting=1)
     assert_ok(model, guide, elbo)
 
 
@@ -2657,9 +2559,7 @@ def test_collapse_normal_plate_normal(num_particles):
         scale = pyro.param("scale", torch.tensor(1.0), constraint=constraints.positive)
         pyro.sample("x", dist.Normal(loc, scale))
 
-    elbo = Trace_ELBO(
-        num_particles=num_particles, vectorize_particles=True, max_plate_nesting=1
-    )
+    elbo = Trace_ELBO(num_particles=num_particles, vectorize_particles=True, max_plate_nesting=1)
     assert_ok(model, guide, elbo)
 
 
@@ -2723,9 +2623,7 @@ def test_collapse_beta_binomial_plate(num_particles):
         b = pyro.param("b", torch.tensor(1.0), constraint=constraints.positive)
         pyro.sample("c", dist.Gamma(a, b))
 
-    elbo = Trace_ELBO(
-        num_particles=num_particles, vectorize_particles=True, max_plate_nesting=1
-    )
+    elbo = Trace_ELBO(num_particles=num_particles, vectorize_particles=True, max_plate_nesting=1)
     assert_ok(model, guide, elbo)
 
 
@@ -2758,12 +2656,8 @@ def test_ordered_logistic_plate():
     data = (K * torch.rand(N)).long().float()
 
     def model():
-        predictor = pyro.sample(
-            "predictor", dist.Normal(0.0, 1.0).expand([N]).to_event(1)
-        )
-        cutpoints = pyro.sample(
-            "cutpoints", dist.Normal(0.0, 1.0).expand([K - 1]).to_event(1)
-        )
+        predictor = pyro.sample("predictor", dist.Normal(0.0, 1.0).expand([N]).to_event(1))
+        cutpoints = pyro.sample("cutpoints", dist.Normal(0.0, 1.0).expand([K - 1]).to_event(1))
         # would have identifiability issues, but this isn't a real model...
         cutpoints = torch.sort(cutpoints, dim=-1).values
         with pyro.plate("obs_plate", N):

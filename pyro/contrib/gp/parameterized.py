@@ -138,9 +138,7 @@ class Parameterized(PyroModule):
             raise ValueError("There is no prior for parameter: {}".format(name))
 
         if dist_constructor not in [dist.Delta, dist.Normal, dist.MultivariateNormal]:
-            raise NotImplementedError(
-                "Unsupported distribution type: {}".format(dist_constructor)
-            )
+            raise NotImplementedError("Unsupported distribution type: {}".format(dist_constructor))
 
         # delete old guide
         if name in self._guides:
@@ -166,9 +164,7 @@ class Parameterized(PyroModule):
         elif dist_constructor is dist.MultivariateNormal:
             loc = Parameter(biject_to(self._priors[name].support).inv(p).detach())
             identity = eye_like(loc, loc.size(-1))
-            scale_tril = PyroParam(
-                identity.repeat(loc.shape[:-1] + (1, 1)), constraints.lower_cholesky
-            )
+            scale_tril = PyroParam(identity.repeat(loc.shape[:-1] + (1, 1)), constraints.lower_cholesky)
             setattr(self, "{}_loc".format(name), loc)
             setattr(self, "{}_scale_tril".format(name), scale_tril)
             dist_args = ("loc", "scale_tril")

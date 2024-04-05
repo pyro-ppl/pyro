@@ -188,15 +188,9 @@ class SCANVI(nn.Module):
             z2_dim=self.latent_dim,
             hidden_dims=[50],
         )
-        self.x_decoder = XDecoder(
-            num_genes=num_genes, hidden_dims=[100], z2_dim=self.latent_dim
-        )
-        self.z2l_encoder = Z2LEncoder(
-            num_genes=num_genes, z2_dim=self.latent_dim, hidden_dims=[100]
-        )
-        self.classifier = Classifier(
-            z2_dim=self.latent_dim, hidden_dims=[50], num_labels=num_labels
-        )
+        self.x_decoder = XDecoder(num_genes=num_genes, hidden_dims=[100], z2_dim=self.latent_dim)
+        self.z2l_encoder = Z2LEncoder(num_genes=num_genes, z2_dim=self.latent_dim, hidden_dims=[100])
+        self.classifier = Classifier(z2_dim=self.latent_dim, hidden_dims=[50], num_labels=num_labels)
         self.z1_encoder = Z1Encoder(
             num_labels=num_labels,
             z1_dim=self.latent_dim,
@@ -220,14 +214,10 @@ class SCANVI(nn.Module):
         # We scale all sample statements by scale_factor so that the ELBO is normalized
         # wrt the number of datapoints and genes
         with pyro.plate("batch", len(x)), poutine.scale(scale=self.scale_factor):
-            z1 = pyro.sample(
-                "z1", dist.Normal(0, x.new_ones(self.latent_dim)).to_event(1)
-            )
+            z1 = pyro.sample("z1", dist.Normal(0, x.new_ones(self.latent_dim)).to_event(1))
             # Note that if y is None (i.e. y is unobserved) then y will be sampled;
             # otherwise y will be treated as observed.
-            y = pyro.sample(
-                "y", dist.OneHotCategorical(logits=x.new_zeros(self.num_labels)), obs=y
-            )
+            y = pyro.sample("y", dist.OneHotCategorical(logits=x.new_zeros(self.num_labels)), obs=y)
 
             z2_loc, z2_scale = self.z2_decoder(z1, y)
             z2 = pyro.sample("z2", dist.Normal(z2_loc, z2_scale).to_event(1))
@@ -242,9 +232,7 @@ class SCANVI(nn.Module):
             # from failure to success parametrization;
             # see https://github.com/pytorch/pytorch/issues/42449
             nb_logits = (l * mu + self.epsilon).log() - (theta + self.epsilon).log()
-            x_dist = dist.ZeroInflatedNegativeBinomial(
-                gate_logits=gate_logits, total_count=theta, logits=nb_logits
-            )
+            x_dist = dist.ZeroInflatedNegativeBinomial(gate_logits=gate_logits, total_count=theta, logits=nb_logits)
             # Observe the datapoint x using the observation distribution x_dist
             pyro.sample("x", x_dist.to_event(1), obs=x)
 
@@ -381,24 +369,16 @@ def main(args):
         axes[0, 1].set_frame_on(False)
 
         # The remaining plots depict the inferred cell type probability for each of the four cell types
-        s10 = axes[1, 0].scatter(
-            umap1, umap2, s=1, c=y_probs[:, 0], marker=".", alpha=0.7
-        )
+        s10 = axes[1, 0].scatter(umap1, umap2, s=1, c=y_probs[:, 0], marker=".", alpha=0.7)
         axes[1, 0].set_title("Inferred CD8-Naive probability")
         fig.colorbar(s10, ax=axes[1, 0])
-        s11 = axes[1, 1].scatter(
-            umap1, umap2, s=1, c=y_probs[:, 1], marker=".", alpha=0.7
-        )
+        s11 = axes[1, 1].scatter(umap1, umap2, s=1, c=y_probs[:, 1], marker=".", alpha=0.7)
         axes[1, 1].set_title("Inferred CD4-Naive probability")
         fig.colorbar(s11, ax=axes[1, 1])
-        s20 = axes[2, 0].scatter(
-            umap1, umap2, s=1, c=y_probs[:, 2], marker=".", alpha=0.7
-        )
+        s20 = axes[2, 0].scatter(umap1, umap2, s=1, c=y_probs[:, 2], marker=".", alpha=0.7)
         axes[2, 0].set_title("Inferred CD4-Memory probability")
         fig.colorbar(s20, ax=axes[2, 0])
-        s21 = axes[2, 1].scatter(
-            umap1, umap2, s=1, c=y_probs[:, 3], marker=".", alpha=0.7
-        )
+        s21 = axes[2, 1].scatter(umap1, umap2, s=1, c=y_probs[:, 3], marker=".", alpha=0.7)
         axes[2, 1].set_title("Inferred CD4-Regulatory probability")
         fig.colorbar(s21, ax=axes[2, 1])
 
@@ -409,13 +389,9 @@ def main(args):
 if __name__ == "__main__":
     assert pyro.__version__.startswith("1.9.0")
     # Parse command line arguments
-    parser = argparse.ArgumentParser(
-        description="single-cell ANnotation using Variational Inference"
-    )
+    parser = argparse.ArgumentParser(description="single-cell ANnotation using Variational Inference")
     parser.add_argument("-s", "--seed", default=0, type=int, help="rng seed")
-    parser.add_argument(
-        "-n", "--num-epochs", default=60, type=int, help="number of training epochs"
-    )
+    parser.add_argument("-n", "--num-epochs", default=60, type=int, help="number of training epochs")
     parser.add_argument(
         "-d",
         "--dataset",
@@ -424,18 +400,10 @@ if __name__ == "__main__":
         help="which dataset to use",
         choices=["pbmc", "mock"],
     )
-    parser.add_argument(
-        "-bs", "--batch-size", default=100, type=int, help="mini-batch size"
-    )
-    parser.add_argument(
-        "-lr", "--learning-rate", default=0.005, type=float, help="learning rate"
-    )
-    parser.add_argument(
-        "--cuda", action="store_true", default=False, help="whether to use cuda"
-    )
-    parser.add_argument(
-        "--plot", action="store_true", default=False, help="whether to make a plot"
-    )
+    parser.add_argument("-bs", "--batch-size", default=100, type=int, help="mini-batch size")
+    parser.add_argument("-lr", "--learning-rate", default=0.005, type=float, help="learning rate")
+    parser.add_argument("--cuda", action="store_true", default=False, help="whether to use cuda")
+    parser.add_argument("--plot", action="store_true", default=False, help="whether to make a plot")
     args = parser.parse_args()
 
     main(args)

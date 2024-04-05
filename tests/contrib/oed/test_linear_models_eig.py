@@ -87,18 +87,12 @@ def make_lfire_classifier(n_theta_samples):
         y_dict = {l: trace.nodes[l]["value"] for l in observation_labels}
         y = torch.cat(list(y_dict.values()), dim=-1)
 
-        quadratic_coef = pyro.param(
-            "quadratic_coef", torch.zeros(n_theta_samples, 3, 3)
-        )
+        quadratic_coef = pyro.param("quadratic_coef", torch.zeros(n_theta_samples, 3, 3))
         linear_coef = pyro.param("linear_coef", torch.zeros(n_theta_samples, 3))
         bias = pyro.param("bias", torch.zeros(n_theta_samples))
 
         y_quadratic = y.unsqueeze(-1) * y.unsqueeze(-2)
-        return (
-            (quadratic_coef * y_quadratic).sum(-1).sum(-1)
-            + (linear_coef * y).sum(-1)
-            + bias
-        )
+        return (quadratic_coef * y_quadratic).sum(-1).sum(-1) + (linear_coef * y).sum(-1) + bias
 
     return lfire_classifier
 

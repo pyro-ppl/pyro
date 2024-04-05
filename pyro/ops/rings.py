@@ -167,9 +167,7 @@ class LinearRing(Ring):
             return self._cache[key]
 
         result = term.reciprocal()
-        result = result.clamp(
-            max=torch.finfo(result.dtype).max
-        )  # avoid nan due to inf / inf
+        result = result.clamp(max=torch.finfo(result.dtype).max)  # avoid nan due to inf / inf
         result._pyro_dims = term._pyro_dims
         self._cache[key] = result
         return result
@@ -221,9 +219,7 @@ class LogRing(Ring):
             return self._cache[key]
 
         result = -term
-        result = result.clamp(
-            max=torch.finfo(result.dtype).max
-        )  # avoid nan due to inf - inf
+        result = result.clamp(max=torch.finfo(result.dtype).max)  # avoid nan due to inf - inf
         result._pyro_dims = term._pyro_dims
         self._cache[key] = result
         return result
@@ -323,9 +319,7 @@ class MarginalRing(LogRing):
     def product(self, term, ordinal):
         result = super().product(term, ordinal)
         if hasattr(term, "_pyro_backward"):
-            result._pyro_backward = _MarginalProductBackward(
-                self, term, ordinal, result
-            )
+            result._pyro_backward = _MarginalProductBackward(self, term, ordinal, result)
         return result
 
 

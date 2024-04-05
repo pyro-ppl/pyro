@@ -19,9 +19,7 @@ from pyro.contrib.util import iter_plates_to_shape, rmv
 epsilon = torch.tensor(2**-24)
 
 
-def known_covariance_linear_model(
-    coef_means, coef_sds, observation_sd, coef_labels="w", observation_label="y"
-):
+def known_covariance_linear_model(coef_means, coef_sds, observation_sd, coef_labels="w", observation_label="y"):
     if not isinstance(coef_means, list):
         coef_means = [coef_means]
     if not isinstance(coef_sds, list):
@@ -31,24 +29,15 @@ def known_covariance_linear_model(
 
     model = partial(
         bayesian_linear_model,
-        w_means=OrderedDict(
-            [(label, mean) for label, mean in zip(coef_labels, coef_means)]
-        ),
-        w_sqrtlambdas=OrderedDict(
-            [
-                (label, 1.0 / (observation_sd * sd))
-                for label, sd in zip(coef_labels, coef_sds)
-            ]
-        ),
+        w_means=OrderedDict([(label, mean) for label, mean in zip(coef_labels, coef_means)]),
+        w_sqrtlambdas=OrderedDict([(label, 1.0 / (observation_sd * sd)) for label, sd in zip(coef_labels, coef_sds)]),
         obs_sd=observation_sd,
         response_label=observation_label,
     )
     # For computing the true EIG
     model.obs_sd = observation_sd
     model.w_sds = OrderedDict([(label, sd) for label, sd in zip(coef_labels, coef_sds)])
-    model.w_sizes = OrderedDict(
-        [(label, sd.shape[-1]) for label, sd in zip(coef_labels, coef_sds)]
-    )
+    model.w_sizes = OrderedDict([(label, sd.shape[-1]) for label, sd in zip(coef_labels, coef_sds)])
     model.observation_label = observation_label
     model.coef_labels = coef_labels
     return model
@@ -89,9 +78,7 @@ def group_linear_model(
     return model
 
 
-def group_normal_guide(
-    observation_sd, coef1_shape, coef2_shape, coef1_label="w1", coef2_label="w2"
-):
+def group_normal_guide(observation_sd, coef1_shape, coef2_shape, coef1_label="w1", coef2_label="w2"):
     return partial(
         normal_inv_gamma_family_guide,
         w_sizes=OrderedDict([(coef1_label, coef1_shape), (coef2_label, coef2_shape)]),
@@ -100,16 +87,12 @@ def group_normal_guide(
 
 
 def zero_mean_unit_obs_sd_lm(coef_sd, coef_label="w"):
-    model = known_covariance_linear_model(
-        torch.tensor(0.0), coef_sd, torch.tensor(1.0), coef_labels=coef_label
-    )
+    model = known_covariance_linear_model(torch.tensor(0.0), coef_sd, torch.tensor(1.0), coef_labels=coef_label)
     guide = normal_guide(torch.tensor(1.0), coef_sd.shape, coef_label=coef_label)
     return model, guide
 
 
-def normal_inverse_gamma_linear_model(
-    coef_mean, coef_sqrtlambda, alpha, beta, coef_label="w", observation_label="y"
-):
+def normal_inverse_gamma_linear_model(coef_mean, coef_sqrtlambda, alpha, beta, coef_label="w", observation_label="y"):
     return partial(
         bayesian_linear_model,
         w_means={coef_label: coef_mean},
@@ -121,17 +104,10 @@ def normal_inverse_gamma_linear_model(
 
 
 def normal_inverse_gamma_guide(coef_shape, coef_label="w", **kwargs):
-    return partial(
-        normal_inv_gamma_family_guide,
-        obs_sd=None,
-        w_sizes={coef_label: coef_shape},
-        **kwargs
-    )
+    return partial(normal_inv_gamma_family_guide, obs_sd=None, w_sizes={coef_label: coef_shape}, **kwargs)
 
 
-def logistic_regression_model(
-    coef_mean, coef_sd, coef_label="w", observation_label="y"
-):
+def logistic_regression_model(coef_mean, coef_sd, coef_label="w", observation_label="y"):
     return partial(
         bayesian_linear_model,
         w_means={coef_label: coef_mean},
@@ -184,9 +160,7 @@ def sigmoid_model(
         k_shape = batch_shape + (sigmoid_design.shape[-1],)
         k = pyro.sample(
             sigmoid_label,
-            dist.Gamma(
-                sigmoid_alpha.expand(k_shape), sigmoid_beta.expand(k_shape)
-            ).to_event(1),
+            dist.Gamma(sigmoid_alpha.expand(k_shape), sigmoid_beta.expand(k_shape)).to_event(1),
         )
         k_assigned = rmv(sigmoid_design, k)
 
@@ -282,17 +256,12 @@ def bayesian_linear_model(
 
         if obs_sd is None:
             # First, sample tau (observation precision)
-            tau_prior = dist.Gamma(
-                alpha_0.unsqueeze(-1), beta_0.unsqueeze(-1)
-            ).to_event(1)
+            tau_prior = dist.Gamma(alpha_0.unsqueeze(-1), beta_0.unsqueeze(-1)).to_event(1)
             tau = pyro.sample("tau", tau_prior)
             obs_sd = 1.0 / torch.sqrt(tau)
 
         elif alpha_0 is not None or beta_0 is not None:
-            warnings.warn(
-                "Values of `alpha_0` and `beta_0` unused becased"
-                "`obs_sd` was specified already."
-            )
+            warnings.warn("Values of `alpha_0` and `beta_0` unused becased" "`obs_sd` was specified already.")
 
         obs_sd = obs_sd.expand(batch_shape + (1,))
 
@@ -322,13 +291,9 @@ def bayesian_linear_model(
         prediction_mean = rmv(design, w)
         if response == "normal":
             # y is an n-vector: hence use .to_event(1)
-            return pyro.sample(
-                response_label, dist.Normal(prediction_mean, obs_sd).to_event(1)
-            )
+            return pyro.sample(response_label, dist.Normal(prediction_mean, obs_sd).to_event(1))
         elif response == "bernoulli":
-            return pyro.sample(
-                response_label, dist.Bernoulli(logits=prediction_mean).to_event(1)
-            )
+            return pyro.sample(response_label, dist.Bernoulli(logits=prediction_mean).to_event(1))
         elif response == "sigmoid":
             base_dist = dist.Normal(prediction_mean, obs_sd).to_event(1)
             # You can add loc via the linear model itself
@@ -373,12 +338,8 @@ def normal_inv_gamma_family_guide(design, obs_sd, w_sizes, mf=False):
 
         if obs_sd is None:
             # First, sample tau (observation precision)
-            alpha = softplus(
-                pyro.param("invsoftplus_alpha", 20.0 * torch.ones(tau_shape))
-            )
-            beta = softplus(
-                pyro.param("invsoftplus_beta", 20.0 * torch.ones(tau_shape))
-            )
+            alpha = softplus(pyro.param("invsoftplus_alpha", 20.0 * torch.ones(tau_shape)))
+            beta = softplus(pyro.param("invsoftplus_beta", 20.0 * torch.ones(tau_shape)))
             # Global variable
             tau_prior = dist.Gamma(alpha, beta)
             tau = pyro.sample("tau", tau_prior)
@@ -400,9 +361,7 @@ def normal_inv_gamma_family_guide(design, obs_sd, w_sizes, mf=False):
             if mf:
                 w_dist = dist.MultivariateNormal(mw_param, scale_tril=scale_tril)
             else:
-                w_dist = dist.MultivariateNormal(
-                    mw_param, scale_tril=obs_sd.unsqueeze(-1) * scale_tril
-                )
+                w_dist = dist.MultivariateNormal(mw_param, scale_tril=obs_sd.unsqueeze(-1) * scale_tril)
             pyro.sample(name, w_dist)
 
 
@@ -455,9 +414,7 @@ def analytic_posterior_cov(prior_cov, x, obs_sd):
     # Use some kernel trick magic
     p = prior_cov.shape[-1]
     SigmaXX = prior_cov.mm(x.t().mm(x))
-    posterior_cov = prior_cov - torch.inverse(
-        SigmaXX + (obs_sd**2) * torch.eye(p)
-    ).mm(SigmaXX.mm(prior_cov))
+    posterior_cov = prior_cov - torch.inverse(SigmaXX + (obs_sd**2) * torch.eye(p)).mm(SigmaXX.mm(prior_cov))
     return posterior_cov
 
 

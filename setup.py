@@ -23,18 +23,12 @@ for line in open(os.path.join(PROJECT_PATH, "pyro", "__init__.py")):
 commit_sha = ""
 try:
     current_tag = (
-        subprocess.check_output(["git", "tag", "--points-at", "HEAD"], cwd=PROJECT_PATH)
-        .decode("ascii")
-        .strip()
+        subprocess.check_output(["git", "tag", "--points-at", "HEAD"], cwd=PROJECT_PATH).decode("ascii").strip()
     )
     # only add sha if HEAD does not point to the release tag
     if not current_tag == version:
         commit_sha = (
-            subprocess.check_output(
-                ["git", "rev-parse", "--short", "HEAD"], cwd=PROJECT_PATH
-            )
-            .decode("ascii")
-            .strip()
+            subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=PROJECT_PATH).decode("ascii").strip()
         )
 # catch all exception to be safe
 except Exception:
@@ -112,7 +106,6 @@ setup(
         "extras": EXTRAS_REQUIRE,
         "test": EXTRAS_REQUIRE
         + [
-            "black>=21.4b0",
             "nbval",
             "pytest-cov",
             "pytest-xdist",
@@ -122,7 +115,6 @@ setup(
         "profile": ["prettytable", "pytest-benchmark", "snakeviz"],
         "dev": EXTRAS_REQUIRE
         + [
-            "black>=21.4b0",
             "mypy>=0.812",
             "nbformat",
             "nbsphinx>=0.3.2",

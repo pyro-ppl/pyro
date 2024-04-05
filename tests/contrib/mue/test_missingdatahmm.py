@@ -13,9 +13,7 @@ def test_hmm_log_prob():
     a = torch.tensor([[0.1, 0.8, 0.1], [0.5, 0.3, 0.2], [0.4, 0.4, 0.2]])
     e = torch.tensor([[0.99, 0.01], [0.01, 0.99], [0.5, 0.5]])
 
-    x = torch.tensor(
-        [[0.0, 1.0], [1.0, 0.0], [0.0, 1.0], [0.0, 1.0], [1.0, 0.0], [0.0, 0.0]]
-    )
+    x = torch.tensor([[0.0, 1.0], [1.0, 0.0], [0.0, 1.0], [0.0, 1.0], [1.0, 0.0], [0.0, 0.0]])
 
     hmm_distr = MissingDataDiscreteHMM(torch.log(a0), torch.log(a), torch.log(e))
     lp = hmm_distr.log_prob(x)
@@ -33,9 +31,7 @@ def test_hmm_log_prob():
     x = torch.cat(
         [
             x[None, :, :],
-            torch.tensor(
-                [[1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
-            )[None, :, :],
+            torch.tensor([[1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]])[None, :, :],
         ],
         dim=0,
     )
@@ -53,9 +49,7 @@ def test_hmm_log_prob():
     a = torch.cat(
         [
             a[None, :, :],
-            torch.tensor([[0.8, 0.1, 0.1], [0.2, 0.6, 0.2], [0.1, 0.1, 0.8]])[
-                None, :, :
-            ],
+            torch.tensor([[0.8, 0.1, 0.1], [0.2, 0.6, 0.2], [0.1, 0.1, 0.8]])[None, :, :],
         ],
         dim=0,
     )
@@ -89,22 +83,16 @@ def test_shapes(batch_initial, batch_transition, batch_observation, batch_data):
     # Model initialization.
     initial_logits = torch.randn([batch_size] * batch_initial + [state_dim])
     initial_logits = initial_logits - initial_logits.logsumexp(-1, True)
-    transition_logits = torch.randn(
-        [batch_size] * batch_transition + [state_dim, state_dim]
-    )
+    transition_logits = torch.randn([batch_size] * batch_transition + [state_dim, state_dim])
     transition_logits = transition_logits - transition_logits.logsumexp(-1, True)
-    observation_logits = torch.randn(
-        [batch_size] * batch_observation + [state_dim, observation_dim]
-    )
+    observation_logits = torch.randn([batch_size] * batch_observation + [state_dim, observation_dim])
     observation_logits = observation_logits - observation_logits.logsumexp(-1, True)
 
     hmm = MissingDataDiscreteHMM(initial_logits, transition_logits, observation_logits)
 
     # Random observations.
     value = (
-        torch.randint(
-            observation_dim, [batch_size] * batch_data + [num_steps]
-        ).unsqueeze(-1)
+        torch.randint(observation_dim, [batch_size] * batch_data + [num_steps]).unsqueeze(-1)
         == torch.arange(observation_dim)
     ).double()
 
@@ -112,9 +100,7 @@ def test_shapes(batch_initial, batch_transition, batch_observation, batch_data):
     lp = hmm.log_prob(value)
 
     # Check shapes:
-    if all(
-        [not batch_initial, not batch_transition, not batch_observation, not batch_data]
-    ):
+    if all([not batch_initial, not batch_transition, not batch_observation, not batch_data]):
         assert lp.shape == ()
     else:
         assert lp.shape == (batch_size,)
@@ -124,39 +110,27 @@ def test_shapes(batch_initial, batch_transition, batch_observation, batch_data):
 @pytest.mark.parametrize("batch_transition", [False, True])
 @pytest.mark.parametrize("batch_observation", [False, True])
 @pytest.mark.parametrize("batch_data", [False, True])
-def test_DiscreteHMM_comparison(
-    batch_initial, batch_transition, batch_observation, batch_data
-):
+def test_DiscreteHMM_comparison(batch_initial, batch_transition, batch_observation, batch_data):
     # Dimensions.
     batch_size = 3
     state_dim, observation_dim, num_steps = 4, 5, 6
 
     # -- Model setup --.
-    transition_logits_vldhmm = torch.randn(
-        [batch_size] * batch_transition + [state_dim, state_dim]
-    )
-    transition_logits_vldhmm = (
-        transition_logits_vldhmm - transition_logits_vldhmm.logsumexp(-1, True)
-    )
+    transition_logits_vldhmm = torch.randn([batch_size] * batch_transition + [state_dim, state_dim])
+    transition_logits_vldhmm = transition_logits_vldhmm - transition_logits_vldhmm.logsumexp(-1, True)
     # Adjust for DiscreteHMM broadcasting convention.
     transition_logits_dhmm = transition_logits_vldhmm.unsqueeze(-3)
     # Convert between discrete HMM convention for initial state and variable
     # length HMM convention.
     initial_logits_dhmm = torch.randn([batch_size] * batch_initial + [state_dim])
     initial_logits_dhmm = initial_logits_dhmm - initial_logits_dhmm.logsumexp(-1, True)
-    initial_logits_vldhmm = (
-        initial_logits_dhmm.unsqueeze(-1) + transition_logits_vldhmm
-    ).logsumexp(-2)
-    observation_logits = torch.randn(
-        [batch_size] * batch_observation + [state_dim, observation_dim]
-    )
+    initial_logits_vldhmm = (initial_logits_dhmm.unsqueeze(-1) + transition_logits_vldhmm).logsumexp(-2)
+    observation_logits = torch.randn([batch_size] * batch_observation + [state_dim, observation_dim])
     observation_logits = observation_logits - observation_logits.logsumexp(-1, True)
     # Create distribution object for DiscreteHMM
     observation_dist = Categorical(logits=observation_logits.unsqueeze(-3))
 
-    vldhmm = MissingDataDiscreteHMM(
-        initial_logits_vldhmm, transition_logits_vldhmm, observation_logits
-    )
+    vldhmm = MissingDataDiscreteHMM(initial_logits_vldhmm, transition_logits_vldhmm, observation_logits)
     dhmm = DiscreteHMM(initial_logits_dhmm, transition_logits_dhmm, observation_dist)
 
     # Random observations.
@@ -168,9 +142,7 @@ def test_DiscreteHMM_comparison(
     lp_vldhmm = vldhmm.log_prob(value_oh)
     lp_dhmm = dhmm.log_prob(value)
     # Shapes.
-    if all(
-        [not batch_initial, not batch_transition, not batch_observation, not batch_data]
-    ):
+    if all([not batch_initial, not batch_transition, not batch_observation, not batch_data]):
         assert lp_vldhmm.shape == ()
     else:
         assert lp_vldhmm.shape == (batch_size,)
@@ -206,12 +178,8 @@ def test_samples(batch_data):
         dtype=torch.float64,
     )
     if batch_data:
-        initial_logits = torch.tensor(
-            [[-100, 0, -100, -100], [0, -100, -100, -100]], dtype=torch.float64
-        )
-        transition_logits = transition_logits * torch.ones(
-            [2] + list(transition_logits.shape)
-        )
+        initial_logits = torch.tensor([[-100, 0, -100, -100], [0, -100, -100, -100]], dtype=torch.float64)
+        transition_logits = transition_logits * torch.ones([2] + list(transition_logits.shape))
         obs_logits = obs_logits * torch.ones([2] + list(obs_logits.shape))
 
     model = MissingDataDiscreteHMM(initial_logits, transition_logits, obs_logits)
@@ -219,9 +187,7 @@ def test_samples(batch_data):
     if not batch_data:
         sample = model.sample(torch.Size([3]))
         print(sample)
-        assert torch.allclose(
-            sample, torch.tensor([[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
-        )
+        assert torch.allclose(sample, torch.tensor([[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]]))
     else:
         sample = model.sample(torch.Size([2, 3]))
         print(sample[0, :, :])
@@ -301,9 +267,7 @@ def test_state_infer():
     a = torch.tensor([[0.1, 0.8, 0.1], [0.5, 0.3, 0.2], [0.4, 0.4, 0.2]])
     e = torch.tensor([[0.9, 0.1], [0.1, 0.9], [0.5, 0.5]])
     # Observed value.
-    x = torch.tensor(
-        [[0.0, 1.0], [1.0, 0.0], [0.0, 1.0], [0.0, 1.0], [1.0, 0.0], [0.0, 0.0]]
-    )
+    x = torch.tensor([[0.0, 1.0], [1.0, 0.0], [0.0, 1.0], [0.0, 1.0], [1.0, 0.0], [0.0, 0.0]])
 
     expected_map_states = indiv_map_states(a0, a, e, x)
     expected_filter = indiv_filter(a0, a, e, x)
@@ -322,9 +286,7 @@ def test_state_infer():
     x = torch.cat(
         [
             x[None, :, :],
-            torch.tensor(
-                [[1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]]
-            )[None, :, :],
+            torch.tensor([[1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]])[None, :, :],
         ],
         dim=0,
     )
@@ -363,9 +325,7 @@ def test_state_infer():
     a = torch.cat(
         [
             a[None, :, :],
-            torch.tensor([[0.8, 0.1, 0.1], [0.2, 0.6, 0.2], [0.1, 0.1, 0.8]])[
-                None, :, :
-            ],
+            torch.tensor([[0.8, 0.1, 0.1], [0.2, 0.6, 0.2], [0.1, 0.1, 0.8]])[None, :, :],
         ],
         dim=0,
     )

@@ -44,11 +44,7 @@ def terms_from_trace(tr):
             # ensure previous step variables are added to measure_vars
             for step in node["value"]:
                 terms["measure_vars"] |= frozenset(
-                    {
-                        var
-                        for var in step[1:-1]
-                        if tr.nodes[var]["funsor"].get("log_measure", None) is not None
-                    }
+                    {var for var in step[1:-1] if tr.nodes[var]["funsor"].get("log_measure", None) is not None}
                 )
         if (
             node["type"] != "sample"
@@ -57,16 +53,12 @@ def terms_from_trace(tr):
         ):
             continue
         # grab plate dimensions from the cond_indep_stack
-        terms["plate_vars"] |= frozenset(
-            f.name for f in node["cond_indep_stack"] if f.vectorized
-        )
+        terms["plate_vars"] |= frozenset(f.name for f in node["cond_indep_stack"] if f.vectorized)
         # grab the log-measure, found only at sites that are not replayed or observed
         if node["funsor"].get("log_measure", None) is not None:
             terms["log_measures"].append(node["funsor"]["log_measure"])
             # sum (measure) variables: the fresh non-plate variables at a site
-            terms["measure_vars"] |= (
-                frozenset(node["funsor"]["value"].inputs) | {name}
-            ) - terms["plate_vars"]
+            terms["measure_vars"] |= (frozenset(node["funsor"]["value"].inputs) | {name}) - terms["plate_vars"]
         # grab the scale, assuming a common subsampling scale
         if (
             node.get("replay_active", False)
@@ -76,16 +68,12 @@ def terms_from_trace(tr):
             # model site that depends on enumerated variable: common scale
             terms["scale"] = node["funsor"]["scale"]
         else:  # otherwise: default scale behavior
-            node["funsor"]["log_prob"] = (
-                node["funsor"]["log_prob"] * node["funsor"]["scale"]
-            )
+            node["funsor"]["log_prob"] = node["funsor"]["log_prob"] * node["funsor"]["scale"]
         # grab the log-density, found at all sites except those that are not replayed
         if node["is_observed"] or not node.get("replay_skipped", False):
             terms["log_factors"].append(node["funsor"]["log_prob"])
     # add plate dimensions to the plate_to_step dictionary
-    terms["plate_to_step"].update(
-        {plate: terms["plate_to_step"].get(plate, {}) for plate in terms["plate_vars"]}
-    )
+    terms["plate_to_step"].update({plate: terms["plate_to_step"].get(plate, {}) for plate in terms["plate_vars"]})
     return terms
 
 
@@ -93,14 +81,8 @@ def terms_from_trace(tr):
 class TraceMarkovEnum_ELBO(ELBO):
     def differentiable_loss(self, model, guide, *args, **kwargs):
         # get batched, enumerated, to_funsor-ed traces from the guide and model
-        with (
-            plate(size=self.num_particles)
-            if self.num_particles > 1
-            else contextlib.ExitStack()
-        ), enum(
-            first_available_dim=(
-                (-self.max_plate_nesting - 1) if self.max_plate_nesting else None
-            )
+        with plate(size=self.num_particles) if self.num_particles > 1 else contextlib.ExitStack(), enum(
+            first_available_dim=((-self.max_plate_nesting - 1) if self.max_plate_nesting else None)
         ):
             guide_tr = trace(guide).get_trace(*args, **kwargs)
             model_tr = trace(replay(model, trace=guide_tr)).get_trace(*args, **kwargs)
@@ -111,9 +93,7 @@ class TraceMarkovEnum_ELBO(ELBO):
 
         # guide side enumeration is not supported
         if any(guide_terms["plate_to_step"].values()):
-            raise NotImplementedError(
-                "TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration"
-            )
+            raise NotImplementedError("TraceMarkovEnum_ELBO does not yet support guide side Markov enumeration")
 
         # build up a lazy expression for the elbo
         with funsor.terms.lazy:
@@ -125,9 +105,7 @@ class TraceMarkovEnum_ELBO(ELBO):
                 else:
                     uncontracted_factors.append(f)
             # incorporate the effects of subsampling and handlers.scale through a common scale factor
-            markov_dims = frozenset(
-                {plate for plate, step in model_terms["plate_to_step"].items() if step}
-            )
+            markov_dims = frozenset({plate for plate, step in model_terms["plate_to_step"].items() if step})
             contracted_costs = [
                 model_terms["scale"] * f
                 for f in funsor.sum_product.dynamic_partial_sum_product(
@@ -152,16 +130,11 @@ class TraceMarkovEnum_ELBO(ELBO):
                     funsor.ops.add,
                     guide_terms["log_measures"],
                     plates=plate_vars,
-                    eliminate=(plate_vars | guide_terms["measure_vars"])
-                    - frozenset(cost.inputs),
+                    eliminate=(plate_vars | guide_terms["measure_vars"]) - frozenset(cost.inputs),
                 )
                 # compute the expected cost term E_q[logp] or E_q[-logq] using the marginal logq for q
-                elbo_term = funsor.Integrate(
-                    log_prob, cost, guide_terms["measure_vars"] & frozenset(cost.inputs)
-                )
-                elbo += elbo_term.reduce(
-                    funsor.ops.add, plate_vars & frozenset(cost.inputs)
-                )
+                elbo_term = funsor.Integrate(log_prob, cost, guide_terms["measure_vars"] & frozenset(cost.inputs))
+                elbo += elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
 
         # evaluate the elbo, using memoize to share tensor computation where possible
         with funsor.interpretations.memoize():
@@ -172,14 +145,8 @@ class TraceMarkovEnum_ELBO(ELBO):
 class TraceEnum_ELBO(ELBO):
     def differentiable_loss(self, model, guide, *args, **kwargs):
         # get batched, enumerated, to_funsor-ed traces from the guide and model
-        with (
-            plate(size=self.num_particles)
-            if self.num_particles > 1
-            else contextlib.ExitStack()
-        ), enum(
-            first_available_dim=(
-                (-self.max_plate_nesting - 1) if self.max_plate_nesting else None
-            )
+        with plate(size=self.num_particles) if self.num_particles > 1 else contextlib.ExitStack(), enum(
+            first_available_dim=((-self.max_plate_nesting - 1) if self.max_plate_nesting else None)
         ):
             guide_tr = trace(guide).get_trace(*args, **kwargs)
             model_tr = trace(replay(model, trace=guide_tr)).get_trace(*args, **kwargs)
@@ -203,13 +170,9 @@ class TraceEnum_ELBO(ELBO):
                 model_terms["log_measures"] + contracted_factors,
                 model_terms["measure_vars"],
             ):
-                group_factor_vars = frozenset().union(
-                    *[f.inputs for f in group_factors]
-                )
+                group_factor_vars = frozenset().union(*[f.inputs for f in group_factors])
                 group_plates = model_terms["plate_vars"] & group_factor_vars
-                outermost_plates = frozenset.intersection(
-                    *(frozenset(f.inputs) & group_plates for f in group_factors)
-                )
+                outermost_plates = frozenset.intersection(*(frozenset(f.inputs) & group_plates for f in group_factors))
                 elim_plates = group_plates - outermost_plates
                 for f in funsor.sum_product.partial_sum_product(
                     funsor.ops.logaddexp,
@@ -250,25 +213,19 @@ class TraceEnum_ELBO(ELBO):
                     plates=plate_vars,
                     eliminate=(plate_vars | guide_terms["measure_vars"]),
                 )
-            marginals = tape.adjoint(
-                funsor.ops.logaddexp, funsor.ops.add, logzq, tuple(targets.values())
-            )
+            marginals = tape.adjoint(funsor.ops.logaddexp, funsor.ops.add, logzq, tuple(targets.values()))
             # finally, integrate out guide variables in the elbo and all plates
             elbo = to_funsor(0, output=funsor.Real)
             for cost in costs:
                 target = targets[frozenset(cost.inputs)]
-                logzq_local = marginals[target].reduce(
-                    funsor.ops.logaddexp, frozenset(cost.inputs) - plate_vars
-                )
+                logzq_local = marginals[target].reduce(funsor.ops.logaddexp, frozenset(cost.inputs) - plate_vars)
                 log_prob = marginals[target] - logzq_local
                 elbo_term = funsor.Integrate(
                     log_prob,
                     cost,
                     guide_terms["measure_vars"] & frozenset(log_prob.inputs),
                 )
-                elbo += elbo_term.reduce(
-                    funsor.ops.add, plate_vars & frozenset(cost.inputs)
-                )
+                elbo += elbo_term.reduce(funsor.ops.add, plate_vars & frozenset(cost.inputs))
 
         # evaluate the elbo, using memoize to share tensor computation where possible
         with funsor.interpretations.memoize():

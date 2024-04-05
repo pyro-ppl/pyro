@@ -44,23 +44,22 @@ class MissingDataDiscreteHMM(TorchDistribution):
     }
     support = constraints.independent(constraints.nonnegative_integer, 2)
 
-    def __init__(
-        self, initial_logits, transition_logits, observation_logits, validate_args=None
-    ):
+    def __init__(self, initial_logits, transition_logits, observation_logits, validate_args=None):
         if initial_logits.dim() < 1:
             raise ValueError(
-                "expected initial_logits to have at least one dim, "
-                "actual shape = {}".format(initial_logits.shape)
+                "expected initial_logits to have at least one dim, " "actual shape = {}".format(initial_logits.shape)
             )
         if transition_logits.dim() < 2:
             raise ValueError(
-                "expected transition_logits to have at least two dims, "
-                "actual shape = {}".format(transition_logits.shape)
+                "expected transition_logits to have at least two dims, " "actual shape = {}".format(
+                    transition_logits.shape
+                )
             )
         if observation_logits.dim() < 2:
             raise ValueError(
-                "expected observation_logits to have at least two dims, "
-                "actual shape = {}".format(transition_logits.shape)
+                "expected observation_logits to have at least two dims, " "actual shape = {}".format(
+                    transition_logits.shape
+                )
             )
         shape = broadcast_shape(
             initial_logits.shape[:-1],
@@ -72,15 +71,9 @@ class MissingDataDiscreteHMM(TorchDistribution):
         batch_shape = shape
         event_shape = (1, observation_logits.shape[-1])
         self.initial_logits = initial_logits - initial_logits.logsumexp(-1, True)
-        self.transition_logits = transition_logits - transition_logits.logsumexp(
-            -1, True
-        )
-        self.observation_logits = observation_logits - observation_logits.logsumexp(
-            -1, True
-        )
-        super(MissingDataDiscreteHMM, self).__init__(
-            batch_shape, event_shape, validate_args=validate_args
-        )
+        self.transition_logits = transition_logits - transition_logits.logsumexp(-1, True)
+        self.observation_logits = observation_logits - observation_logits.logsumexp(-1, True)
+        super(MissingDataDiscreteHMM, self).__init__(batch_shape, event_shape, validate_args=validate_args)
 
     def log_prob(self, value):
         """
@@ -97,9 +90,7 @@ class MissingDataDiscreteHMM(TorchDistribution):
         assert value.shape[-1] == self.event_shape[1]
 
         # Combine observation and transition factors.
-        value_logits = torch.matmul(
-            value, torch.transpose(self.observation_logits, -2, -1)
-        )
+        value_logits = torch.matmul(value, torch.transpose(self.observation_logits, -2, -1))
         result = self.transition_logits.unsqueeze(-3) + value_logits[..., 1:, None, :]
 
         # Eliminate time dimension.
@@ -131,15 +122,11 @@ class MissingDataDiscreteHMM(TorchDistribution):
         for i in range(shape[-2]):
             # batch_size x 1 x state_dim @
             # batch_size x state_dim x categorical_size
-            obs_logits = torch.matmul(
-                state.unsqueeze(-2), self.observation_logits
-            ).squeeze(-2)
+            obs_logits = torch.matmul(state.unsqueeze(-2), self.observation_logits).squeeze(-2)
             sample[:, i, :] = OneHotCategorical(logits=obs_logits).sample()
             # batch_size x 1 x state_dim @
             # batch_size x state_dim x state_dim
-            trans_logits = torch.matmul(
-                state.unsqueeze(-2), self.transition_logits
-            ).squeeze(-2)
+            trans_logits = torch.matmul(state.unsqueeze(-2), self.transition_logits).squeeze(-2)
             state = OneHotCategorical(logits=trans_logits).sample()
 
         return sample
@@ -164,25 +151,17 @@ class MissingDataDiscreteHMM(TorchDistribution):
 
         # Combine observation and transition factors.
         # batch_size x num_steps x state_dim
-        value_logits = torch.matmul(
-            value, torch.transpose(self.observation_logits, -2, -1)
-        )
+        value_logits = torch.matmul(value, torch.transpose(self.observation_logits, -2, -1))
         # batch_size x num_steps-1 x state_dim x state_dim
         result = self.transition_logits.unsqueeze(-3) + value_logits[..., 1:, None, :]
 
         # Forward pass. (This could be parallelized using the
         # Sarkka & Garcia-Fernandez method.)
         filter[..., 0, :] = self.initial_logits + value_logits[..., 0, :]
-        filter[..., 0, :] = filter[..., 0, :] - torch.logsumexp(
-            filter[..., 0, :], -1, True
-        )
+        filter[..., 0, :] = filter[..., 0, :] - torch.logsumexp(filter[..., 0, :], -1, True)
         for i in range(1, shape[-2]):
-            filter[..., i, :] = torch.logsumexp(
-                filter[..., i - 1, :, None] + result[..., i - 1, :, :], -2
-            )
-            filter[..., i, :] = filter[..., i, :] - torch.logsumexp(
-                filter[..., i, :], -1, True
-            )
+            filter[..., i, :] = torch.logsumexp(filter[..., i - 1, :, None] + result[..., i - 1, :, :], -2)
+            filter[..., i, :] = filter[..., i, :] - torch.logsumexp(filter[..., i, :], -1, True)
         return filter
 
     def smooth(self, value):
@@ -201,16 +180,12 @@ class MissingDataDiscreteHMM(TorchDistribution):
 
         # Combine observation and transition factors.
         # batch_size x num_steps x state_dim
-        value_logits = torch.matmul(
-            value, torch.transpose(self.observation_logits, -2, -1)
-        )
+        value_logits = torch.matmul(value, torch.transpose(self.observation_logits, -2, -1))
         # batch_size x num_steps-1 x state_dim x state_dim
         result = self.transition_logits.unsqueeze(-3) + value_logits[..., 1:, None, :]
         # Construct backwards filter.
         for i in range(shape[-2] - 1, 0, -1):
-            backfilter[..., i - 1, :] = torch.logsumexp(
-                backfilter[..., i, None, :] + result[..., i - 1, :, :], -1
-            )
+            backfilter[..., i - 1, :] = torch.logsumexp(backfilter[..., i, None, :] + result[..., i - 1, :, :], -1)
 
         # Compute smoothed version.
         smooth = filter + backfilter
@@ -235,8 +210,7 @@ class MissingDataDiscreteHMM(TorchDistribution):
             logits = torch.gather(
                 joint[..., i - 1, :, :],
                 -1,
-                states[..., i, None, None]
-                * torch.ones([shape[-1], 1], dtype=torch.long),
+                states[..., i, None, None] * torch.ones([shape[-1], 1], dtype=torch.long),
             ).squeeze(-1)
             states[..., i - 1] = Categorical(logits=logits).sample()
         return states
@@ -263,21 +237,15 @@ class MissingDataDiscreteHMM(TorchDistribution):
 
         # Combine observation and transition factors.
         # batch_size x num_steps x state_dim
-        value_logits = torch.matmul(
-            value, torch.transpose(self.observation_logits, -2, -1)
-        )
+        value_logits = torch.matmul(value, torch.transpose(self.observation_logits, -2, -1))
         # batch_size x num_steps-1 x state_dim x state_dim
         result = self.transition_logits.unsqueeze(-3) + value_logits[..., 1:, None, :]
 
         # Forward pass.
         state_logits[..., 0, :] = self.initial_logits + value_logits[..., 0, :]
         for i in range(1, shape[-2]):
-            transit_weights = (
-                state_logits[..., i - 1, :, None] + result[..., i - 1, :, :]
-            )
-            state_logits[..., i, :], state_traceback[..., i, :] = torch.max(
-                transit_weights, -2
-            )
+            transit_weights = state_logits[..., i - 1, :, None] + result[..., i - 1, :, :]
+            state_logits[..., i, :], state_traceback[..., i, :] = torch.max(transit_weights, -2)
         # Traceback.
         map_states = torch.zeros(shape[:-1], dtype=torch.long)
         map_states[..., -1] = torch.argmax(state_logits[..., -1, :], -1)

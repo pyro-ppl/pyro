@@ -29,12 +29,7 @@ def test_constraint(value_shape):
 
 def _autograd_log_det(ys, x):
     # computes log_abs_det_jacobian of y w.r.t. x
-    return (
-        torch.stack([torch.autograd.grad(y, (x,), retain_graph=True)[0] for y in ys])
-        .det()
-        .abs()
-        .log()
-    )
+    return torch.stack([torch.autograd.grad(y, (x,), retain_graph=True)[0] for y in ys]).det().abs().log()
 
 
 @pytest.mark.parametrize("y_shape", [(1,), (3, 1), (6,), (1, 6), (2, 6)])
@@ -122,9 +117,7 @@ def test_log_prob_conc1(dim):
 @pytest.mark.parametrize("concentration", [0.1, 0.5, 1.0, 2.0, 5.0])
 def test_log_prob_d2(concentration):
     dist = LKJCholesky(2, torch.tensor([concentration]))
-    test_dist = TransformedDistribution(
-        Beta(concentration, concentration), AffineTransform(loc=-1.0, scale=2.0)
-    )
+    test_dist = TransformedDistribution(Beta(concentration, concentration), AffineTransform(loc=-1.0, scale=2.0))
 
     samples = dist.sample(torch.Size([100]))
     lp = dist.log_prob(samples)

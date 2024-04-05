@@ -27,9 +27,7 @@ def model(batch, subsample, full_size):
         z = 0.0
         for t in range(num_time_steps):
             z = pyro.sample("state_{}".format(t), dist.Normal(z, drift))
-            result[t] = pyro.sample(
-                "obs_{}".format(t), dist.Bernoulli(logits=z), obs=batch[t]
-            )
+            result[t] = pyro.sample("obs_{}".format(t), dist.Bernoulli(logits=z), obs=batch[t])
     return torch.stack(result)
 
 
@@ -110,18 +108,14 @@ def test_subsample_smoke(init_fn):
             lambda: torch.full(group.event_shape, 0.01),
             constraint=constraints.positive,
         )
-        cov_factor = pyro.param(
-            "state_cov_factor", lambda: torch.randn(group.event_shape + (rank,)) * 0.01
-        )
+        cov_factor = pyro.param("state_cov_factor", lambda: torch.randn(group.event_shape + (rank,)) * 0.01)
         with self.plate("data", full_size, subsample=subsample):
             loc = pyro.param(
                 "state_loc",
                 lambda: torch.full((full_size,) + group.event_shape, 0.5),
                 event_dim=1,
             )
-            group.sample(
-                "states", dist.LowRankMultivariateNormal(loc, cov_factor, cov_diag)
-            )
+            group.sample("states", dist.LowRankMultivariateNormal(loc, cov_factor, cov_diag))
 
     if init_fn is not None:
         guide.init = init_fn
@@ -144,22 +138,16 @@ def test_amortized_smoke(init_fn):
             lambda: torch.full(group.event_shape, 0.01),
             constraint=constraints.positive,
         )
-        cov_factor = pyro.param(
-            "state_cov_factor", lambda: torch.randn(group.event_shape + (rank,)) * 0.01
-        )
+        cov_factor = pyro.param("state_cov_factor", lambda: torch.randn(group.event_shape + (rank,)) * 0.01)
 
         if not hasattr(self, "nn"):
-            self.nn = torch.nn.Linear(
-                group.event_shape.numel(), group.event_shape.numel()
-            )
+            self.nn = torch.nn.Linear(group.event_shape.numel(), group.event_shape.numel())
             self.nn.weight.data.fill_(1.0 / num_time_steps)
             self.nn.bias.data.fill_(-0.5)
         pyro.module("state_nn", self.nn)
         with self.plate("data", full_size, subsample=subsample):
             loc = self.nn(batch.t())
-            group.sample(
-                "states", dist.LowRankMultivariateNormal(loc, cov_factor, cov_diag)
-            )
+            group.sample("states", dist.LowRankMultivariateNormal(loc, cov_factor, cov_diag))
 
     if init_fn is not None:
         guide.init = init_fn
@@ -226,9 +214,7 @@ def test_overlapping_plates_error():
     def guide(self, batch, subsample, full_size):
         with self.plate("shared", full_size, subsample=subsample, dim=-1):
             group = self.group(match="x|y")
-            loc = pyro.param(
-                "guide_loc", torch.zeros((full_size,) + group.event_shape), event_dim=1
-            )
+            loc = pyro.param("guide_loc", torch.zeros((full_size,) + group.event_shape), event_dim=1)
             scale = pyro.param(
                 "guide_scale",
                 torch.ones((full_size,) + group.event_shape),

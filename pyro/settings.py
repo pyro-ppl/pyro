@@ -149,9 +149,7 @@ def register(
     _REGISTRY[alias] = modulename, deepname, validator
 
     # Add default value to module docstring.
-    __doc__ = _doc_template.format(
-        defaults="\n".join(f"- {a} = {get(a)}" for a in sorted(_REGISTRY))
-    )
+    __doc__ = _doc_template.format(defaults="\n".join(f"- {a} = {get(a)}" for a in sorted(_REGISTRY)))
 
     # Support use as a decorator on an optional user-provided validator.
     if validator is None:

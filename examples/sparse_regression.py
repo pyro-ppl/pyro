@@ -71,16 +71,12 @@ def model(X, Y, hypers, jitter=1.0e-4):
 
     eta2 = eta1.pow(2.0) * xisq.sqrt() / msq
 
-    lam = pyro.sample(
-        "lambda", dist.HalfCauchy(torch.ones(P, device=X.device)).to_event(1)
-    )
+    lam = pyro.sample("lambda", dist.HalfCauchy(torch.ones(P, device=X.device)).to_event(1))
     kappa = msq.sqrt() * lam / (msq + (eta1 * lam).pow(2.0)).sqrt()
     kX = kappa * X
 
     # compute the kernel for the given hyperparameters
-    k = kernel(kX, kX, eta1, eta2, hypers["c"]) + (sigma**2 + jitter) * torch.eye(
-        N, device=X.device
-    )
+    k = kernel(kX, kX, eta1, eta2, hypers["c"]) + (sigma**2 + jitter) * torch.eye(N, device=X.device)
 
     # observe the outputs Y
     pyro.sample(
@@ -115,30 +111,19 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, sigma, jitter=1.0e-4)
     kprobe = kprobe.reshape(-1, P)
 
     # compute various kernels
-    k_xx = kernel(kX, kX, eta1, eta2, c) + (jitter + sigma**2) * torch.eye(
-        N, dtype=X.dtype, device=X.device
-    )
+    k_xx = kernel(kX, kX, eta1, eta2, c) + (jitter + sigma**2) * torch.eye(N, dtype=X.dtype, device=X.device)
     k_xx_inv = torch.inverse(k_xx)
     k_probeX = kernel(kprobe, kX, eta1, eta2, c)
     k_prbprb = kernel(kprobe, kprobe, eta1, eta2, c)
 
     # compute mean and variance for singleton weights
     vec = torch.tensor([0.50, -0.50], dtype=X.dtype, device=X.device)
-    mu = (
-        torch.matmul(k_probeX, torch.matmul(k_xx_inv, Y).unsqueeze(-1))
-        .squeeze(-1)
-        .reshape(P, 2)
-    )
+    mu = torch.matmul(k_probeX, torch.matmul(k_xx_inv, Y).unsqueeze(-1)).squeeze(-1).reshape(P, 2)
     mu = (mu * vec).sum(-1)
 
     var = k_prbprb - torch.matmul(k_probeX, torch.matmul(k_xx_inv, k_probeX.t()))
     var = var.reshape(P, 2, P, 2).diagonal(dim1=-4, dim2=-2)  # 2 2 P
-    std = (
-        ((var * vec.unsqueeze(-1)).sum(-2) * vec.unsqueeze(-1))
-        .sum(-2)
-        .clamp(min=0.0)
-        .sqrt()
-    )
+    std = ((var * vec.unsqueeze(-1)).sum(-2) * vec.unsqueeze(-1)).sum(-2).clamp(min=0.0).sqrt()
 
     # select active dimensions (those that are non-zero with sufficient statistical significance)
     active_dims = (((mu - 4.0 * std) > 0.0) | ((mu + 4.0 * std) < 0.0)).bool()
@@ -175,27 +160,14 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, sigma, jitter=1.0e-4)
     # compute mean and covariance for a subset of weights theta_ij (namely those with
     # 'active' dimensions i and j)
     vec = torch.tensor([0.25, -0.25, -0.25, 0.25], dtype=X.dtype, device=X.device)
-    mu = (
-        torch.matmul(k_probeX, torch.matmul(k_xx_inv, Y).unsqueeze(-1))
-        .squeeze(-1)
-        .reshape(left_dims.size(0), 4)
-    )
+    mu = torch.matmul(k_probeX, torch.matmul(k_xx_inv, Y).unsqueeze(-1)).squeeze(-1).reshape(left_dims.size(0), 4)
     mu = (mu * vec).sum(-1)
 
     var = k_prbprb - torch.matmul(k_probeX, torch.matmul(k_xx_inv, k_probeX.t()))
-    var = var.reshape(left_dims.size(0), 4, left_dims.size(0), 4).diagonal(
-        dim1=-4, dim2=-2
-    )
-    std = (
-        ((var * vec.unsqueeze(-1)).sum(-2) * vec.unsqueeze(-1))
-        .sum(-2)
-        .clamp(min=0.0)
-        .sqrt()
-    )
+    var = var.reshape(left_dims.size(0), 4, left_dims.size(0), 4).diagonal(dim1=-4, dim2=-2)
+    std = ((var * vec.unsqueeze(-1)).sum(-2) * vec.unsqueeze(-1)).sum(-2).clamp(min=0.0).sqrt()
 
-    active_quad_dims = (((mu - 4.0 * std) > 0.0) | ((mu + 4.0 * std) < 0.0)) & (
-        mu.abs() > 1.0e-4
-    ).bool()
+    active_quad_dims = (((mu - 4.0 * std) > 0.0) | ((mu + 4.0 * std) < 0.0)) & (mu.abs() > 1.0e-4).bool()
     active_quad_dims = active_quad_dims.nonzero(as_tuple=False)
 
     active_quadratic_dims = np.stack(
@@ -205,9 +177,7 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, sigma, jitter=1.0e-4)
         ],
         axis=1,
     )
-    active_quadratic_dims = np.split(
-        active_quadratic_dims, active_quadratic_dims.shape[0]
-    )
+    active_quadratic_dims = np.split(active_quadratic_dims, active_quadratic_dims.shape[0])
     active_quadratic_dims = [tuple(a.tolist()[0]) for a in active_quadratic_dims]
 
     return active_dims.data.numpy(), active_quadratic_dims
@@ -278,9 +248,7 @@ def main(args):
     Q = args.quadratic_dimensions
 
     # generate artificial dataset
-    X, Y, expected_thetas, expected_quad_dims = get_data(
-        N=args.num_data, P=P, S=S, Q=Q, sigma_obs=args.sigma
-    )
+    X, Y, expected_thetas, expected_quad_dims = get_data(N=args.num_data, P=P, S=S, Q=Q, sigma_obs=args.sigma)
 
     loss_fn = Trace_ELBO().differentiable_loss
 
@@ -353,14 +321,8 @@ def main(args):
     # We report how well we did, i.e. did we recover the sparse set of coefficients
     # that we expected for our artificial dataset?
     print("[SUMMARY STATS]")
-    print(
-        "Singletons (true positive, false positive, false negative): "
-        + "(%d, %d, %d)" % singleton_stats
-    )
-    print(
-        "Quadratic  (true positive, false positive, false negative): "
-        + "(%d, %d, %d)" % quad_stats
-    )
+    print("Singletons (true positive, false positive, false negative): " + "(%d, %d, %d)" % singleton_stats)
+    print("Quadratic  (true positive, false positive, false negative): " + "(%d, %d, %d)" % quad_stats)
 
 
 if __name__ == "__main__":

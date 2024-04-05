@@ -47,8 +47,7 @@ class LatentStableReparam(Reparam):
         assert isinstance(fn, dist.Stable) and fn.coords == "S0"
         if is_observed:
             raise NotImplementedError(
-                f"At pyro.sample({repr(name)},...), "
-                "LatentStableReparam does not support observe statements"
+                f"At pyro.sample({repr(name)},...), " "LatentStableReparam does not support observe statements"
             )
 
         # Draw parameter-free noise.
@@ -59,9 +58,7 @@ class LatentStableReparam(Reparam):
             "{}_uniform".format(name),
             self._wrap(dist.Uniform(-half_pi, half_pi).expand(proto.shape), event_dim),
         )
-        e = pyro.sample(
-            "{}_exponential".format(name), self._wrap(dist.Exponential(one), event_dim)
-        )
+        e = pyro.sample("{}_exponential".format(name), self._wrap(dist.Exponential(one), event_dim))
 
         # Differentiably transform.
         x = _standard_stable(fn.stability, fn.skew, u, e, coords="S0")
@@ -116,9 +113,7 @@ class SymmetricStableReparam(Reparam):
             "{}_uniform".format(name),
             self._wrap(dist.Uniform(-half_pi, half_pi).expand(proto.shape), event_dim),
         )
-        e = pyro.sample(
-            "{}_exponential".format(name), self._wrap(dist.Exponential(one), event_dim)
-        )
+        e = pyro.sample("{}_exponential".format(name), self._wrap(dist.Exponential(one), event_dim))
 
         # Differentiably transform to scale drawn from a totally-skewed stable variable.
         a = fn.stability

@@ -38,9 +38,7 @@ def test_idempotent(batch_dim, event_dim):
     assert dist.event_shape == dist0.event_shape
 
 
-@pytest.mark.parametrize(
-    "sample_dim,extra_event_dims", [(s, e) for s in range(4) for e in range(4 + s)]
-)
+@pytest.mark.parametrize("sample_dim,extra_event_dims", [(s, e) for s in range(4) for e in range(4 + s)])
 def test_reshape(sample_dim, extra_event_dims):
     batch_dim = 3
     batch_shape, event_shape = torch.Size((5, 4, 3)), torch.Size()
@@ -58,10 +56,7 @@ def test_reshape(sample_dim, extra_event_dims):
     assert sample.shape == shape
     assert dist.mean.shape == shape
     assert dist.variance.shape == shape
-    assert (
-        dist.log_prob(sample).shape
-        == shape[: sample_dim + batch_dim - extra_event_dims]
-    )
+    assert dist.log_prob(sample).shape == shape[: sample_dim + batch_dim - extra_event_dims]
 
     # Check enumerate support.
     if dist.event_shape:
@@ -74,15 +69,10 @@ def test_reshape(sample_dim, extra_event_dims):
     else:
         assert dist.enumerate_support().shape == (2,) + shape
         assert dist.enumerate_support(expand=True).shape == (2,) + shape
-        assert (
-            dist.enumerate_support(expand=False).shape
-            == (2,) + (1,) * len(sample_shape + batch_shape) + event_shape
-        )
+        assert dist.enumerate_support(expand=False).shape == (2,) + (1,) * len(sample_shape + batch_shape) + event_shape
 
 
-@pytest.mark.parametrize(
-    "sample_dim,extra_event_dims", [(s, e) for s in range(3) for e in range(3 + s)]
-)
+@pytest.mark.parametrize("sample_dim,extra_event_dims", [(s, e) for s in range(3) for e in range(3 + s)])
 def test_reshape_reshape(sample_dim, extra_event_dims):
     batch_dim = 2
     batch_shape, event_shape = torch.Size((6, 5)), torch.Size((4, 3))
@@ -101,10 +91,7 @@ def test_reshape_reshape(sample_dim, extra_event_dims):
     assert sample.shape == shape
     assert dist.mean.shape == shape
     assert dist.variance.shape == shape
-    assert (
-        dist.log_prob(sample).shape
-        == shape[: sample_dim + batch_dim - extra_event_dims]
-    )
+    assert dist.log_prob(sample).shape == shape[: sample_dim + batch_dim - extra_event_dims]
 
     # Check enumerate support.
     if dist.event_shape:
@@ -117,10 +104,7 @@ def test_reshape_reshape(sample_dim, extra_event_dims):
     else:
         assert dist.enumerate_support().shape == (2,) + shape
         assert dist.enumerate_support(expand=True).shape == (2,) + shape
-        assert (
-            dist.enumerate_support(expand=False).shape
-            == (2,) + (1,) * len(sample_shape + batch_shape) + event_shape
-        )
+        assert dist.enumerate_support(expand=False).shape == (2,) + (1,) * len(sample_shape + batch_shape) + event_shape
 
 
 @pytest.mark.parametrize("sample_dim", [0, 1, 2])

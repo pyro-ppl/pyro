@@ -101,20 +101,14 @@ class HiddenLayer(TorchDistribution):
     def rsample(self, sample_shape=torch.Size()):
         # note: weight space sampling is only meant for testing
         if self.weight_space_sampling:
-            A = (
-                self.A_mean
-                + torch.randn(sample_shape + self.A_scale.shape).type_as(self.A_mean)
-                * self.A_scale
-            )
+            A = self.A_mean + torch.randn(sample_shape + self.A_scale.shape).type_as(self.A_mean) * self.A_scale
             activation = torch.matmul(self.X, A)
         else:
             _mean = torch.matmul(self.X, self.A_mean)
             X_sqr = torch.pow(self.X, 2.0).unsqueeze(-1)
             A_scale_sqr = torch.pow(self.A_scale, 2.0)
             _std = (X_sqr * A_scale_sqr).sum(-2).sqrt()
-            activation = (
-                _mean + torch.randn(sample_shape + _std.shape).type_as(_std) * _std
-            )
+            activation = _mean + torch.randn(sample_shape + _std.shape).type_as(_std) * _std
 
         # apply non-linearity
         activation = self.non_linearity(activation)

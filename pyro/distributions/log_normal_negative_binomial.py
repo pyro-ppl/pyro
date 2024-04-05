@@ -86,27 +86,18 @@ class LogNormalNegativeBinomial(TorchDistribution):
         if num_quad_points < 1:
             raise ValueError("num_quad_points must be positive.")
 
-        total_count, logits, multiplicative_noise_scale = broadcast_all(
-            total_count, logits, multiplicative_noise_scale
-        )
+        total_count, logits, multiplicative_noise_scale = broadcast_all(total_count, logits, multiplicative_noise_scale)
 
         self.quad_points, self.log_weights = get_quad_rule(num_quad_points, logits)
-        quad_logits = (
-            logits.unsqueeze(-1)
-            + multiplicative_noise_scale.unsqueeze(-1) * self.quad_points
-        )
-        self.nb_dist = NegativeBinomial(
-            total_count=total_count.unsqueeze(-1), logits=quad_logits
-        )
+        quad_logits = logits.unsqueeze(-1) + multiplicative_noise_scale.unsqueeze(-1) * self.quad_points
+        self.nb_dist = NegativeBinomial(total_count=total_count.unsqueeze(-1), logits=quad_logits)
 
         self.multiplicative_noise_scale = multiplicative_noise_scale
         self.total_count = total_count
         self.logits = logits
         self.num_quad_points = num_quad_points
 
-        batch_shape = broadcast_shape(
-            multiplicative_noise_scale.shape, self.nb_dist.batch_shape[:-1]
-        )
+        batch_shape = broadcast_shape(multiplicative_noise_scale.shape, self.nb_dist.batch_shape[:-1])
         event_shape = torch.Size()
 
         super().__init__(batch_shape, event_shape, validate_args)
@@ -137,17 +128,9 @@ class LogNormalNegativeBinomial(TorchDistribution):
 
     @lazy_property
     def mean(self):
-        return torch.exp(
-            self.logits
-            + self.total_count.log()
-            + 0.5 * self.multiplicative_noise_scale.pow(2.0)
-        )
+        return torch.exp(self.logits + self.total_count.log() + 0.5 * self.multiplicative_noise_scale.pow(2.0))
 
     @lazy_property
     def variance(self):
-        kappa = (
-            torch.exp(self.multiplicative_noise_scale.pow(2.0))
-            * (1 + 1 / self.total_count)
-            - 1
-        )
+        kappa = torch.exp(self.multiplicative_noise_scale.pow(2.0)) * (1 + 1 / self.total_count) - 1
         return self.mean + kappa * self.mean.pow(2.0)

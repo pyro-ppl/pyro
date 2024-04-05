@@ -45,9 +45,7 @@ def test_serialization(jit, feature_dim, outcome_dist):
     x, t, y = generate_data(num_data=32, feature_dim=feature_dim)
     if outcome_dist == "exponential":
         y.clamp_(min=1e-20)
-    cevae = CEVAE(
-        feature_dim, outcome_dist=outcome_dist, num_samples=1000, hidden_dim=32
-    )
+    cevae = CEVAE(feature_dim, outcome_dist=outcome_dist, num_samples=1000, hidden_dim=32)
     cevae.fit(x, t, y, num_epochs=4, batch_size=8)
     pyro.set_rng_seed(0)
     expected_ite = cevae.ite(x)

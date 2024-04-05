@@ -10,23 +10,11 @@ from pyro.contrib.autoname import named
 
 
 def get_sample_names(tr):
-    return set(
-        [
-            name
-            for name, site in tr.nodes.items()
-            if site["type"] == "sample" and not site["is_observed"]
-        ]
-    )
+    return set([name for name, site in tr.nodes.items() if site["type"] == "sample" and not site["is_observed"]])
 
 
 def get_observe_names(tr):
-    return set(
-        [
-            name
-            for name, site in tr.nodes.items()
-            if site["type"] == "sample" and site["is_observed"]
-        ]
-    )
+    return set([name for name, site in tr.nodes.items() if site["type"] == "sample" and site["is_observed"]])
 
 
 def get_param_names(tr):

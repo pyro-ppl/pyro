@@ -18,23 +18,15 @@ from .traceenum_elbo import terms_from_trace
 @copy_docs_from(_OrigTrace_ELBO)
 class Trace_ELBO(ELBO):
     def differentiable_loss(self, model, guide, *args, **kwargs):
-        with enum(), (
-            plate(size=self.num_particles)
-            if self.num_particles > 1
-            else contextlib.ExitStack()
-        ):
-            guide_tr = trace(config_enumerate(default="flat")(guide)).get_trace(
-                *args, **kwargs
-            )
+        with enum(), plate(size=self.num_particles) if self.num_particles > 1 else contextlib.ExitStack():
+            guide_tr = trace(config_enumerate(default="flat")(guide)).get_trace(*args, **kwargs)
             model_tr = trace(replay(model, trace=guide_tr)).get_trace(*args, **kwargs)
 
         model_terms = terms_from_trace(model_tr)
         guide_terms = terms_from_trace(guide_tr)
 
         log_measures = guide_terms["log_measures"] + model_terms["log_measures"]
-        log_factors = model_terms["log_factors"] + [
-            -f for f in guide_terms["log_factors"]
-        ]
+        log_factors = model_terms["log_factors"] + [-f for f in guide_terms["log_factors"]]
         plate_vars = model_terms["plate_vars"] | guide_terms["plate_vars"]
         measure_vars = model_terms["measure_vars"] | guide_terms["measure_vars"]
 

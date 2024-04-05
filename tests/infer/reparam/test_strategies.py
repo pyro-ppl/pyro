@@ -125,28 +125,20 @@ def stable_model():
     h = pyro.sample("h", dist.Stable(1.5, zero, b, 0).to_event(1), obs=a)
     i = pyro.sample(
         "i",
-        dist.TransformedDistribution(
-            dist.Stable(1.5, 0, b, a), dist.transforms.ExpTransform()
-        ),
+        dist.TransformedDistribution(dist.Stable(1.5, 0, b, a), dist.transforms.ExpTransform()),
     )
     j = pyro.sample(
         "j",
-        dist.TransformedDistribution(
-            dist.Stable(1.5, 0, b, a), dist.transforms.ExpTransform()
-        ),
+        dist.TransformedDistribution(dist.Stable(1.5, 0, b, a), dist.transforms.ExpTransform()),
         obs=a.exp(),
     )
     k = pyro.sample(
         "k",
-        dist.TransformedDistribution(
-            dist.Stable(1.5, zero, b, a), dist.transforms.ExpTransform()
-        ).to_event(1),
+        dist.TransformedDistribution(dist.Stable(1.5, zero, b, a), dist.transforms.ExpTransform()).to_event(1),
     )
     l = pyro.sample(
         "l",
-        dist.TransformedDistribution(
-            dist.Stable(1.5, zero, b, a), dist.transforms.ExpTransform()
-        ).to_event(1),
+        dist.TransformedDistribution(dist.Stable(1.5, zero, b, a), dist.transforms.ExpTransform()).to_event(1),
         obs=a.exp() + zero,
     )
     return a, b, c, d, e, f, g, h, i, j, k, l
@@ -293,9 +285,7 @@ def softmax_model():
     b = pyro.sample("b", dist.RelaxedOneHotCategorical(probs=a, temperature=2.0))
     c = pyro.sample("c", dist.Normal(torch.ones(7), 1).to_event(1))
     d = pyro.sample("d", dist.RelaxedOneHotCategorical(logits=c, temperature=1.0))
-    e = pyro.sample(
-        "e", dist.RelaxedOneHotCategorical(logits=c, temperature=0.5), obs=d.round()
-    )
+    e = pyro.sample("e", dist.RelaxedOneHotCategorical(logits=c, temperature=0.5), obs=d.round())
     return a, b, c, d, e
 
 
@@ -323,9 +313,7 @@ def test_softmax_auto():
     assert actual == expected
 
 
-@pytest.mark.filterwarnings(
-    "ignore:.*falling back to default initialization.*:RuntimeWarning"
-)
+@pytest.mark.filterwarnings("ignore:.*falling back to default initialization.*:RuntimeWarning")
 @pytest.mark.parametrize("model", [normal_model, stable_model, projected_normal_model])
 def test_end_to_end(model):
     # Test training.

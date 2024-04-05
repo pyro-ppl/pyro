@@ -13,6 +13,7 @@ http://docs.pyro.ai/en/latest/contrib.cevae.html
     http://papers.nips.cc/paper/7223-causal-effect-inference-with-deep-latent-variable-models.pdf
     https://github.com/AMLab-Amsterdam/CEVAE
 """
+
 import argparse
 import logging
 
@@ -87,9 +88,7 @@ def main(args):
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith("1.9.0")
-    parser = argparse.ArgumentParser(
-        description="Causal Effect Variational Autoencoder"
-    )
+    parser = argparse.ArgumentParser(description="Causal Effect Variational Autoencoder")
     parser.add_argument("--num-data", default=1000, type=int)
     parser.add_argument("--feature-dim", default=5, type=int)
     parser.add_argument("--latent-dim", default=20, type=int)

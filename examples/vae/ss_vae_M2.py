@@ -132,9 +132,7 @@ class SSVAE(nn.Module):
 
             # if the label y (which digit to write) is supervised, sample from the
             # constant prior, otherwise, observe the value (i.e. score it against the constant prior)
-            alpha_prior = torch.ones(batch_size, self.output_size, **options) / (
-                1.0 * self.output_size
-            )
+            alpha_prior = torch.ones(batch_size, self.output_size, **options) / (1.0 * self.output_size)
             ys = pyro.sample("y", dist.OneHotCategorical(alpha_prior), obs=ys)
 
             # Finally, score the image (x) using the handwriting style (z) and
@@ -143,9 +141,7 @@ class SSVAE(nn.Module):
             # where `decoder` is a neural network. We disable validation
             # since the decoder output is a relaxed Bernoulli value.
             loc = self.decoder([zs, ys])
-            pyro.sample(
-                "x", dist.Bernoulli(loc, validate_args=False).to_event(1), obs=xs
-            )
+            pyro.sample("x", dist.Bernoulli(loc, validate_args=False).to_event(1), obs=xs)
             # return the loc so we can visualize it later
             return loc
 
@@ -335,25 +331,19 @@ def main(args):
     # aux_loss: whether to use the auxiliary loss from NIPS 14 paper (Kingma et al.)
     if args.aux_loss:
         elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
-        loss_aux = SVI(
-            ss_vae.model_classify, ss_vae.guide_classify, optimizer, loss=elbo
-        )
+        loss_aux = SVI(ss_vae.model_classify, ss_vae.guide_classify, optimizer, loss=elbo)
         losses.append(loss_aux)
 
     try:
         # setup the logger if a filename is provided
         logger = open(args.logfile, "w") if args.logfile else None
 
-        data_loaders = setup_data_loaders(
-            MNISTCached, args.cuda, args.batch_size, sup_num=args.sup_num
-        )
+        data_loaders = setup_data_loaders(MNISTCached, args.cuda, args.batch_size, sup_num=args.sup_num)
 
         # how often would a supervised batch be encountered during inference
         # e.g. if sup_num is 3000, we would have every 16th = int(50000/3000) batch supervised
         # until we have traversed through the all supervised batches
-        periodic_interval_batches = int(
-            MNISTCached.train_data_size / (1.0 * args.sup_num)
-        )
+        periodic_interval_batches = int(MNISTCached.train_data_size / (1.0 * args.sup_num))
 
         # number of unsupervised examples
         unsup_num = MNISTCached.train_data_size - args.sup_num
@@ -378,20 +368,14 @@ def main(args):
             str_loss_sup = " ".join(map(str, avg_epoch_losses_sup))
             str_loss_unsup = " ".join(map(str, avg_epoch_losses_unsup))
 
-            str_print = "{} epoch: avg losses {}".format(
-                i, "{} {}".format(str_loss_sup, str_loss_unsup)
-            )
+            str_print = "{} epoch: avg losses {}".format(i, "{} {}".format(str_loss_sup, str_loss_unsup))
 
-            validation_accuracy = get_accuracy(
-                data_loaders["valid"], ss_vae.classifier, args.batch_size
-            )
+            validation_accuracy = get_accuracy(data_loaders["valid"], ss_vae.classifier, args.batch_size)
             str_print += " validation accuracy {}".format(validation_accuracy)
 
             # this test accuracy is only for logging, this is not used
             # to make any decisions during training
-            test_accuracy = get_accuracy(
-                data_loaders["test"], ss_vae.classifier, args.batch_size
-            )
+            test_accuracy = get_accuracy(data_loaders["test"], ss_vae.classifier, args.batch_size)
             str_print += " test accuracy {}".format(test_accuracy)
 
             # update the best validation accuracy and the corresponding
@@ -402,13 +386,10 @@ def main(args):
 
             print_and_log(logger, str_print)
 
-        final_test_accuracy = get_accuracy(
-            data_loaders["test"], ss_vae.classifier, args.batch_size
-        )
+        final_test_accuracy = get_accuracy(data_loaders["test"], ss_vae.classifier, args.batch_size)
         print_and_log(
             logger,
-            "best validation accuracy {} corresponding testing accuracy {} "
-            "last testing accuracy {}".format(
+            "best validation accuracy {} corresponding testing accuracy {} " "last testing accuracy {}".format(
                 best_valid_acc, corresponding_test_acc, final_test_accuracy
             ),
         )
@@ -431,20 +412,13 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="SS-VAE\n{}".format(EXAMPLE_RUN))
 
-    parser.add_argument(
-        "--cuda", action="store_true", help="use GPU(s) to speed up training"
-    )
-    parser.add_argument(
-        "--jit", action="store_true", help="use PyTorch jit to speed up training"
-    )
-    parser.add_argument(
-        "-n", "--num-epochs", default=50, type=int, help="number of epochs to run"
-    )
+    parser.add_argument("--cuda", action="store_true", help="use GPU(s) to speed up training")
+    parser.add_argument("--jit", action="store_true", help="use PyTorch jit to speed up training")
+    parser.add_argument("-n", "--num-epochs", default=50, type=int, help="number of epochs to run")
     parser.add_argument(
         "--aux-loss",
         action="store_true",
-        help="whether to use the auxiliary loss from NIPS 14 paper "
-        "(Kingma et al.). It is not used by default ",
+        help="whether to use the auxiliary loss from NIPS 14 paper " "(Kingma et al.). It is not used by default ",
     )
     parser.add_argument(
         "-alm",
@@ -464,8 +438,7 @@ if __name__ == "__main__":
         "--sup-num",
         default=3000,
         type=float,
-        help="supervised amount of the data i.e. "
-        "how many of the images have supervised labels",
+        help="supervised amount of the data i.e. " "how many of the images have supervised labels",
     )
     parser.add_argument(
         "-zd",
@@ -533,8 +506,6 @@ if __name__ == "__main__":
     assert (
         MNISTCached.train_data_size % args.batch_size == 0
     ), "batch size doesn't divide total number of training data examples"
-    assert (
-        MNISTCached.test_size % args.batch_size == 0
-    ), "batch size should divide the number of test examples"
+    assert MNISTCached.test_size % args.batch_size == 0, "batch size should divide the number of test examples"
 
     main(args)

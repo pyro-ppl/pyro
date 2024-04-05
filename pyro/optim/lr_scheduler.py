@@ -48,9 +48,7 @@ class PyroLRScheduler(PyroOptim):
     def __call__(self, params: Union[List, ValuesView], *args, **kwargs) -> None:
         super().__call__(params, *args, **kwargs)
 
-    def _get_optim(
-        self, params: Union[Tensor, Iterable[Tensor], Iterable[Dict[Any, Any]]]
-    ):
+    def _get_optim(self, params: Union[Tensor, Iterable[Tensor], Iterable[Dict[Any, Any]]]):
         optim = super()._get_optim(params)
         return self.pt_scheduler_constructor(optim, **self.kwargs)
 

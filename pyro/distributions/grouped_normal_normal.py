@@ -56,18 +56,12 @@ class GroupedNormalNormal(TorchDistribution):
     }
     support = constraints.real
 
-    def __init__(
-        self, prior_loc, prior_scale, obs_scale, group_idx, validate_args=None
-    ):
+    def __init__(self, prior_loc, prior_scale, obs_scale, group_idx, validate_args=None):
         if prior_loc.ndim not in [0, 1] or prior_scale.ndim not in [0, 1]:
-            raise ValueError(
-                "prior_loc and prior_scale must be broadcastable to 1D tensors of the same shape."
-            )
+            raise ValueError("prior_loc and prior_scale must be broadcastable to 1D tensors of the same shape.")
 
         if obs_scale.ndim not in [0, 1]:
-            raise ValueError(
-                "obs_scale must be broadcastable to a 1-dimensional tensor."
-            )
+            raise ValueError("obs_scale must be broadcastable to a 1-dimensional tensor.")
 
         if group_idx.ndim != 1 or not isinstance(group_idx, torch.LongTensor):
             raise ValueError("group_idx must be a 1-dimensional tensor of indices.")
@@ -115,13 +109,9 @@ class GroupedNormalNormal(TorchDistribution):
         obs_scale_sq_inv = self.obs_scale.pow(-2)
         prior_scale_sq_inv = self.prior_scale.pow(-2)
 
-        obs_scale_sq_inv_sum = torch.zeros_like(self.prior_loc).scatter_add(
-            0, self.group_idx, obs_scale_sq_inv
-        )
+        obs_scale_sq_inv_sum = torch.zeros_like(self.prior_loc).scatter_add(0, self.group_idx, obs_scale_sq_inv)
         precision = prior_scale_sq_inv + obs_scale_sq_inv_sum
-        scaled_value_sum = torch.zeros_like(self.prior_loc).scatter_add(
-            0, self.group_idx, value * obs_scale_sq_inv
-        )
+        scaled_value_sum = torch.zeros_like(self.prior_loc).scatter_add(0, self.group_idx, value * obs_scale_sq_inv)
 
         loc = (scaled_value_sum + self.prior_loc * prior_scale_sq_inv) / precision
         scale = precision.rsqrt()
@@ -135,22 +125,16 @@ class GroupedNormalNormal(TorchDistribution):
         group_idx = self.group_idx
 
         if value.shape != group_idx.shape:
-            raise ValueError(
-                "GroupedNormalNormal.log_prob only supports values that have the same shape as group_idx."
-            )
+            raise ValueError("GroupedNormalNormal.log_prob only supports values that have the same shape as group_idx.")
 
         prior_scale_sq = self.prior_scale.pow(2.0)
         obs_scale_sq_inv = self.obs_scale.pow(-2)
-        obs_scale_sq_inv_sum = torch.zeros_like(self.prior_loc).scatter_add(
-            0, self.group_idx, obs_scale_sq_inv
-        )
+        obs_scale_sq_inv_sum = torch.zeros_like(self.prior_loc).scatter_add(0, self.group_idx, obs_scale_sq_inv)
 
         scale_ratio = prior_scale_sq * obs_scale_sq_inv_sum
         delta = value - self.prior_loc[group_idx]
         scaled_delta = delta * obs_scale_sq_inv
-        scaled_delta_sum = torch.zeros_like(self.prior_loc).scatter_add(
-            0, self.group_idx, scaled_delta
-        )
+        scaled_delta_sum = torch.zeros_like(self.prior_loc).scatter_add(0, self.group_idx, scaled_delta)
 
         result1 = -(self.num_data_per_batch * LOG_ROOT_TWO_PI).sum()
         result2 = -0.5 * torch.log1p(scale_ratio).sum() - self.obs_scale.log().sum()

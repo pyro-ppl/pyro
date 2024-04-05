@@ -21,6 +21,7 @@ using components :class:`Model`, :class:`Guide`,
     | http://papers.nips.cc/paper/7223-causal-effect-inference-with-deep-latent-variable-models.pdf
     | https://github.com/AMLab-Amsterdam/CEVAE
 """
+
 import logging
 
 import torch
@@ -256,9 +257,7 @@ class DiagNormalNet(nn.Module):
     def forward(self, x):
         loc_scale = self.fc(x)
         loc = loc_scale[..., : self.dim].clamp(min=-1e2, max=1e2)
-        scale = (
-            nn.functional.softplus(loc_scale[..., self.dim :]).add(1e-3).clamp(max=1e2)
-        )
+        scale = nn.functional.softplus(loc_scale[..., self.dim :]).add(1e-3).clamp(max=1e2)
         return loc, scale
 
 
@@ -302,18 +301,12 @@ class Model(PyroModule):
         self.latent_dim = config["latent_dim"]
         super().__init__()
         self.x_nn = DiagNormalNet(
-            [config["latent_dim"]]
-            + [config["hidden_dim"]] * config["num_layers"]
-            + [config["feature_dim"]]
+            [config["latent_dim"]] + [config["hidden_dim"]] * config["num_layers"] + [config["feature_dim"]]
         )
         OutcomeNet = DistributionNet.get_class(config["outcome_dist"])
         # The y network is split between the two t values.
-        self.y0_nn = OutcomeNet(
-            [config["latent_dim"]] + [config["hidden_dim"]] * config["num_layers"]
-        )
-        self.y1_nn = OutcomeNet(
-            [config["latent_dim"]] + [config["hidden_dim"]] * config["num_layers"]
-        )
+        self.y0_nn = OutcomeNet([config["latent_dim"]] + [config["hidden_dim"]] * config["num_layers"])
+        self.y1_nn = OutcomeNet([config["latent_dim"]] + [config["hidden_dim"]] * config["num_layers"])
         self.t_nn = BernoulliNet([config["latent_dim"]])
 
     def forward(self, x, t=None, y=None, size=None):
@@ -380,15 +373,13 @@ class Guide(PyroModule):
         # layers are shared for t in {0,1}, but the final layer is split
         # between the two t values.
         self.y_nn = FullyConnected(
-            [config["feature_dim"]]
-            + [config["hidden_dim"]] * (config["num_layers"] - 1),
+            [config["feature_dim"]] + [config["hidden_dim"]] * (config["num_layers"] - 1),
             final_activation=nn.ELU(),
         )
         self.y0_nn = OutcomeNet([config["hidden_dim"]])
         self.y1_nn = OutcomeNet([config["hidden_dim"]])
         self.z_nn = FullyConnected(
-            [1 + config["feature_dim"]]
-            + [config["hidden_dim"]] * (config["num_layers"] - 1),
+            [1 + config["feature_dim"]] + [config["hidden_dim"]] * (config["num_layers"] - 1),
             final_activation=nn.ELU(),
         )
         self.z0_nn = DiagNormalNet([config["hidden_dim"], config["latent_dim"]])
@@ -443,16 +434,12 @@ class TraceCausalEffect_ELBO(Trace_ELBO):
     def _differentiable_loss_particle(self, model_trace, guide_trace):
         # Construct -ELBO part.
         blocked_names = [
-            name
-            for name, site in guide_trace.nodes.items()
-            if site["type"] == "sample" and site["is_observed"]
+            name for name, site in guide_trace.nodes.items() if site["type"] == "sample" and site["is_observed"]
         ]
         blocked_guide_trace = guide_trace.copy()
         for name in blocked_names:
             del blocked_guide_trace.nodes[name]
-        loss, surrogate_loss = super()._differentiable_loss_particle(
-            model_trace, blocked_guide_trace
-        )
+        loss, surrogate_loss = super()._differentiable_loss_particle(model_trace, blocked_guide_trace)
 
         # Add log q terms.
         for name in blocked_names:
@@ -596,9 +583,7 @@ class CEVAE(nn.Module):
                 x = self.whiten(x)
                 loss = svi.step(x, t, y, size=len(dataset)) / len(dataset)
                 if log_every and len(losses) % log_every == 0:
-                    logger.debug(
-                        "step {: >5d} loss = {:0.6g}".format(len(losses), loss)
-                    )
+                    logger.debug("step {: >5d} loss = {:0.6g}".format(len(losses), loss))
                 assert not torch_isnan(loss)
                 losses.append(loss)
         return losses

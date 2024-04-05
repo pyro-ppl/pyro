@@ -38,14 +38,8 @@ def test_hmm_smoke(length, temperature):
         means = torch.arange(float(hidden_dim))
         states = [0]
         for t in pyro.markov(range(len(data))):
-            states.append(
-                pyro.sample(
-                    "states_{}".format(t), dist.Categorical(transition[states[-1]])
-                )
-            )
-            data[t] = pyro.sample(
-                "obs_{}".format(t), dist.Normal(means[states[-1]], 1.0), obs=data[t]
-            )
+            states.append(pyro.sample("states_{}".format(t), dist.Categorical(transition[states[-1]])))
+            data[t] = pyro.sample("obs_{}".format(t), dist.Normal(means[states[-1]], 1.0), obs=data[t])
         return states, data
 
     true_states, data = hmm([None] * length)
@@ -79,33 +73,17 @@ def test_distribution_1(temperature):
             pyro.sample("x", dist.Normal(z, 1.0), obs=data)
 
     first_available_dim = -3
-    vectorized_model = (
-        model
-        if temperature == 0
-        else pyro.plate("particles", size=num_particles, dim=-2)(model)
-    )
-    sampled_model = infer.infer_discrete(
-        vectorized_model, first_available_dim, temperature
-    )
+    vectorized_model = model if temperature == 0 else pyro.plate("particles", size=num_particles, dim=-2)(model)
+    sampled_model = infer.infer_discrete(vectorized_model, first_available_dim, temperature)
     sampled_trace = handlers.trace(sampled_model).get_trace()
-    conditioned_traces = {
-        z: handlers.trace(model).get_trace(z=torch.tensor(z).long()) for z in [0.0, 1.0]
-    }
+    conditioned_traces = {z: handlers.trace(model).get_trace(z=torch.tensor(z).long()) for z in [0.0, 1.0]}
 
     # Check  posterior over z.
     actual_z_mean = sampled_trace.nodes["z"]["value"].float().mean()
     if temperature:
-        expected_z_mean = 1 / (
-            1
-            + (
-                conditioned_traces[0].log_prob_sum()
-                - conditioned_traces[1].log_prob_sum()
-            ).exp()
-        )
+        expected_z_mean = 1 / (1 + (conditioned_traces[0].log_prob_sum() - conditioned_traces[1].log_prob_sum()).exp())
     else:
-        expected_z_mean = (
-            conditioned_traces[1].log_prob_sum() > conditioned_traces[0].log_prob_sum()
-        ).float()
+        expected_z_mean = (conditioned_traces[1].log_prob_sum() > conditioned_traces[0].log_prob_sum()).float()
         expected_max = max(t.log_prob_sum() for t in conditioned_traces.values())
         actual_max = sampled_trace.log_prob_sum()
         assert_equal(expected_max, actual_max, prec=1e-5)
@@ -137,19 +115,11 @@ def test_distribution_2(temperature):
             pyro.sample("x2", dist.Normal(loc[z2], 1.0), obs=data[1])
 
     first_available_dim = -3
-    vectorized_model = (
-        model
-        if temperature == 0
-        else pyro.plate("particles", size=num_particles, dim=-2)(model)
-    )
-    sampled_model = infer.infer_discrete(
-        vectorized_model, first_available_dim, temperature
-    )
+    vectorized_model = model if temperature == 0 else pyro.plate("particles", size=num_particles, dim=-2)(model)
+    sampled_model = infer.infer_discrete(vectorized_model, first_available_dim, temperature)
     sampled_trace = handlers.trace(sampled_model).get_trace()
     conditioned_traces = {
-        (z1, z2): handlers.trace(model).get_trace(
-            z1=torch.tensor(z1), z2=torch.tensor(z2)
-        )
+        (z1, z2): handlers.trace(model).get_trace(z1=torch.tensor(z1), z2=torch.tensor(z2))
         for z1 in [0, 1]
         for z2 in [0, 1]
     }
@@ -160,12 +130,7 @@ def test_distribution_2(temperature):
     for (z1, z2), tr in conditioned_traces.items():
         expected_probs[z1, z2] = tr.log_prob_sum().exp()
         actual_probs[z1, z2] = (
-            (
-                (sampled_trace.nodes["z1"]["value"] == z1)
-                & (sampled_trace.nodes["z2"]["value"] == z2)
-            )
-            .float()
-            .mean()
+            ((sampled_trace.nodes["z1"]["value"] == z1) & (sampled_trace.nodes["z2"]["value"] == z2)).float().mean()
         )
 
     if temperature:
@@ -198,19 +163,11 @@ def test_distribution_3_simple(temperature):
             pyro.sample("x2", dist.Normal(loc[z2], 1.0), obs=data)
 
     first_available_dim = -3
-    vectorized_model = (
-        model
-        if temperature == 0
-        else pyro.plate("particles", size=num_particles, dim=-2)(model)
-    )
-    sampled_model = infer.infer_discrete(
-        vectorized_model, first_available_dim, temperature
-    )
+    vectorized_model = model if temperature == 0 else pyro.plate("particles", size=num_particles, dim=-2)(model)
+    sampled_model = infer.infer_discrete(vectorized_model, first_available_dim, temperature)
     sampled_trace = handlers.trace(sampled_model).get_trace()
     conditioned_traces = {
-        (z20, z21): handlers.trace(model).get_trace(z2=torch.tensor([z20, z21]))
-        for z20 in [0, 1]
-        for z21 in [0, 1]
+        (z20, z21): handlers.trace(model).get_trace(z2=torch.tensor([z20, z21])) for z20 in [0, 1] for z21 in [0, 1]
     }
 
     # Check joint posterior over (z2[0], z2[1]).
@@ -259,19 +216,11 @@ def test_distribution_3(temperature):
             pyro.sample("x2", dist.Normal(loc[z2], 1.0), obs=data[1])
 
     first_available_dim = -3
-    vectorized_model = (
-        model
-        if temperature == 0
-        else pyro.plate("particles", size=num_particles, dim=-2)(model)
-    )
-    sampled_model = infer.infer_discrete(
-        vectorized_model, first_available_dim, temperature
-    )
+    vectorized_model = model if temperature == 0 else pyro.plate("particles", size=num_particles, dim=-2)(model)
+    sampled_model = infer.infer_discrete(vectorized_model, first_available_dim, temperature)
     sampled_trace = handlers.trace(sampled_model).get_trace()
     conditioned_traces = {
-        (z1, z20, z21): handlers.trace(model).get_trace(
-            z1=torch.tensor(z1), z2=torch.tensor([z20, z21])
-        )
+        (z1, z20, z21): handlers.trace(model).get_trace(z1=torch.tensor(z1), z2=torch.tensor([z20, z21]))
         for z1 in [0, 1]
         for z20 in [0, 1]
         for z21 in [0, 1]
@@ -344,18 +293,10 @@ def model2():
 def test_svi_model_side_enumeration(model, temperature):
     # Perform fake inference.
     # This has the wrong distribution but the right type for tests.
-    guide = AutoNormal(
-        handlers.enum(
-            handlers.block(infer.config_enumerate(model), expose=["loc", "scale"])
-        )
-    )
+    guide = AutoNormal(handlers.enum(handlers.block(infer.config_enumerate(model), expose=["loc", "scale"])))
     guide()  # Initialize but don't bother to train.
     guide_trace = handlers.trace(guide).get_trace()
-    guide_data = {
-        name: site["value"]
-        for name, site in guide_trace.nodes.items()
-        if site["type"] == "sample"
-    }
+    guide_data = {name: site["value"] for name, site in guide_trace.nodes.items() if site["type"] == "sample"}
 
     # MAP estimate discretes, conditioned on posterior sampled continous latents.
     actual_trace = handlers.trace(
@@ -381,15 +322,9 @@ def test_mcmc_model_side_enumeration(model, temperature):
     # Draw from prior rather than trying to sample from mcmc posterior.
     # This has the wrong distribution but the right type for tests.
     mcmc_trace = handlers.trace(
-        handlers.block(
-            handlers.enum(infer.config_enumerate(model)), expose=["loc", "scale"]
-        )
+        handlers.block(handlers.enum(infer.config_enumerate(model)), expose=["loc", "scale"])
     ).get_trace()
-    mcmc_data = {
-        name: site["value"]
-        for name, site in mcmc_trace.nodes.items()
-        if site["type"] == "sample"
-    }
+    mcmc_data = {name: site["value"] for name, site in mcmc_trace.nodes.items() if site["type"] == "sample"}
 
     # MAP estimate discretes, conditioned on posterior sampled continous latents.
     actual_trace = handlers.trace(
@@ -426,31 +361,15 @@ def test_distribution_masked(temperature):
             pyro.sample("x", dist.Normal(z.type_as(data), 1.0), obs=data)
 
     first_available_dim = -3
-    vectorized_model = (
-        model
-        if temperature == 0
-        else pyro.plate("particles", size=num_particles, dim=-2)(model)
-    )
-    sampled_model = infer.infer_discrete(
-        vectorized_model, first_available_dim, temperature
-    )
+    vectorized_model = model if temperature == 0 else pyro.plate("particles", size=num_particles, dim=-2)(model)
+    sampled_model = infer.infer_discrete(vectorized_model, first_available_dim, temperature)
     sampled_trace = handlers.trace(sampled_model).get_trace()
-    conditioned_traces = {
-        z: handlers.trace(model).get_trace(z=torch.tensor(z)) for z in [0.0, 1.0]
-    }
+    conditioned_traces = {z: handlers.trace(model).get_trace(z=torch.tensor(z)) for z in [0.0, 1.0]}
 
     # Check  posterior over z.
     actual_z_mean = sampled_trace.nodes["z"]["value"].type_as(data).mean()
     if temperature:
-        expected_z_mean = 1 / (
-            1
-            + (
-                conditioned_traces[0].log_prob_sum()
-                - conditioned_traces[1].log_prob_sum()
-            ).exp()
-        )
+        expected_z_mean = 1 / (1 + (conditioned_traces[0].log_prob_sum() - conditioned_traces[1].log_prob_sum()).exp())
     else:
-        expected_z_mean = (
-            conditioned_traces[1].log_prob_sum() > conditioned_traces[0].log_prob_sum()
-        ).float()
+        expected_z_mean = (conditioned_traces[1].log_prob_sum() > conditioned_traces[0].log_prob_sum()).float()
     assert_equal(actual_z_mean, expected_z_mean, prec=1e-2)

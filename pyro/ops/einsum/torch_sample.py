@@ -25,9 +25,7 @@ class _EinsumBackward(Backward):
     def process(self, message):
         output = self.output
         operands = list(self.operands)
-        contract_dims = "".join(
-            sorted(set().union(*(x._pyro_dims for x in operands)) - set(output))
-        )
+        contract_dims = "".join(sorted(set().union(*(x._pyro_dims for x in operands)) - set(output)))
         batch_dims = output
 
         # Slice down operands before combining terms.

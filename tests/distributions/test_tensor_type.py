@@ -69,9 +69,7 @@ def test_float_type(float_test_data, float_alpha, float_beta, test_data, alpha, 
     assert_equal(log_px_val, log_px_np, prec=1e-4)
 
 
-@pytest.mark.xfail(
-    reason="https://github.com/pytorch/pytorch/issues/43138#issuecomment-677804776"
-)
+@pytest.mark.xfail(reason="https://github.com/pytorch/pytorch/issues/43138#issuecomment-677804776")
 def test_conflicting_types(test_data, float_alpha, beta):
     with pytest.raises((TypeError, RuntimeError)):
         dist.Beta(float_alpha, beta).log_prob(test_data)

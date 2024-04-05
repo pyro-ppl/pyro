@@ -45,9 +45,7 @@ def test_counterfactual_query(intervene, observe, flip):
         if observe:
             model = poutine.condition(model, data=observations)
     elif flip and intervene and observe:
-        model = poutine.do(
-            poutine.condition(model, data=observations), data=interventions
-        )
+        model = poutine.do(poutine.condition(model, data=observations), data=interventions)
 
     tr = poutine.trace(model).get_trace()
     actual_values = tr.nodes["_RETURN"]["value"]
@@ -81,12 +79,8 @@ def test_counterfactual_query(intervene, observe, flip):
 def test_plate_duplication_smoke():
     def model(N):
         with pyro.plate("x_plate", N):
-            z1 = pyro.sample(
-                "z1", dist.MultivariateNormal(torch.zeros(2), torch.eye(2))
-            )
-            z2 = pyro.sample(
-                "z2", dist.MultivariateNormal(torch.zeros(2), torch.eye(2))
-            )
+            z1 = pyro.sample("z1", dist.MultivariateNormal(torch.zeros(2), torch.eye(2)))
+            z2 = pyro.sample("z2", dist.MultivariateNormal(torch.zeros(2), torch.eye(2)))
             return pyro.sample("x", dist.MultivariateNormal(z1 + z2, torch.eye(2)))
 
     fix_z1 = torch.tensor([[-6.1258, -6.1524], [-4.1513, -4.3080]])

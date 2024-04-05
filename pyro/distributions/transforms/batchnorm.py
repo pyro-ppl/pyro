@@ -124,9 +124,7 @@ class BatchNorm(TransformModule):
         else:
             mean, var = self.moving_mean, self.moving_variance
 
-        return (y - mean) * self.constrained_gamma / torch.sqrt(
-            var + self.epsilon
-        ) + self.beta
+        return (y - mean) * self.constrained_gamma / torch.sqrt(var + self.epsilon) + self.beta
 
     def log_abs_det_jacobian(self, x, y):
         """

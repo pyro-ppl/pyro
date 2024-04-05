@@ -102,9 +102,7 @@ class Permute(Transform):
         determinant is -1 or +1), and so returning a vector of zeros works.
         """
 
-        return torch.zeros(
-            x.size()[: -self.event_dim], dtype=x.dtype, layout=x.layout, device=x.device
-        )
+        return torch.zeros(x.size()[: -self.event_dim], dtype=x.dtype, layout=x.layout, device=x.device)
 
     def with_cache(self, cache_size=1):
         if self._cache_size == cache_size:
@@ -130,11 +128,7 @@ def permute(input_dim, permutation=None, dim=-1):
     """
     if dim < -1 or not isinstance(input_dim, int):
         if len(input_dim) != -dim:
-            raise ValueError(
-                "event shape {} must have same length as event_dim {}".format(
-                    input_dim, -dim
-                )
-            )
+            raise ValueError("event shape {} must have same length as event_dim {}".format(input_dim, -dim))
         input_dim = input_dim[dim]
 
     if permutation is None:

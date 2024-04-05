@@ -27,7 +27,5 @@ def test_sample(concentration, rate, n_samples=int(1e6)):
 def test_log_prob(concentration, rate, value):
     value = torch.tensor(value)
     log_prob = InverseGamma(concentration, rate).log_prob(value)
-    expected_log_prob = (
-        Gamma(concentration, rate).log_prob(1.0 / value) - 2.0 * value.log()
-    )
+    expected_log_prob = Gamma(concentration, rate).log_prob(1.0 / value) - 2.0 * value.log()
     assert_equal(log_prob, expected_log_prob, prec=1e-6)

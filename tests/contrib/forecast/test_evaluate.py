@@ -36,13 +36,9 @@ WINDOWS = [
 ]
 
 
-@pytest.mark.parametrize(
-    "train_window,min_train_window,test_window,min_test_window,stride", WINDOWS
-)
+@pytest.mark.parametrize("train_window,min_train_window,test_window,min_test_window,stride", WINDOWS)
 @pytest.mark.parametrize("warm_start", [False, True], ids=["cold", "warm"])
-def test_simple(
-    train_window, min_train_window, test_window, min_test_window, stride, warm_start
-):
+def test_simple(train_window, min_train_window, test_window, min_test_window, stride, warm_start):
     duration = 30
     obs_dim = 2
     covariates = torch.zeros(duration, 0)
@@ -74,13 +70,9 @@ def test_simple(
                 assert 0 < window[name] < math.inf
 
 
-@pytest.mark.parametrize(
-    "train_window,min_train_window,test_window,min_test_window,stride", WINDOWS
-)
+@pytest.mark.parametrize("train_window,min_train_window,test_window,min_test_window,stride", WINDOWS)
 @pytest.mark.parametrize("engine", ["svi", "hmc"])
-def test_poisson(
-    train_window, min_train_window, test_window, min_test_window, stride, engine
-):
+def test_poisson(train_window, min_train_window, test_window, min_test_window, stride, engine):
     duration = 30
     obs_dim = 2
     covariates = torch.zeros(duration, 0)

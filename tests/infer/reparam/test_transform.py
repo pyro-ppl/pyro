@@ -49,9 +49,7 @@ def test_log_normal(batch_shape, event_shape):
 
     with poutine.trace() as tr:
         value = model()
-    assert isinstance(
-        tr.trace.nodes["x"]["fn"], (dist.TransformedDistribution, dist.Independent)
-    )
+    assert isinstance(tr.trace.nodes["x"]["fn"], (dist.TransformedDistribution, dist.Independent))
     expected_moments = get_moments(value)
 
     with poutine.reparam(config={"x": TransformReparam()}):

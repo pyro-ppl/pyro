@@ -34,9 +34,7 @@ class ZeroInflatedDistribution(TorchDistribution):
 
     def __init__(self, base_dist, *, gate=None, gate_logits=None, validate_args=None):
         if (gate is None) == (gate_logits is None):
-            raise ValueError(
-                "Either `gate` or `gate_logits` must be specified, but not both."
-            )
+            raise ValueError("Either `gate` or `gate_logits` must be specified, but not both.")
         if gate is not None:
             batch_shape = broadcast_shape(gate.shape, base_dist.batch_shape)
             self.gate = gate.expand(batch_shape)
@@ -45,8 +43,9 @@ class ZeroInflatedDistribution(TorchDistribution):
             self.gate_logits = gate_logits.expand(batch_shape)
         if base_dist.event_shape:
             raise ValueError(
-                "ZeroInflatedDistribution expected empty "
-                "base_dist.event_shape but got {}".format(base_dist.event_shape)
+                "ZeroInflatedDistribution expected empty " "base_dist.event_shape but got {}".format(
+                    base_dist.event_shape
+                )
             )
 
         self.base_dist = base_dist.expand(batch_shape)
@@ -97,23 +96,15 @@ class ZeroInflatedDistribution(TorchDistribution):
 
     @lazy_property
     def variance(self):
-        return (1 - self.gate) * (
-            self.base_dist.mean**2 + self.base_dist.variance
-        ) - (self.mean) ** 2
+        return (1 - self.gate) * (self.base_dist.mean**2 + self.base_dist.variance) - (self.mean) ** 2
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(type(self), _instance)
         batch_shape = torch.Size(batch_shape)
         gate = self.gate.expand(batch_shape) if "gate" in self.__dict__ else None
-        gate_logits = (
-            self.gate_logits.expand(batch_shape)
-            if "gate_logits" in self.__dict__
-            else None
-        )
+        gate_logits = self.gate_logits.expand(batch_shape) if "gate_logits" in self.__dict__ else None
         base_dist = self.base_dist.expand(batch_shape)
-        ZeroInflatedDistribution.__init__(
-            new, base_dist, gate=gate, gate_logits=gate_logits, validate_args=False
-        )
+        ZeroInflatedDistribution.__init__(new, base_dist, gate=gate, gate_logits=gate_logits, validate_args=False)
         new._validate_args = self._validate_args
         return new
 
@@ -138,9 +129,7 @@ class ZeroInflatedPoisson(ZeroInflatedDistribution):
         base_dist = Poisson(rate=rate, validate_args=False)
         base_dist._validate_args = validate_args
 
-        super().__init__(
-            base_dist, gate=gate, gate_logits=gate_logits, validate_args=validate_args
-        )
+        super().__init__(base_dist, gate=gate, gate_logits=gate_logits, validate_args=validate_args)
 
     @property
     def rate(self):
@@ -168,16 +157,7 @@ class ZeroInflatedNegativeBinomial(ZeroInflatedDistribution):
     }
     support = constraints.nonnegative_integer
 
-    def __init__(
-        self,
-        total_count,
-        *,
-        probs=None,
-        logits=None,
-        gate=None,
-        gate_logits=None,
-        validate_args=None
-    ):
+    def __init__(self, total_count, *, probs=None, logits=None, gate=None, gate_logits=None, validate_args=None):
         base_dist = NegativeBinomial(
             total_count=total_count,
             probs=probs,
@@ -186,9 +166,7 @@ class ZeroInflatedNegativeBinomial(ZeroInflatedDistribution):
         )
         base_dist._validate_args = validate_args
 
-        super().__init__(
-            base_dist, gate=gate, gate_logits=gate_logits, validate_args=validate_args
-        )
+        super().__init__(base_dist, gate=gate, gate_logits=gate_logits, validate_args=validate_args)
 
     @property
     def total_count(self):

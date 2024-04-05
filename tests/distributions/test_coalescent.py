@@ -55,16 +55,12 @@ def test_simple_smoke(num_leaves, num_steps, batch_shape, sample_shape):
 @pytest.mark.parametrize("rate_grid_shape", [(), (2,), (3, 1), (3, 2)], ids=str)
 @pytest.mark.parametrize("leaf_times_shape", [(), (2,), (3, 1), (3, 2)], ids=str)
 @pytest.mark.parametrize("num_leaves", [2, 7, 11])
-def test_with_rate_smoke(
-    num_leaves, num_steps, leaf_times_shape, rate_grid_shape, sample_shape
-):
+def test_with_rate_smoke(num_leaves, num_steps, leaf_times_shape, rate_grid_shape, sample_shape):
     batch_shape = broadcast_shape(leaf_times_shape, rate_grid_shape)
     leaf_times = torch.rand(leaf_times_shape + (num_leaves,)).pow(0.5) * num_steps
     rate_grid = torch.rand(rate_grid_shape + (num_steps,))
     d = CoalescentTimesWithRate(leaf_times, rate_grid)
-    coal_times = _sample_coalescent_times(
-        leaf_times.expand(sample_shape + batch_shape + (-1,))
-    )
+    coal_times = _sample_coalescent_times(leaf_times.expand(sample_shape + batch_shape + (-1,)))
     assert coal_times.shape == sample_shape + batch_shape + (num_leaves - 1,)
 
     actual = d.log_prob(coal_times)

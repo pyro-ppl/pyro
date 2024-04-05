@@ -55,9 +55,7 @@ class _ConditionalInverseTransformModule(ConditionalTransformModule):
         return self._transform.condition(context).inv
 
 
-class ConditionalComposeTransformModule(
-    ConditionalTransformModule, torch.nn.ModuleList
-):
+class ConditionalComposeTransformModule(ConditionalTransformModule, torch.nn.ModuleList):
     """
     Conditional analogue of :class:`~pyro.distributions.torch_transform.ComposeTransformModule` .
 
@@ -82,12 +80,7 @@ class ConditionalComposeTransformModule(
 
     def __init__(self, transforms, cache_size: int = 0):
         self.transforms = [
-            (
-                ConstantConditionalTransform(t)
-                if not isinstance(t, ConditionalTransform)
-                else t
-            )
-            for t in transforms
+            (ConstantConditionalTransform(t) if not isinstance(t, ConditionalTransform) else t) for t in transforms
         ]
         super().__init__()
         if cache_size not in {0, 1}:
@@ -99,9 +92,7 @@ class ConditionalComposeTransformModule(
                 self.append(t)
 
     def condition(self, context: torch.Tensor) -> ComposeTransformModule:
-        return ComposeTransformModule(
-            [t.condition(context) for t in self.transforms]
-        ).with_cache(self._cache_size)
+        return ComposeTransformModule([t.condition(context) for t in self.transforms]).with_cache(self._cache_size)
 
 
 class ConstantConditionalDistribution(ConditionalDistribution):
@@ -128,17 +119,10 @@ class ConstantConditionalTransform(ConditionalTransform):
 class ConditionalTransformedDistribution(ConditionalDistribution):
     def __init__(self, base_dist, transforms):
         self.base_dist = (
-            base_dist
-            if isinstance(base_dist, ConditionalDistribution)
-            else ConstantConditionalDistribution(base_dist)
+            base_dist if isinstance(base_dist, ConditionalDistribution) else ConstantConditionalDistribution(base_dist)
         )
         self.transforms = [
-            (
-                t
-                if isinstance(t, ConditionalTransform)
-                else ConstantConditionalTransform(t)
-            )
-            for t in transforms
+            (t if isinstance(t, ConditionalTransform) else ConstantConditionalTransform(t)) for t in transforms
         ]
 
     def condition(self, context):

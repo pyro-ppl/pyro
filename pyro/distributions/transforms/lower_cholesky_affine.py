@@ -57,9 +57,7 @@ class LowerCholeskyAffine(Transform):
 
         Inverts y => x.
         """
-        return torch.linalg.solve_triangular(
-            self.scale_tril, (y - self.loc).unsqueeze(-1), upper=False
-        ).squeeze(-1)
+        return torch.linalg.solve_triangular(self.scale_tril, (y - self.loc).unsqueeze(-1), upper=False).squeeze(-1)
 
     def log_abs_det_jacobian(self, x, y):
         """

@@ -71,9 +71,7 @@ def _TransformedDistribution_clear_cache(self):
 def _HalfCauchy_logprob(self, value):
     if self._validate_args:
         self._validate_sample(value)
-    value = torch.as_tensor(
-        value, dtype=self.base_dist.scale.dtype, device=self.base_dist.scale.device
-    )
+    value = torch.as_tensor(value, dtype=self.base_dist.scale.dtype, device=self.base_dist.scale.device)
     log_prob = self.base_dist.log_prob(value) + math.log(2)
     log_prob.masked_fill_(value.expand(log_prob.shape) < 0, -float("inf"))
     return log_prob

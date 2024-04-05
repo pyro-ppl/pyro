@@ -106,9 +106,7 @@ def test_mutual_recur():
         else:
             model1(n)
 
-    names = set(
-        ["_INPUT", "_RETURN", "model2/b", "model2/model1/a", "model2/model1/model2/b"]
-    )
+    names = set(["_INPUT", "_RETURN", "model2/b", "model2/model1/a", "model2/model1/model2/b"])
     tr_names = set([name for name in poutine.trace(name_count(model2)).get_trace(1)])
     assert names == tr_names
 
@@ -163,9 +161,7 @@ def test_nested_traces():
 
     expected_names = ["f2/f1/x", "f2/f1__1/x", "f2/f1__2/x", "f2/y"]
     tr2 = poutine.trace(name_count(name_count(f2))).get_trace()
-    actual_names = [
-        name for name, node in tr2.nodes.items() if node["type"] == "sample"
-    ]
+    actual_names = [name for name, node in tr2.nodes.items() if node["type"] == "sample"]
     assert expected_names == actual_names
 
 
@@ -179,8 +175,6 @@ def test_no_param():
 
     expected_names = ["a", "model/b"]
     tr = poutine.trace(model).get_trace()
-    actual_names = [
-        name for name, node in tr.nodes.items() if node["type"] in ("param", "sample")
-    ]
+    actual_names = [name for name, node in tr.nodes.items() if node["type"] in ("param", "sample")]
 
     assert expected_names == actual_names

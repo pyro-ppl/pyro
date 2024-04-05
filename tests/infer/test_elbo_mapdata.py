@@ -59,29 +59,29 @@ def test_elbo_mapdata(map_type, batch_size, n_steps, lr):
     analytic_log_sig_n = -0.5 * torch.log(analytic_lam_n)
     analytic_loc_n = sum_data * (lam / analytic_lam_n) + loc0 * (lam0 / analytic_lam_n)
 
-    logger.debug(
-        "DOING ELBO TEST [bs = {}, map_type = {}]".format(batch_size, map_type)
-    )
+    logger.debug("DOING ELBO TEST [bs = {}, map_type = {}]".format(batch_size, map_type))
     pyro.clear_param_store()
 
     def model():
-        loc_latent = pyro.sample(
-            "loc_latent", dist.Normal(loc0, torch.pow(lam0, -0.5)).to_event(1)
-        )
+        loc_latent = pyro.sample("loc_latent", dist.Normal(loc0, torch.pow(lam0, -0.5)).to_event(1))
         if map_type == "iplate":
             for i in pyro.plate("aaa", len(data), batch_size):
-                pyro.sample(
-                    "obs_%d" % i,
-                    dist.Normal(loc_latent, torch.pow(lam, -0.5)).to_event(1),
-                    obs=data[i],
-                ),
+                (
+                    pyro.sample(
+                        "obs_%d" % i,
+                        dist.Normal(loc_latent, torch.pow(lam, -0.5)).to_event(1),
+                        obs=data[i],
+                    ),
+                )
         elif map_type == "plate":
             with pyro.plate("aaa", len(data), batch_size) as ind:
-                pyro.sample(
-                    "obs",
-                    dist.Normal(loc_latent, torch.pow(lam, -0.5)).to_event(1),
-                    obs=data[ind],
-                ),
+                (
+                    pyro.sample(
+                        "obs",
+                        dist.Normal(loc_latent, torch.pow(lam, -0.5)).to_event(1),
+                        obs=data[ind],
+                    ),
+                )
         else:
             for i, x in enumerate(data):
                 pyro.sample(
@@ -92,9 +92,7 @@ def test_elbo_mapdata(map_type, batch_size, n_steps, lr):
         return loc_latent
 
     def guide():
-        loc_q = pyro.param(
-            "loc_q", analytic_loc_n.detach().clone() + torch.tensor([-0.18, 0.23])
-        )
+        loc_q = pyro.param("loc_q", analytic_loc_n.detach().clone() + torch.tensor([-0.18, 0.23]))
         log_sig_q = pyro.param(
             "log_sig_q",
             analytic_log_sig_n.detach().clone() - torch.tensor([-0.18, 0.23]),
@@ -118,9 +116,7 @@ def test_elbo_mapdata(map_type, batch_size, n_steps, lr):
         svi.step()
 
         loc_error = torch.sum(torch.pow(analytic_loc_n - pyro.param("loc_q"), 2.0))
-        log_sig_error = torch.sum(
-            torch.pow(analytic_log_sig_n - pyro.param("log_sig_q"), 2.0)
-        )
+        log_sig_error = torch.sum(torch.pow(analytic_log_sig_n - pyro.param("log_sig_q"), 2.0))
 
         if k % 500 == 0:
             logger.debug("errors - {}, {}".format(loc_error, log_sig_error))

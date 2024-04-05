@@ -60,9 +60,7 @@ from tests.common import (
     xfail_param,
 )
 
-AutoGaussianFunsor = pytest.param(
-    AutoGaussianFunsor, marks=[pytest.mark.stage("funsor")]
-)
+AutoGaussianFunsor = pytest.param(AutoGaussianFunsor, marks=[pytest.mark.stage("funsor")])
 
 
 def xfail_messenger(auto_class, Elbo):
@@ -99,9 +97,7 @@ def test_scores(auto_class):
     prefix = auto_class.__name__
     if prefix != "AutoNormal":
         assert "_{}_latent".format(prefix) not in model_trace.nodes
-        assert (
-            guide_trace.nodes["_{}_latent".format(prefix)]["log_prob_sum"].item() != 0.0
-        )
+        assert guide_trace.nodes["_{}_latent".format(prefix)]["log_prob_sum"].item() != 0.0
     assert model_trace.nodes["z"]["log_prob_sum"].item() != 0.0
     assert guide_trace.nodes["z"]["log_prob_sum"].item() == 0.0
 
@@ -236,9 +232,7 @@ def test_shapes(auto_class, init_loc_fn, Elbo, num_particles):
             pyro.sample("z3", dist.Normal(torch.zeros(3), torch.ones(3)))
         pyro.sample("z4", dist.MultivariateNormal(torch.zeros(2), torch.eye(2)))
         pyro.sample("z5", dist.Dirichlet(torch.ones(3)))
-        pyro.sample(
-            "z6", dist.Normal(0, 1).expand((2,)).mask(torch.arange(2) > 0).to_event(1)
-        )
+        pyro.sample("z6", dist.Normal(0, 1).expand((2,)).mask(torch.arange(2) > 0).to_event(1))
         pyro.sample("z7", dist.LKJCholesky(2, torch.tensor(1.0)))
 
     guide = auto_class(model, init_loc_fn=init_loc_fn)
@@ -273,9 +267,7 @@ def test_iplate_smoke(auto_class, Elbo):
         assert x.shape == ()
 
         for i in pyro.plate("plate", 3):
-            y = pyro.sample(
-                "y_{}".format(i), dist.Normal(0, 1).expand_by([2, 1 + i, 2]).to_event(3)
-            )
+            y = pyro.sample("y_{}".format(i), dist.Normal(0, 1).expand_by([2, 1 + i, 2]).to_event(3))
             assert y.shape == (2, 1 + i, 2)
 
         z = pyro.sample("z", dist.Normal(0, 1).expand_by([2]).to_event(1))
@@ -284,9 +276,7 @@ def test_iplate_smoke(auto_class, Elbo):
         pyro.sample("obs", dist.Bernoulli(0.1), obs=torch.tensor(0))
 
     guide = auto_class(model)
-    infer = SVI(
-        model, guide, Adam({"lr": 1e-6}), Elbo(strict_enumeration_warning=False)
-    )
+    infer = SVI(model, guide, Adam({"lr": 1e-6}), Elbo(strict_enumeration_warning=False))
     infer.step()
 
 
@@ -300,9 +290,7 @@ def auto_guide_list_x(model):
 def auto_guide_callable(model):
     def guide_x():
         x_loc = pyro.param("x_loc", torch.tensor(1.0))
-        x_scale = pyro.param(
-            "x_scale", torch.tensor(0.1), constraint=constraints.positive
-        )
+        x_scale = pyro.param("x_scale", torch.tensor(0.1), constraint=constraints.positive)
         pyro.sample("x", dist.Normal(x_loc, x_scale))
 
     def median_x():
@@ -448,9 +436,7 @@ def serialization_model():
             AutoGaussianFunsor[0],
             marks=[
                 pytest.mark.stage("funsor"),
-                pytest.mark.xfail(
-                    reason="https://github.com/pyro-ppl/pyro/issues/2945"
-                ),
+                pytest.mark.xfail(reason="https://github.com/pyro-ppl/pyro/issues/2945"),
             ],
         ),
         AutoNormalMessenger,
@@ -473,9 +459,7 @@ def test_serialization(auto_class, jit):
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
             # XXX: check_trace=True fails for AutoLaplaceApproximation
-            traced_guide = torch.jit.trace_module(
-                guide, {"call": ()}, check_trace=False
-            )
+            traced_guide = torch.jit.trace_module(guide, {"call": ()}, check_trace=False)
         f = io.BytesIO()
         torch.jit.save(traced_guide, f)
         del guide, traced_guide
@@ -533,9 +517,7 @@ def test_quantiles(auto_class, Elbo):
 
     guide = auto_class(model)
     optim = Adam({"lr": 0.05, "betas": (0.8, 0.99)})
-    elbo = Elbo(
-        strict_enumeration_warning=False, num_particles=100, vectorize_particles=True
-    )
+    elbo = Elbo(strict_enumeration_warning=False, num_particles=100, vectorize_particles=True)
     infer = SVI(model, guide, optim, elbo)
     for _ in range(100):
         infer.step()
@@ -815,9 +797,7 @@ def test_median_module(auto_class, Elbo):
 
     model = Model()
     guide = auto_class(model)
-    infer = SVI(
-        model, guide, Adam({"lr": 0.005}), Elbo(strict_enumeration_warning=False)
-    )
+    infer = SVI(model, guide, Adam({"lr": 0.005}), Elbo(strict_enumeration_warning=False))
     for _ in range(20):
         infer.step()
 
@@ -849,23 +829,16 @@ def test_nested_autoguide(Elbo):
     for _, m in guide.named_modules():
         if m is guide:
             continue
-        assert (
-            m.master is not None and m.master() is guide
-        ), "master ref wrong for {}".format(m._pyro_name)
+        assert m.master is not None and m.master() is guide, "master ref wrong for {}".format(m._pyro_name)
 
-    infer = SVI(
-        model, guide, Adam({"lr": 0.005}), Elbo(strict_enumeration_warning=False)
-    )
+    infer = SVI(model, guide, Adam({"lr": 0.005}), Elbo(strict_enumeration_warning=False))
     for _ in range(20):
         infer.step()
 
     guide_trace = poutine.trace(guide).get_trace()
     model_trace = poutine.trace(model).get_trace()
     check_model_guide_match(model_trace, guide_trace)
-    assert all(
-        p.startswith("AutoGuideList.0") or p.startswith("AutoGuideList.1.z")
-        for p in guide_trace.param_nodes
-    )
+    assert all(p.startswith("AutoGuideList.0") or p.startswith("AutoGuideList.1.z") for p in guide_trace.param_nodes)
     stochastic_nodes = set(guide_trace.stochastic_nodes)
     assert "x" in stochastic_nodes
     assert "y" in stochastic_nodes
@@ -899,12 +872,8 @@ def test_linear_regression_smoke(auto_class, Elbo):
     class RandomLinear(nn.Linear, PyroModule):
         def __init__(self, in_features, out_features):
             super().__init__(in_features, out_features)
-            self.weight = PyroSample(
-                dist.Normal(0.0, 1.0).expand([out_features, in_features]).to_event(2)
-            )
-            self.bias = PyroSample(
-                dist.Normal(0.0, 10.0).expand([out_features]).to_event(1)
-            )
+            self.weight = PyroSample(dist.Normal(0.0, 1.0).expand([out_features, in_features]).to_event(2))
+            self.bias = PyroSample(dist.Normal(0.0, 10.0).expand([out_features]).to_event(1))
 
     class LinearRegression(PyroModule):
         def __init__(self):
@@ -920,9 +889,7 @@ def test_linear_regression_smoke(auto_class, Elbo):
     x, y = torch.randn(N, D), torch.randn(N)
     model = LinearRegression()
     guide = auto_class(model)
-    infer = SVI(
-        model, guide, Adam({"lr": 0.005}), Elbo(strict_enumeration_warning=False)
-    )
+    infer = SVI(model, guide, Adam({"lr": 0.005}), Elbo(strict_enumeration_warning=False))
     infer.step(x, y)
 
 
@@ -959,9 +926,7 @@ class AutoStructured_predictive(AutoStructured):
             AutoGaussianFunsor[0],
             marks=[
                 pytest.mark.stage("funsor"),
-                pytest.mark.xfail(
-                    reason="https://github.com/pyro-ppl/pyro/issues/2945"
-                ),
+                pytest.mark.xfail(reason="https://github.com/pyro-ppl/pyro/issues/2945"),
             ],
         ),
     ],
@@ -972,12 +937,8 @@ def test_predictive(auto_class):
     class RandomLinear(nn.Linear, PyroModule):
         def __init__(self, in_features, out_features):
             super().__init__(in_features, out_features)
-            self.weight = PyroSample(
-                dist.Normal(0.0, 1.0).expand([out_features, in_features]).to_event(2)
-            )
-            self.bias = PyroSample(
-                dist.Normal(0.0, 10.0).expand([out_features]).to_event(1)
-            )
+            self.weight = PyroSample(dist.Normal(0.0, 1.0).expand([out_features, in_features]).to_event(2))
+            self.bias = PyroSample(dist.Normal(0.0, 10.0).expand([out_features]).to_event(1))
 
     class LinearRegression(PyroModule):
         def __init__(self):
@@ -1040,9 +1001,7 @@ def test_replay_plates(auto_class, sample_shape):
     def model():
         a = pyro.sample("a", dist.Normal(0, 1))
         b = pyro.sample("b", dist.Normal(a[..., None], torch.ones(3)).to_event(1))
-        c = pyro.sample(
-            "c", dist.MultivariateNormal(torch.zeros(3) + a[..., None], torch.eye(3))
-        )
+        c = pyro.sample("c", dist.MultivariateNormal(torch.zeros(3) + a[..., None], torch.eye(3)))
         with pyro.plate("i", 2):
             d = pyro.sample("d", dist.Dirichlet((b + c).exp()))
             pyro.sample("e", dist.Categorical(logits=d), obs=torch.tensor([0, 0]))
@@ -1071,9 +1030,7 @@ def test_replay_plates(auto_class, sample_shape):
 def test_subsample_model(auto_class):
     def model(x, y=None, batch_size=None):
         loc = pyro.param("loc", lambda: torch.tensor(0.0))
-        scale = pyro.param(
-            "scale", lambda: torch.tensor(1.0), constraint=constraints.positive
-        )
+        scale = pyro.param("scale", lambda: torch.tensor(1.0), constraint=constraints.positive)
         with pyro.plate("batch", len(x), subsample_size=batch_size):
             batch_x = pyro.subsample(x, event_dim=0)
             batch_y = pyro.subsample(y, event_dim=0) if y is not None else None
@@ -1109,9 +1066,7 @@ def test_subsample_model(auto_class):
 def test_subsample_model_amortized(auto_class):
     def model(x, y=None, batch_size=None):
         loc = pyro.param("loc", lambda: torch.tensor(0.0))
-        scale = pyro.param(
-            "scale", lambda: torch.tensor(1.0), constraint=constraints.positive
-        )
+        scale = pyro.param("scale", lambda: torch.tensor(1.0), constraint=constraints.positive)
         with pyro.plate("batch", len(x), subsample_size=batch_size):
             batch_x = pyro.subsample(x, event_dim=0)
             batch_y = pyro.subsample(y, event_dim=0) if y is not None else None
@@ -1157,9 +1112,7 @@ def test_subsample_guide(auto_class, init_fn):
             z = 0.0
             for t in range(num_time_steps):
                 z = pyro.sample("state_{}".format(t), dist.Normal(z, drift))
-                result[t] = pyro.sample(
-                    "obs_{}".format(t), dist.Bernoulli(logits=z), obs=batch[t]
-                )
+                result[t] = pyro.sample("obs_{}".format(t), dist.Bernoulli(logits=z), obs=batch[t])
 
         return torch.stack(result)
 
@@ -1326,9 +1279,7 @@ def test_sphere_reparam_ok(auto_class, init_loc_fn):
     def model():
         x = pyro.sample("x", dist.Normal(0.0, 1.0).expand([3]).to_event(1))
         y = pyro.sample("y", dist.ProjectedNormal(x))
-        pyro.sample(
-            "obs", dist.Normal(y, 1).to_event(1), obs=torch.tensor([1.0, 0.0, 0.0])
-        )
+        pyro.sample("obs", dist.Normal(y, 1).to_event(1), obs=torch.tensor([1.0, 0.0, 0.0]))
 
     model = poutine.reparam(model, {"y": ProjectedNormalReparam()})
     guide = auto_class(model)
@@ -1349,9 +1300,7 @@ def test_sphere_raw_ok(auto_class, init_loc_fn):
     def model():
         x = pyro.sample("x", dist.Normal(0.0, 1.0).expand([3]).to_event(1))
         y = pyro.sample("y", dist.ProjectedNormal(x))
-        pyro.sample(
-            "obs", dist.Normal(y, 1).to_event(1), obs=torch.tensor([1.0, 0.0, 0.0])
-        )
+        pyro.sample("obs", dist.Normal(y, 1).to_event(1), obs=torch.tensor([1.0, 0.0, 0.0]))
 
     guide = auto_class(model, init_loc_fn=init_loc_fn)
     poutine.trace(guide).get_trace().compute_log_prob()
@@ -1477,9 +1426,7 @@ def test_exact_batch(Guide):
             dtype=data.dtype,
         ),
     )
-    expected_loss = float(
-        g.event_logsumexp().sum() - g.condition(data[:, None]).event_logsumexp().sum()
-    )
+    expected_loss = float(g.event_logsumexp().sum() - g.condition(data[:, None]).event_logsumexp().sum())
 
     guide = Guide(model)
     Elbo = JitTrace_ELBO

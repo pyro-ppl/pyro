@@ -17,26 +17,18 @@ def pack(value, dim_to_symbol):
     :param dim_to_symbol: a map from negative integers to characters
     """
     if isinstance(value, torch.Tensor):
-        assert not hasattr(
-            value, "_pyro_dims"
-        ), "tried to pack an already-packed tensor"
+        assert not hasattr(value, "_pyro_dims"), "tried to pack an already-packed tensor"
         shape = value.shape
         shift = len(shape)
         try:
             with ignore_jit_warnings():
-                dims = "".join(
-                    dim_to_symbol[dim - shift]
-                    for dim, size in enumerate(shape)
-                    if size > 1
-                )
+                dims = "".join(dim_to_symbol[dim - shift] for dim, size in enumerate(shape) if size > 1)
         except KeyError as e:
             raise ValueError(
                 "\n  ".join(
                     [
                         "Invalid tensor shape.",
-                        "Allowed dims: {}".format(
-                            ", ".join(map(str, sorted(dim_to_symbol)))
-                        ),
+                        "Allowed dims: {}".format(", ".join(map(str, sorted(dim_to_symbol)))),
                         "Actual shape: {}".format(tuple(value.shape)),
                         "Try adding shape assertions for your model's sample values and distribution parameters.",
                     ]
@@ -75,11 +67,7 @@ def broadcast_all(*values, **kwargs):
     Packed broadcasting of multiple tensors.
     """
     dims = kwargs.get("dims")
-    sizes = {
-        dim: size
-        for value in values
-        for dim, size in zip(value._pyro_dims, value.shape)
-    }
+    sizes = {dim: size for value in values for dim, size in zip(value._pyro_dims, value.shape)}
     if dims is None:
         dims = "".join(sorted(sizes))
     else:
@@ -192,9 +180,5 @@ def rename_equation(equation, *operands):
     inputs, outputs = equation.split("->")
     inputs = inputs.split(",")
     assert len(inputs) == len(operands)
-    rename = {
-        old: new
-        for input_, operand in zip(inputs, operands)
-        for old, new in zip(input_, operand._pyro_dims)
-    }
+    rename = {old: new for input_, operand in zip(inputs, operands) for old, new in zip(input_, operand._pyro_dims)}
     return "".join(rename.get(s, s) for s in equation)

@@ -76,9 +76,7 @@ class PyroMultiOptimizer(MultiOptimizer):
 
     def __init__(self, optim: PyroOptim) -> None:
         if not isinstance(optim, PyroOptim):
-            raise TypeError(
-                "Expected a PyroOptim object but got a {}".format(type(optim))
-            )
+            raise TypeError("Expected a PyroOptim object but got a {}".format(type(optim)))
         self.optim = optim
 
     def step(self, loss: torch.Tensor, params: Dict) -> None:
@@ -122,8 +120,9 @@ class MixedMultiOptimizer(MultiOptimizer):
             for name in names_part:
                 if name in optim_dict:
                     raise ValueError(
-                        "Attempted to optimize parameter '{}' by two different optimizers: "
-                        "{} vs {}".format(name, optim_dict[name], optim)
+                        "Attempted to optimize parameter '{}' by two different optimizers: " "{} vs {}".format(
+                            name, optim_dict[name], optim
+                        )
                     )
                 optim_dict[name] = optim
             self.parts.append((names_part, optim))
@@ -135,9 +134,7 @@ class MixedMultiOptimizer(MultiOptimizer):
     def get_step(self, loss: torch.Tensor, params: Dict) -> Dict:
         updated_values = {}
         for names_part, optim in self.parts:
-            updated_values.update(
-                optim.get_step(loss, {name: params[name] for name in names_part})
-            )
+            updated_values.update(optim.get_step(loss, {name: params[name] for name in names_part}))
         return updated_values
 
 

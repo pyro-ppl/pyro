@@ -81,9 +81,7 @@ class OptimTests(TestCase):
         assert adam2_step_count_after_load_and_step == 2
 
         free_param_unchanged = torch.equal(pyro.param(free_param).data, torch.zeros(1))
-        fixed_param_unchanged = torch.equal(
-            pyro.param(fixed_param).data, torch.zeros(1)
-        )
+        fixed_param_unchanged = torch.equal(pyro.param(fixed_param).data, torch.zeros(1))
         assert fixed_param_unchanged and not free_param_unchanged
 
 
@@ -105,9 +103,7 @@ class OptimTests(TestCase):
                 "step_size": 1,
             }
         ),
-        optim.ExponentialLR(
-            {"optimizer": torch.optim.SGD, "optim_args": {"lr": 0.01}, "gamma": 2}
-        ),
+        optim.ExponentialLR({"optimizer": torch.optim.SGD, "optim_args": {"lr": 0.01}, "gamma": 2}),
         optim.ReduceLROnPlateau(
             {
                 "optimizer": torch.optim.SGD,
@@ -123,9 +119,7 @@ def test_dynamic_lr(scheduler):
 
     def model():
         sample = pyro.sample("latent", Normal(torch.tensor(0.0), torch.tensor(0.3)))
-        return pyro.sample(
-            "obs", Normal(sample, torch.tensor(0.2)), obs=torch.tensor(0.1)
-        )
+        return pyro.sample("obs", Normal(sample, torch.tensor(0.2)), obs=torch.tensor(0.1))
 
     def guide():
         loc = pyro.param("loc", torch.tensor(0.0))
@@ -165,9 +159,7 @@ def test_dynamic_lr(scheduler):
             assert opt_scale.state_dict()["param_groups"][0]["lr"] == 0.04
 
 
-@pytest.mark.parametrize(
-    "factory", [optim.Adam, optim.ClippedAdam, optim.DCTAdam, optim.RMSprop, optim.SGD]
-)
+@pytest.mark.parametrize("factory", [optim.Adam, optim.ClippedAdam, optim.DCTAdam, optim.RMSprop, optim.SGD])
 def test_autowrap(factory):
     instance = factory({})
     assert instance.pt_optim_constructor.__name__ == factory.__name__
@@ -197,9 +189,7 @@ def test_clip_norm(pyro_optim, clip, value):
 def test_clippedadam_clip(clip_norm):
     x1 = torch.tensor(0.0, requires_grad=True)
     x2 = torch.tensor(0.0, requires_grad=True)
-    opt_ca = optim.clipped_adam.ClippedAdam(
-        params=[x1], lr=1.0, lrd=1.0, clip_norm=clip_norm
-    )
+    opt_ca = optim.clipped_adam.ClippedAdam(params=[x1], lr=1.0, lrd=1.0, clip_norm=clip_norm)
     opt_a = torch.optim.Adam(params=[x2], lr=1.0)
     for step in range(3):
         opt_ca.zero_grad()
@@ -215,9 +205,7 @@ def test_clippedadam_clip(clip_norm):
 def test_clippedadam_pass(clip_norm):
     x1 = torch.tensor(0.0, requires_grad=True)
     x2 = torch.tensor(0.0, requires_grad=True)
-    opt_ca = optim.clipped_adam.ClippedAdam(
-        params=[x1], lr=1.0, lrd=1.0, clip_norm=clip_norm
-    )
+    opt_ca = optim.clipped_adam.ClippedAdam(params=[x1], lr=1.0, lrd=1.0, clip_norm=clip_norm)
     opt_a = torch.optim.Adam(params=[x2], lr=1.0)
     for step in range(3):
         g = Uniform(-clip_norm, clip_norm).sample()
@@ -371,17 +359,13 @@ def test_name_preserved_by_to_pyro_module():
 )
 def test_checkpoint(Optim, config):
     def model():
-        x_scale = pyro.param(
-            "x_scale", torch.tensor(1.0), constraint=constraints.positive
-        )
+        x_scale = pyro.param("x_scale", torch.tensor(1.0), constraint=constraints.positive)
         z = pyro.sample("z", Normal(0, 1))
         return pyro.sample("x", Normal(z, x_scale), obs=torch.tensor(0.1))
 
     def guide():
         z_loc = pyro.param("z_loc", torch.tensor(0.0))
-        z_scale = pyro.param(
-            "z_scale", torch.tensor(0.5), constraint=constraints.positive
-        )
+        z_scale = pyro.param("z_scale", torch.tensor(0.5), constraint=constraints.positive)
         pyro.sample("z", Normal(z_loc, z_scale))
 
     store = pyro.get_param_store()

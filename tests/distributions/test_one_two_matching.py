@@ -73,9 +73,7 @@ def test_log_prob_full(num_destins, dtype, bp_iters):
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
     values = d.enumerate_support()
     log_total = d.log_prob(values).logsumexp(0).item()
-    logging.info(
-        f"log_total = {log_total:0.3g}, " + f"log_Z = {d.log_partition_function:0.3g}"
-    )
+    logging.info(f"log_total = {log_total:0.3g}, " + f"log_Z = {d.log_partition_function:0.3g}")
     assert_close(log_total, 0.0, atol=1.0)
 
 
@@ -87,9 +85,7 @@ def test_log_prob_hard(dtype, bp_iters):
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
     values = d.enumerate_support()
     log_total = d.log_prob(values).logsumexp(0).item()
-    logging.info(
-        f"log_total = {log_total:0.3g}, " + f"log_Z = {d.log_partition_function:0.3g}"
-    )
+    logging.info(f"log_total = {log_total:0.3g}, " + f"log_Z = {d.log_partition_function:0.3g}")
     assert_close(log_total, 0.0, atol=0.5)
 
 
@@ -101,9 +97,7 @@ def test_log_prob_phylo(num_leaves, dtype, bp_iters):
     d = dist.OneTwoMatching(logits, bp_iters=bp_iters)
     values = d.enumerate_support()
     log_total = d.log_prob(values).logsumexp(0).item()
-    logging.info(
-        f"log_total = {log_total:0.3g}, " + f"log_Z = {d.log_partition_function:0.3g}"
-    )
+    logging.info(f"log_total = {log_total:0.3g}, " + f"log_Z = {d.log_partition_function:0.3g}")
     assert_close(log_total, 0.0, atol=1.0)
 
 

@@ -82,9 +82,7 @@ def test_shape(backend, equation):
             if contract_dims:
                 assert backward_result.size(0) == len(contract_dims)
                 assert set(backward_result._pyro_dims[1:]) == set(output)
-                for sample, dim in zip(
-                    backward_result, backward_result._pyro_sample_dims
-                ):
+                for sample, dim in zip(backward_result, backward_result._pyro_sample_dims):
                     assert sample.min() >= 0
                     assert sample.max() < sizes[dim]
             else:
@@ -110,9 +108,7 @@ def test_marginal(equation):
     actual._pyro_backward()
     for input_, operand in zip(inputs, operands):
         marginal_equation = ",".join(inputs) + "->" + input_
-        expected = contract(
-            marginal_equation, *operands, backend="pyro.ops.einsum.torch_log"
-        )
+        expected = contract(marginal_equation, *operands, backend="pyro.ops.einsum.torch_log")
         actual = operand._pyro_backward_result
         assert_equal(expected, actual)
 

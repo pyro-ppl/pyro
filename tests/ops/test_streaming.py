@@ -27,9 +27,7 @@ EXAMPLE_STATS = [
     functools.partial(StatsOfDict, default=CountMeanVarianceStats),
     functools.partial(StatsOfDict, default=StackStats),
     StatsOfDict,
-    functools.partial(
-        StatsOfDict, {"aaa": CountMeanStats, "bbb": CountMeanVarianceStats}
-    ),
+    functools.partial(StatsOfDict, {"aaa": CountMeanStats, "bbb": CountMeanVarianceStats}),
 ]
 EXAMPLE_STATS_IDS = [
     "CountStats",

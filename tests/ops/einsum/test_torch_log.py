@@ -45,13 +45,8 @@ def test_einsum(equation, min_size, infinite):
     symbols = sorted(set(equation) - set(",->"))
     sizes = dict(zip(symbols, itertools.count(min_size)))
     shapes = [torch.Size(tuple(sizes[dim] for dim in dims)) for dims in inputs]
-    operands = [
-        torch.full(shape, -float("inf")) if infinite else torch.randn(shape)
-        for shape in shapes
-    ]
+    operands = [torch.full(shape, -float("inf")) if infinite else torch.randn(shape) for shape in shapes]
 
-    expected = contract(
-        equation, *(torch_exp(x) for x in operands), backend="torch"
-    ).log()
+    expected = contract(equation, *(torch_exp(x) for x in operands), backend="torch").log()
     actual = contract(equation, *operands, backend="pyro.ops.einsum.torch_log")
     assert_equal(actual, expected)

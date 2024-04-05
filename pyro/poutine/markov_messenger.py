@@ -46,13 +46,9 @@ class MarkovMessenger(ReentrantMessenger):
         self.dim = dim
         self.name = name
         if dim is not None:
-            raise NotImplementedError(
-                "vectorized markov not yet implemented, try setting dim to None"
-            )
+            raise NotImplementedError("vectorized markov not yet implemented, try setting dim to None")
         if name is not None:
-            raise NotImplementedError(
-                "vectorized markov not yet implemented, try setting name to None"
-            )
+            raise NotImplementedError("vectorized markov not yet implemented, try setting name to None")
         self._iterable: Optional[Iterable[int]] = None
         self._pos = -1
         self._stack: List[Set[str]] = []
@@ -92,9 +88,7 @@ class MarkovMessenger(ReentrantMessenger):
         assert msg["name"] is not None
         assert msg["infer"] is not None
         infer = msg["infer"]
-        scope = infer.setdefault(
-            "_markov_scope", Counter()
-        )  # site name -> markov depth
+        scope = infer.setdefault("_markov_scope", Counter())  # site name -> markov depth
         for pos in range(max(0, self._pos - self.history), self._pos + 1):
             scope.update(self._stack[pos])
         infer["_markov_depth"] = 1 + infer.get("_markov_depth", 0)

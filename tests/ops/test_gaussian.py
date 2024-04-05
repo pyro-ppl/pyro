@@ -38,9 +38,7 @@ from tests.ops.gaussian import assert_close_gaussian, random_gaussian, random_mv
     ids=str,
 )
 @pytest.mark.parametrize("dim", [1, 2, 3])
-def test_expand(
-    extra_shape, log_normalizer_shape, info_vec_shape, precision_shape, dim
-):
+def test_expand(extra_shape, log_normalizer_shape, info_vec_shape, precision_shape, dim):
     rank = dim + dim
     log_normalizer = torch.randn(log_normalizer_shape)
     info_vec = torch.randn(info_vec_shape + (dim,))
@@ -48,9 +46,7 @@ def test_expand(
     precision = precision.matmul(precision.transpose(-1, -2))
     gaussian = Gaussian(log_normalizer, info_vec, precision)
 
-    expected_shape = extra_shape + broadcast_shape(
-        log_normalizer_shape, info_vec_shape, precision_shape
-    )
+    expected_shape = extra_shape + broadcast_shape(log_normalizer_shape, info_vec_shape, precision_shape)
     actual = gaussian.expand(expected_shape)
     assert actual.batch_shape == expected_shape
 
@@ -127,9 +123,7 @@ def test_add(shape, dim):
     x = random_gaussian(shape, dim)
     y = random_gaussian(shape, dim)
     value = torch.randn(dim)
-    assert_close(
-        (x + y).log_density(value), x.log_density(value) + y.log_density(value)
-    )
+    assert_close((x + y).log_density(value), x.log_density(value) + y.log_density(value))
 
 
 @pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
@@ -196,9 +190,7 @@ def test_marginalize_condition(sample_shape, batch_shape, left, right):
     dim = left + right
     g = random_gaussian(batch_shape, dim)
     x = torch.randn(sample_shape + (1,) * len(batch_shape) + (right,))
-    assert_close(
-        g.marginalize(left=left).log_density(x), g.condition(x).event_logsumexp()
-    )
+    assert_close(g.marginalize(left=left).log_density(x), g.condition(x).event_logsumexp())
 
 
 @pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
@@ -238,13 +230,8 @@ def test_logsumexp(batch_shape, dim):
 
     num_samples = 200000
     scale = 10
-    samples = (
-        torch.rand((num_samples,) + (1,) * len(batch_shape) + (dim,)) * scale
-        - scale / 2
-    )
-    expected = gaussian.log_density(samples).logsumexp(0) + math.log(
-        scale**dim / num_samples
-    )
+    samples = torch.rand((num_samples,) + (1,) * len(batch_shape) + (dim,)) * scale - scale / 2
+    expected = gaussian.log_density(samples).logsumexp(0) + math.log(scale**dim / num_samples)
     actual = gaussian.event_logsumexp()
     assert_close(actual, expected, atol=0.05, rtol=0.05)
 
@@ -329,9 +316,7 @@ def test_matrix_and_mvn_to_gaussian_2(sample_shape, batch_shape, x_dim, y_dim):
     mvn = dist.MultivariateNormal(Mx_loc + y_mvn.loc, Mx_cov + y_mvn.covariance_matrix)
     expected = mvn_to_gaussian(mvn)
 
-    actual = gaussian_tensordot(
-        mvn_to_gaussian(x_mvn), matrix_and_mvn_to_gaussian(matrix, y_mvn), dims=x_dim
-    )
+    actual = gaussian_tensordot(mvn_to_gaussian(x_mvn), matrix_and_mvn_to_gaussian(matrix, y_mvn), dims=x_dim)
     assert_close_gaussian(expected, actual)
 
 
@@ -367,9 +352,7 @@ def test_matrix_and_mvn_to_gaussian_2(sample_shape, batch_shape, x_dim, y_dim):
     ids=str,
 )
 @pytest.mark.parametrize("x_rank,y_rank", [(1, 1), (4, 1), (1, 4), (4, 4)], ids=str)
-def test_gaussian_tensordot(
-    dot_dims, x_batch_shape, x_dim, x_rank, y_batch_shape, y_dim, y_rank
-):
+def test_gaussian_tensordot(dot_dims, x_batch_shape, x_dim, x_rank, y_batch_shape, y_dim, y_rank):
     x_rank = min(x_rank, x_dim)
     y_rank = min(y_rank, y_dim)
     x = random_gaussian(x_batch_shape, x_dim, x_rank)
@@ -393,15 +376,9 @@ def test_gaussian_tensordot(
     precision = pad(x.precision, (0, nc, 0, nc)) + pad(y.precision, (na, 0, na, 0))
     info_vec = pad(x.info_vec, (0, nc)) + pad(y.info_vec, (na, 0))
     covariance = torch.inverse(precision)
-    loc = (
-        covariance.matmul(info_vec.unsqueeze(-1)).squeeze(-1)
-        if info_vec.size(-1) > 0
-        else info_vec
-    )
+    loc = covariance.matmul(info_vec.unsqueeze(-1)).squeeze(-1) if info_vec.size(-1) > 0 else info_vec
     z_covariance = torch.inverse(z.precision)
-    z_loc = z_covariance.matmul(
-        z.info_vec.view(z.info_vec.shape + (int(z.dim() > 0),))
-    ).sum(-1)
+    z_loc = z_covariance.matmul(z.info_vec.view(z.info_vec.shape + (int(z.dim() > 0),))).sum(-1)
     assert_close(loc[..., :na], z_loc[..., :na])
     assert_close(loc[..., x_dim:], z_loc[..., na:])
     assert_close(covariance[..., :na, :na], z_covariance[..., :na, :na])
@@ -474,9 +451,7 @@ def test_gaussian_funsor(batch_shape):
     sample_inputs = OrderedDict(particle=funsor.Bint[num_samples])
     deltas = f_gaussian.sample("x", sample_inputs)
     f_rsamples = funsor.montecarlo.extract_samples(deltas)["x"]
-    ff_entropy = (f_log_Z - f_gaussian(x=f_rsamples)).reduce(
-        funsor.ops.mean, "particle"
-    )
+    ff_entropy = (f_log_Z - f_gaussian(x=f_rsamples)).reduce(funsor.ops.mean, "particle")
     check_equal(ff_entropy.data, entropy)
 
     # Check Funsor's .rsample against Pyro's .log_prob.
@@ -487,9 +462,7 @@ def test_gaussian_funsor(batch_shape):
     fp_rsamples = funsor.Tensor(p_rsamples)["particle"]
     for i in "ij"[: len(batch_shape)]:
         fp_rsamples = fp_rsamples[i]
-    fp_entropy = (f_log_Z - f_gaussian(x=fp_rsamples)).reduce(
-        funsor.ops.mean, "particle"
-    )
+    fp_entropy = (f_log_Z - f_gaussian(x=fp_rsamples)).reduce(funsor.ops.mean, "particle")
     check_equal(fp_entropy.data, entropy)
 
 
@@ -513,13 +486,9 @@ def test_sequential_gaussian_tensordot(batch_shape, state_dim, num_steps):
 @pytest.mark.parametrize("state_dim", [1, 2, 3])
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
-def test_sequential_gaussian_filter_sample(
-    sample_shape, batch_shape, state_dim, num_steps
-):
+def test_sequential_gaussian_filter_sample(sample_shape, batch_shape, state_dim, num_steps):
     init = random_gaussian(batch_shape, state_dim, requires_grad=True)
-    trans = random_gaussian(
-        batch_shape + (num_steps,), state_dim + state_dim, requires_grad=True
-    )
+    trans = random_gaussian(batch_shape + (num_steps,), state_dim + state_dim, requires_grad=True)
     duration = 1 + num_steps
 
     # Check shape.
@@ -537,9 +506,7 @@ def test_sequential_gaussian_filter_sample(
 @pytest.mark.parametrize("state_dim", [1, 2, 3])
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
 @pytest.mark.parametrize("sample_shape", [(), (4,), (3, 2)], ids=str)
-def test_sequential_gaussian_filter_sample_antithetic(
-    sample_shape, batch_shape, state_dim, num_steps
-):
+def test_sequential_gaussian_filter_sample_antithetic(sample_shape, batch_shape, state_dim, num_steps):
     init = random_gaussian(batch_shape, state_dim)
     trans = random_gaussian(batch_shape + (num_steps,), state_dim + state_dim)
     duration = 1 + num_steps
@@ -553,9 +520,7 @@ def test_sequential_gaussian_filter_sample_antithetic(
 
     # Check that antithetic sampling works as expected.
     noise3 = torch.stack([noise, zero, -noise])
-    sample3 = sequential_gaussian_filter_sample(
-        init, trans, (3,) + sample_shape, noise3
-    )
+    sample3 = sequential_gaussian_filter_sample(init, trans, (3,) + sample_shape, noise3)
     expected = torch.stack([sample, mean, 2 * mean - sample])
     assert torch.allclose(sample3, expected)
 
@@ -599,9 +564,7 @@ def test_sequential_gaussian_filter_sample_stability(num_steps):
     )
 
     init = Gaussian(zero, zero.expand(4), eye)
-    trans = matrix_and_gaussian_to_gaussian(
-        trans_matrix, Gaussian(zero, zero.expand(4), eye)
-    ).expand((num_steps - 1,))
+    trans = matrix_and_gaussian_to_gaussian(trans_matrix, Gaussian(zero, zero.expand(4), eye)).expand((num_steps - 1,))
 
     # Check numerically stabilized value.
     x = sequential_gaussian_filter_sample(init, trans, (), noise)

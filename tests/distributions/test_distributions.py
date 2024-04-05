@@ -36,9 +36,7 @@ def test_support_shape(dist):
         assert d.support.event_dim == d.event_dim
         x = dist.get_test_data(idx)
         ok = d.support.check(x)
-        assert ok.shape == broadcast_shape(
-            d.batch_shape, x.shape[: x.dim() - d.event_dim]
-        )
+        assert ok.shape == broadcast_shape(d.batch_shape, x.shape[: x.dim() - d.event_dim])
         assert ok.all()
 
 
@@ -47,10 +45,7 @@ def test_infer_shapes(dist):
         pytest.xfail(reason="cannot statically compute shape")
     for idx in range(dist.get_num_test_data()):
         dist_params = dist.get_dist_params(idx)
-        arg_shapes = {
-            k: v.shape if isinstance(v, torch.Tensor) else ()
-            for k, v in dist_params.items()
-        }
+        arg_shapes = {k: v.shape if isinstance(v, torch.Tensor) else () for k, v in dist_params.items()}
         batch_shape, event_shape = dist.pyro_dist.infer_shapes(**arg_shapes)
         d = dist.pyro_dist(**dist_params)
         assert d.batch_shape == batch_shape
@@ -59,9 +54,7 @@ def test_infer_shapes(dist):
 
 def test_batch_log_prob(dist):
     if dist.scipy_arg_fn is None:
-        pytest.skip(
-            "{}.log_prob_sum has no scipy equivalent".format(dist.pyro_dist.__name__)
-        )
+        pytest.skip("{}.log_prob_sum has no scipy equivalent".format(dist.pyro_dist.__name__))
     for idx in dist.get_batch_data_indices():
         dist_params = dist.get_dist_params(idx)
         d = dist.pyro_dist(**dist_params)
@@ -101,13 +94,9 @@ def test_score_errors_event_dim_mismatch(dist):
         test_data_wrong_dims = torch.ones(d.shape() + (1,))
         if len(d.event_shape) > 0:
             if dist.get_test_distribution_name() == "MultivariateNormal":
-                pytest.skip(
-                    "MultivariateNormal does not do shape validation in log_prob."
-                )
+                pytest.skip("MultivariateNormal does not do shape validation in log_prob.")
             elif dist.get_test_distribution_name() == "LowRankMultivariateNormal":
-                pytest.skip(
-                    "LowRankMultivariateNormal does not do shape validation in log_prob."
-                )
+                pytest.skip("LowRankMultivariateNormal does not do shape validation in log_prob.")
             with pytest.raises((ValueError, RuntimeError)):
                 d.log_prob(test_data_wrong_dims)
 
@@ -234,9 +223,7 @@ def test_enumerate_support(discrete_dist):
     if not expected_support:
         pytest.skip("enumerate_support not tested for distribution")
     Dist = discrete_dist.pyro_dist
-    actual_support_non_vec = Dist(
-        **discrete_dist.get_dist_params(0)
-    ).enumerate_support()
+    actual_support_non_vec = Dist(**discrete_dist.get_dist_params(0)).enumerate_support()
     actual_support = Dist(**discrete_dist.get_dist_params(-1)).enumerate_support()
     assert_equal(actual_support.data, torch.tensor(expected_support))
     assert_equal(actual_support_non_vec.data, torch.tensor(expected_support_non_vec))
@@ -257,10 +244,7 @@ def test_enumerate_support_shape(dist):
             assert_equal(support, support_expanded)
 
             support_unexpanded = d.enumerate_support(expand=False)
-            assert (
-                support_unexpanded.shape
-                == (n,) + (1,) * len(d.batch_shape) + d.event_shape
-            )
+            assert support_unexpanded.shape == (n,) + (1,) * len(d.batch_shape) + d.event_shape
             assert (support_expanded == support_unexpanded).all()
 
 
@@ -322,9 +306,7 @@ def test_expand_new_dim(dist, sample_shape, shape_type, default):
     for idx in range(dist.get_num_test_data()):
         small = dist.pyro_dist(**dist.get_dist_params(idx))
         if default:
-            large = TorchDistribution.expand(
-                small, shape_type(sample_shape + small.batch_shape)
-            )
+            large = TorchDistribution.expand(small, shape_type(sample_shape + small.batch_shape))
         else:
             with xfail_if_not_implemented():
                 large = small.expand(shape_type(sample_shape + small.batch_shape))
@@ -418,9 +400,7 @@ def test_expand_reshaped_distribution(extra_event_dims, expand_shape, default):
     d = dist.OneHotCategorical(probs)
     full_shape = torch.Size([4, 1, 1, 1, 6])
     if default:
-        reshaped_dist = TorchDistribution.expand(d, [4, 1, 1, 1]).to_event(
-            extra_event_dims
-        )
+        reshaped_dist = TorchDistribution.expand(d, [4, 1, 1, 1]).to_event(extra_event_dims)
     else:
         reshaped_dist = d.expand_by([4, 1, 1]).to_event(extra_event_dims)
     cut = 4 - extra_event_dims
@@ -443,7 +423,5 @@ def test_expand_reshaped_distribution(extra_event_dims, expand_shape, default):
 def test_expand_enumerate_support():
     probs = torch.ones(3, 6) / 6
     d = dist.Categorical(probs)
-    actual_enum_shape = (
-        TorchDistribution.expand(d, (4, 3)).enumerate_support(expand=True).shape
-    )
+    actual_enum_shape = TorchDistribution.expand(d, (4, 3)).enumerate_support(expand=True).shape
     assert actual_enum_shape == (6, 4, 3)

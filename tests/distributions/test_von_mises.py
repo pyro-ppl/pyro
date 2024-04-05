@@ -111,9 +111,7 @@ def _fit_params_from_samples(samples, n_iter):
 
     def bfgs_closure():
         bfgs.zero_grad()
-        obj = _log_modified_bessel_fn(kappa, order=1) - _log_modified_bessel_fn(
-            kappa, order=0
-        )
+        obj = _log_modified_bessel_fn(kappa, order=1) - _log_modified_bessel_fn(kappa, order=0)
         obj = (obj - samples_r.log()).abs()
         obj.backward()
         return obj
@@ -127,9 +125,7 @@ def _fit_params_from_samples(samples, n_iter):
 @pytest.mark.parametrize(
     "concentration",
     [
-        skipif_param(
-            0.01, condition="CUDA_TEST" in os.environ, reason="low precision."
-        ),
+        skipif_param(0.01, condition="CUDA_TEST" in os.environ, reason="low precision."),
         0.03,
         0.1,
         0.3,
@@ -148,9 +144,7 @@ def test_sample(loc, concentration, n_samples=int(1e6), n_iter=50):
     assert abs(concentration - kappa) < concentration * 0.1
 
 
-@pytest.mark.parametrize(
-    "concentration", [0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0]
-)
+@pytest.mark.parametrize("concentration", [0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0])
 def test_log_prob_normalized(concentration):
     grid = torch.arange(0.0, 2 * math.pi, 1e-4)
     prob = VonMises(0.0, concentration).log_prob(grid).exp()

@@ -41,9 +41,7 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
         gp.util.train(
             self.gpmodel,
             optimizer,
-            loss_fn=TraceEnum_ELBO(
-                strict_enumeration_warning=False
-            ).differentiable_loss,
+            loss_fn=TraceEnum_ELBO(strict_enumeration_warning=False).differentiable_loss,
             retain_graph=True,
         )
 
@@ -68,9 +66,7 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
                 return torch.tensor(float("inf"))
             x = transform_to(self.constraints)(unconstrained_x)
             y = differentiable(x)
-            autograd.backward(
-                unconstrained_x, autograd.grad(y, unconstrained_x, retain_graph=True)
-            )
+            autograd.backward(unconstrained_x, autograd.grad(y, unconstrained_x, retain_graph=True))
             return y
 
         minimizer.step(closure)
@@ -95,9 +91,9 @@ class GPBayesOptimizer(pyro.optim.multi.MultiOptimizer):
         candidates = []
         values = []
         for j in range(num_candidates):
-            x_init = torch.empty(
-                1, dtype=self.gpmodel.X.dtype, device=self.gpmodel.X.device
-            ).uniform_(self.constraints.lower_bound, self.constraints.upper_bound)
+            x_init = torch.empty(1, dtype=self.gpmodel.X.dtype, device=self.gpmodel.X.device).uniform_(
+                self.constraints.lower_bound, self.constraints.upper_bound
+            )
             x, y = self.find_a_candidate(differentiable, x_init)
             if torch.isnan(y):
                 continue

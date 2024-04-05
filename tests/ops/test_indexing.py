@@ -137,9 +137,7 @@ def test_hmm_example(prev_enum_dim, curr_enum_dim):
     x_prev = torch.arange(hidden_dim).reshape((-1,) + (1,) * (-1 - prev_enum_dim))
     x_curr = torch.arange(hidden_dim).reshape((-1,) + (1,) * (-1 - curr_enum_dim))
 
-    expected = probs_x[
-        x_prev.unsqueeze(-1), x_curr.unsqueeze(-1), torch.arange(hidden_dim)
-    ]
+    expected = probs_x[x_prev.unsqueeze(-1), x_curr.unsqueeze(-1), torch.arange(hidden_dim)]
     actual = Vindex(probs_x)[x_prev, x_curr, :]
     assert_equal(actual, expected)
 

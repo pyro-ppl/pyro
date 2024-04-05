@@ -106,9 +106,7 @@ def test_normal(loc, scale):
 
 @pytest.mark.parametrize("skew0", [-0.9, -0.5, 0.0, 0.5, 0.9])
 @pytest.mark.parametrize("skew1", [-0.9, -0.5, 0.0, 0.5, 0.9])
-@pytest.mark.parametrize(
-    "scale0,scale1", [(0.1, 0.9), (0.2, 0.8), (0.4, 0.6), (0.5, 0.5)]
-)
+@pytest.mark.parametrize("scale0,scale1", [(0.1, 0.9), (0.2, 0.8), (0.4, 0.6), (0.5, 0.5)])
 @pytest.mark.parametrize("stability", [0.5, 0.99, 1.01, 1.5, 1.9])
 def test_additive(stability, skew0, skew1, scale0, scale1):
     num_samples = 10000
@@ -117,9 +115,7 @@ def test_additive(stability, skew0, skew1, scale0, scale1):
     expected = d0.sample([num_samples]) + d1.sample([num_samples])
 
     scale = (scale0**stability + scale1**stability) ** (1 / stability)
-    skew = (skew0 * scale0**stability + skew1 * scale1**stability) / (
-        scale0**stability + scale1**stability
-    )
+    skew = (skew0 * scale0**stability + skew1 * scale1**stability) / (scale0**stability + scale1**stability)
     d = dist.Stable(stability, skew, scale, coords="S")
     actual = d.sample([num_samples])
 

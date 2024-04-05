@@ -58,9 +58,7 @@ class IndependentMaternGP(TimeSeriesModel):
             kernel_scale_init=kernel_scale_init,
         )
 
-        self.obs_noise_scale = PyroParam(
-            obs_noise_scale_init, constraint=constraints.positive
-        )
+        self.obs_noise_scale = PyroParam(obs_noise_scale_init, constraint=constraints.positive)
 
         obs_matrix = [1.0] + [0.0] * (self.kernel.state_dim - 1)
         self.register_buffer("obs_matrix", torch.tensor(obs_matrix).unsqueeze(-1))
@@ -86,9 +84,7 @@ class IndependentMaternGP(TimeSeriesModel):
             This is required when sampling from homogeneous HMMs whose parameters
             are not expanded along the time axis.
         """
-        trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(
-            dt=self.dt
-        )
+        trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
         trans_dist = MultivariateNormal(
             self.obs_matrix.new_zeros(self.obs_dim, 1, self.kernel.state_dim),
             process_covar.unsqueeze(-3),
@@ -129,13 +125,9 @@ class IndependentMaternGP(TimeSeriesModel):
         """
         assert dts.dim() == 1
         dts = dts.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-        trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(
-            dt=dts
-        )
+        trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=dts)
         trans_matrix = trans_matrix[..., 0:1]
-        predicted_mean = torch.matmul(
-            filtering_state.loc.unsqueeze(-2), trans_matrix
-        ).squeeze(-2)[..., 0]
+        predicted_mean = torch.matmul(filtering_state.loc.unsqueeze(-2), trans_matrix).squeeze(-2)[..., 0]
         predicted_function_covar = (
             torch.matmul(
                 trans_matrix.transpose(-1, -2),
@@ -145,9 +137,7 @@ class IndependentMaternGP(TimeSeriesModel):
         )
 
         if include_observation_noise:
-            predicted_function_covar = (
-                predicted_function_covar + self.obs_noise_scale.pow(2.0)
-            )
+            predicted_function_covar = predicted_function_covar + self.obs_noise_scale.pow(2.0)
         return predicted_mean, predicted_function_covar
 
     @pyro_method
@@ -227,20 +217,14 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         )
         self.full_state_dim = num_gps * self.kernel.state_dim
 
-        self.obs_noise_scale = PyroParam(
-            obs_noise_scale_init, constraint=constraints.positive
-        )
+        self.obs_noise_scale = PyroParam(obs_noise_scale_init, constraint=constraints.positive)
         self.A = nn.Parameter(0.3 * torch.randn(self.num_gps, self.obs_dim))
 
     def _get_obs_matrix(self):
         # (num_gps, obs_dim) => (state_dim * num_gps, obs_dim)
-        return self.A.repeat_interleave(
-            self.kernel.state_dim, dim=0
-        ) * self.A.new_tensor([1.0] + [0.0] * (self.kernel.state_dim - 1)).repeat(
-            self.num_gps
-        ).unsqueeze(
-            -1
-        )
+        return self.A.repeat_interleave(self.kernel.state_dim, dim=0) * self.A.new_tensor(
+            [1.0] + [0.0] * (self.kernel.state_dim - 1)
+        ).repeat(self.num_gps).unsqueeze(-1)
 
     def _stationary_covariance(self):
         return block_diag_embed(self.kernel.stationary_covariance())
@@ -262,9 +246,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
             This is required when sampling from homogeneous HMMs whose parameters
             are not expanded along the time axis.
         """
-        trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(
-            dt=self.dt
-        )
+        trans_matrix, process_covar = self.kernel.transition_matrix_and_covariance(dt=self.dt)
         trans_matrix = block_diag_embed(trans_matrix)
         process_covar = block_diag_embed(process_covar)
         loc = self.A.new_zeros(self.full_state_dim)
@@ -298,9 +280,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         return self.get_dist().filter(targets)
 
     @torch.no_grad()
-    def _forecast(
-        self, dts, filtering_state, include_observation_noise=True, full_covar=True
-    ):
+    def _forecast(self, dts, filtering_state, include_observation_noise=True, full_covar=True):
         """
         Internal helper for forecasting.
         """
@@ -308,14 +288,10 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
         dts = dts.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
         trans_mat, process_covar = self.kernel.transition_matrix_and_covariance(dt=dts)
         trans_mat = block_diag_embed(trans_mat)  # S x full_state_dim x full_state_dim
-        process_covar = block_diag_embed(
-            process_covar
-        )  # S x full_state_dim x full_state_dim
+        process_covar = block_diag_embed(process_covar)  # S x full_state_dim x full_state_dim
         obs_matrix = self._get_obs_matrix()  # full_state_dim x obs_dim
         trans_obs = torch.matmul(trans_mat, obs_matrix)  # S x full_state_dim x obs_dim
-        predicted_mean = torch.matmul(
-            filtering_state.loc.unsqueeze(-2), trans_obs
-        ).squeeze(-2)
+        predicted_mean = torch.matmul(filtering_state.loc.unsqueeze(-2), trans_obs).squeeze(-2)
         predicted_function_covar = torch.matmul(
             trans_obs.transpose(-1, -2),
             torch.matmul(filtering_state.covariance_matrix, trans_obs),
@@ -328,9 +304,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
             obs_noise = self.obs_noise_scale.pow(2.0).diag_embed()
             predicted_function_covar = predicted_function_covar + obs_noise
         if not full_covar:
-            predicted_function_covar = predicted_function_covar.diagonal(
-                dim1=-1, dim2=-2
-            )
+            predicted_function_covar = predicted_function_covar.diagonal(dim1=-1, dim2=-2)
 
         return predicted_mean, predicted_function_covar
 
@@ -397,9 +371,7 @@ class DependentMaternGP(TimeSeriesModel):
 
         super().__init__()
 
-        self.kernel = MaternKernel(
-            nu=nu, num_gps=obs_dim, length_scale_init=length_scale_init
-        )
+        self.kernel = MaternKernel(nu=nu, num_gps=obs_dim, length_scale_init=length_scale_init)
         self.full_state_dim = self.kernel.state_dim * obs_dim
 
         # we demote self.kernel.kernel_scale from being a nn.Parameter
@@ -407,18 +379,14 @@ class DependentMaternGP(TimeSeriesModel):
         del self.kernel.kernel_scale
         self.kernel.register_buffer("kernel_scale", torch.ones(obs_dim))
 
-        self.obs_noise_scale = PyroParam(
-            obs_noise_scale_init, constraint=constraints.positive
-        )
+        self.obs_noise_scale = PyroParam(obs_noise_scale_init, constraint=constraints.positive)
         self.wiener_noise_tril = PyroParam(
             torch.eye(obs_dim) + 0.03 * torch.randn(obs_dim, obs_dim).tril(-1),
             constraint=constraints.lower_cholesky,
         )
 
         if linearly_coupled:
-            self.obs_matrix = nn.Parameter(
-                0.3 * torch.randn(self.obs_dim, self.obs_dim)
-            )
+            self.obs_matrix = nn.Parameter(0.3 * torch.randn(self.obs_dim, self.obs_dim))
         else:
             obs_matrix = torch.zeros(self.full_state_dim, obs_dim)
             for i in range(obs_dim):
@@ -429,9 +397,9 @@ class DependentMaternGP(TimeSeriesModel):
         if self.obs_matrix.size(0) == self.obs_dim:
             # (num_gps, obs_dim) => (state_dim * num_gps, obs_dim)
             selector = [1.0] + [0.0] * (self.kernel.state_dim - 1)
-            return self.obs_matrix.repeat_interleave(
-                self.kernel.state_dim, dim=0
-            ) * self.obs_matrix.new_tensor(selector).repeat(self.obs_dim).unsqueeze(-1)
+            return self.obs_matrix.repeat_interleave(self.kernel.state_dim, dim=0) * self.obs_matrix.new_tensor(
+                selector
+            ).repeat(self.obs_dim).unsqueeze(-1)
         else:
             return self.obs_matrix
 
@@ -441,16 +409,12 @@ class DependentMaternGP(TimeSeriesModel):
         )
 
     def _get_obs_dist(self):
-        return dist.Normal(
-            self.obs_matrix.new_zeros(self.obs_dim), self.obs_noise_scale
-        ).to_event(1)
+        return dist.Normal(self.obs_matrix.new_zeros(self.obs_dim), self.obs_noise_scale).to_event(1)
 
     def _get_wiener_cov(self):
         chol = self.wiener_noise_tril
         wiener_cov = torch.mm(chol, chol.t()).reshape(self.obs_dim, 1, self.obs_dim, 1)
-        wiener_cov = wiener_cov * wiener_cov.new_ones(
-            self.kernel.state_dim, 1, self.kernel.state_dim
-        )
+        wiener_cov = wiener_cov * wiener_cov.new_ones(self.kernel.state_dim, 1, self.kernel.state_dim)
         return wiener_cov.reshape(self.full_state_dim, self.full_state_dim)
 
     def _stationary_covariance(self):
@@ -462,9 +426,7 @@ class DependentMaternGP(TimeSeriesModel):
             + (2.0 * rho_i * rho_j) * self.kernel.mask11
         )
         block = block / (rho_i + rho_j).pow(3.0)
-        block = block.transpose(-2, -3).reshape(
-            self.full_state_dim, self.full_state_dim
-        )
+        block = block.transpose(-2, -3).reshape(self.full_state_dim, self.full_state_dim)
         return self._get_wiener_cov() * block
 
     def _get_trans_dist(self, trans_matrix, stationary_covariance):
@@ -533,20 +495,14 @@ class DependentMaternGP(TimeSeriesModel):
         obs_matrix = self._get_obs_matrix()
         trans_obs = torch.matmul(trans_matrix, obs_matrix)
 
-        predicted_mean = torch.matmul(
-            filtering_state.loc.unsqueeze(-2), trans_obs
-        ).squeeze(-2)
+        predicted_mean = torch.matmul(filtering_state.loc.unsqueeze(-2), trans_obs).squeeze(-2)
         predicted_function_covar = torch.matmul(
             trans_obs.transpose(-1, -2),
             torch.matmul(filtering_state.covariance_matrix, trans_obs),
-        ) + torch.matmul(
-            obs_matrix.t(), torch.matmul(trans_dist.covariance_matrix, obs_matrix)
-        )
+        ) + torch.matmul(obs_matrix.t(), torch.matmul(trans_dist.covariance_matrix, obs_matrix))
 
         if include_observation_noise:
-            predicted_function_covar = (
-                predicted_function_covar + self.obs_noise_scale.pow(2.0)
-            )
+            predicted_function_covar = predicted_function_covar + self.obs_noise_scale.pow(2.0)
 
         return predicted_mean, predicted_function_covar
 

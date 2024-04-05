@@ -27,11 +27,7 @@ class MaskedConstraint(constraints.Constraint):
 
     def check(self, value):
         result = self.constraint0.check(value)
-        mask = (
-            self.mask.expand(result.shape)
-            if result.shape != self.mask.shape
-            else self.mask
-        )
+        mask = self.mask.expand(result.shape) if result.shape != self.mask.shape else self.mask
         result[mask] = self.constraint1.check(value)[mask]
         return result
 
@@ -65,18 +61,12 @@ class MaskedMixture(TorchDistribution):
 
     def __init__(self, mask, component0, component1, validate_args=None):
         if not torch.is_tensor(mask) or mask.dtype != torch.bool:
-            raise ValueError(
-                "Expected mask to be a BoolTensor but got {}".format(type(mask))
-            )
+            raise ValueError("Expected mask to be a BoolTensor but got {}".format(type(mask)))
         if component0.event_shape != component1.event_shape:
             raise ValueError(
-                "components event_shape disagree: {} vs {}".format(
-                    component0.event_shape, component1.event_shape
-                )
+                "components event_shape disagree: {} vs {}".format(component0.event_shape, component1.event_shape)
             )
-        batch_shape = broadcast_shape(
-            mask.shape, component0.batch_shape, component1.batch_shape
-        )
+        batch_shape = broadcast_shape(mask.shape, component0.batch_shape, component1.batch_shape)
         if mask.shape != batch_shape:
             mask = mask.expand(batch_shape)
         if component0.batch_shape != batch_shape:
@@ -102,9 +92,7 @@ class MaskedMixture(TorchDistribution):
     def support(self):
         if self.component0.support is self.component1.support:
             return self.component0.support
-        return MaskedConstraint(
-            self.mask, self.component0.support, self.component1.support
-        )
+        return MaskedConstraint(self.mask, self.component0.support, self.component1.support)
 
     def expand(self, batch_shape):
         try:
@@ -145,9 +133,7 @@ class MaskedMixture(TorchDistribution):
         mask = self.mask
         if mask.shape != mask_shape:
             mask = mask.expand(mask_shape)
-        result = torch.where(
-            mask, self.component1.log_prob(value), self.component0.log_prob(value)
-        )
+        result = torch.where(mask, self.component1.log_prob(value), self.component0.log_prob(value))
         return result
 
     @lazy_property

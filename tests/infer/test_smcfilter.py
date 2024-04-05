@@ -21,9 +21,7 @@ def test_systematic_sample(size):
     num_samples = 20000
     index = _systematic_sample(probs.expand(num_samples, size))
     histogram = torch.zeros_like(probs)
-    histogram.scatter_add_(
-        -1, index.reshape(-1), probs.new_ones(1).expand(num_samples * size)
-    )
+    histogram.scatter_add_(-1, index.reshape(-1), probs.new_ones(1).expand(num_samples * size))
 
     expected = probs * size
     actual = histogram / num_samples
@@ -40,23 +38,17 @@ class SmokeModel:
         state["x_mean"] = pyro.sample("x_mean", dist.Normal(0.0, 1.0))
         state["y_mean"] = pyro.sample(
             "y_mean",
-            dist.MultivariateNormal(
-                torch.zeros(self.state_size), torch.eye(self.state_size)
-            ),
+            dist.MultivariateNormal(torch.zeros(self.state_size), torch.eye(self.state_size)),
         )
 
     def step(self, state, x=None, y=None):
         v = pyro.sample("v_{}".format(self.t), dist.Normal(0.0, 1.0))
         with pyro.plate("plate", self.plate_size):
             w = pyro.sample("w_{}".format(self.t), dist.Normal(v, 1.0))
-            x = pyro.sample(
-                "x_{}".format(self.t), dist.Normal(state["x_mean"] + w, 1), obs=x
-            )
+            x = pyro.sample("x_{}".format(self.t), dist.Normal(state["x_mean"] + w, 1), obs=x)
             y = pyro.sample(
                 "y_{}".format(self.t),
-                dist.MultivariateNormal(
-                    state["y_mean"] + w.unsqueeze(-1), torch.eye(self.state_size)
-                ),
+                dist.MultivariateNormal(state["y_mean"] + w.unsqueeze(-1), torch.eye(self.state_size)),
                 obs=y,
             )
         self.t += 1
@@ -73,9 +65,7 @@ class SmokeGuide:
         pyro.sample("x_mean", dist.Normal(0.0, 2.0))
         pyro.sample(
             "y_mean",
-            dist.MultivariateNormal(
-                torch.zeros(self.state_size), 2.0 * torch.eye(self.state_size)
-            ),
+            dist.MultivariateNormal(torch.zeros(self.state_size), 2.0 * torch.eye(self.state_size)),
         )
 
     def step(self, state, x=None, y=None):
@@ -93,9 +83,7 @@ def test_smoke(max_plate_nesting, state_size, plate_size, num_steps):
     model = SmokeModel(state_size, plate_size)
     guide = SmokeGuide(state_size, plate_size)
 
-    smc = SMCFilter(
-        model, guide, num_particles=100, max_plate_nesting=max_plate_nesting
-    )
+    smc = SMCFilter(model, guide, num_particles=100, max_plate_nesting=max_plate_nesting)
 
     true_model = SmokeModel(state_size, plate_size)
 
@@ -120,9 +108,7 @@ class HarmonicModel:
 
     def init(self, state):
         self.t = 0
-        state["z"] = pyro.sample(
-            "z_init", dist.Delta(torch.tensor([1.0, 0.0]), event_dim=1)
-        )
+        state["z"] = pyro.sample("z_init", dist.Delta(torch.tensor([1.0, 0.0]), event_dim=1))
 
     def step(self, state, y=None):
         self.t += 1
@@ -130,9 +116,7 @@ class HarmonicModel:
             "z_{}".format(self.t),
             dist.Normal(state["z"].matmul(self.A), self.B * self.sigma_z).to_event(1),
         )
-        y = pyro.sample(
-            "y_{}".format(self.t), dist.Normal(state["z"][..., 0], self.sigma_y), obs=y
-        )
+        y = pyro.sample("y_{}".format(self.t), dist.Normal(state["z"][..., 0], self.sigma_y), obs=y)
 
         state["z_{}".format(self.t)] = state["z"]  # saved for testing
 
@@ -153,9 +137,7 @@ class HarmonicGuide:
         # Proposal distribution
         pyro.sample(
             "z_{}".format(self.t),
-            dist.Normal(
-                state["z"].matmul(self.model.A), torch.tensor([2.0, 2.0])
-            ).to_event(1),
+            dist.Normal(state["z"].matmul(self.model.A), torch.tensor([2.0, 2.0])).to_event(1),
         )
 
 
@@ -210,9 +192,7 @@ def test_likelihood_ratio():
 
 def test_gaussian_filter():
     dim = 4
-    init_dist = dist.MultivariateNormal(
-        torch.zeros(dim), scale_tril=torch.eye(dim) * 10
-    )
+    init_dist = dist.MultivariateNormal(torch.zeros(dim), scale_tril=torch.eye(dim) * 10)
     trans_mat = torch.eye(dim)
     trans_dist = dist.MultivariateNormal(torch.zeros(dim), scale_tril=torch.eye(dim))
     obs_mat = torch.eye(dim)
@@ -245,9 +225,7 @@ def test_gaussian_filter():
         def step(self, state, datum):
             pyro.sample(
                 "z_{}".format(self.t),
-                dist.MultivariateNormal(
-                    state["z"], scale_tril=trans_dist.scale_tril * 2
-                ),
+                dist.MultivariateNormal(state["z"], scale_tril=trans_dist.scale_tril * 2),
             )
             self.t += 1
 

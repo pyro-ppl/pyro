@@ -147,9 +147,7 @@ def test_timeseries_models(model, nu_statedim, obs_dim, T):
 @pytest.mark.parametrize("obs_dim", [1, 3])
 def test_dependent_matern_gp(obs_dim):
     dt = 0.5 + torch.rand(1).item()
-    gp = DependentMaternGP(
-        nu=1.5, obs_dim=obs_dim, dt=dt, length_scale_init=0.5 + torch.rand(obs_dim)
-    )
+    gp = DependentMaternGP(nu=1.5, obs_dim=obs_dim, dt=dt, length_scale_init=0.5 + torch.rand(obs_dim))
 
     # make sure stationary covariance matrix satisfies the relevant
     # matrix riccati equation
@@ -163,9 +161,5 @@ def test_dependent_matern_gp(obs_dim):
     wiener_cov = gp._get_wiener_cov()
     wiener_cov *= torch.tensor([[0.0, 0.0], [0.0, 1.0]]).repeat(obs_dim, obs_dim)
 
-    expected_zero = (
-        torch.matmul(F, stat_cov)
-        + torch.matmul(stat_cov, F.transpose(-1, -2))
-        + wiener_cov
-    )
+    expected_zero = torch.matmul(F, stat_cov) + torch.matmul(stat_cov, F.transpose(-1, -2)) + wiener_cov
     assert_equal(expected_zero, torch.zeros(gp.full_state_dim, gp.full_state_dim))

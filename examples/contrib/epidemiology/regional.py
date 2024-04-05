@@ -38,15 +38,14 @@ def generate_data(args):
         S2I_sum = int(S2I[: args.duration].sum())
         if obs_sum >= args.min_observations:
             logging.info(
-                "Observed {:d}/{:d} infections:\n{}".format(
-                    obs_sum, S2I_sum, " ".join(str(int(x)) for x in obs[:, 0])
-                )
+                "Observed {:d}/{:d} infections:\n{}".format(obs_sum, S2I_sum, " ".join(str(int(x)) for x in obs[:, 0]))
             )
             return {"S2I": S2I, "obs": obs}
 
     raise ValueError(
-        "Failed to generate {} observations. Try increasing "
-        "--population or decreasing --min-observations".format(args.min_observations)
+        "Failed to generate {} observations. Try increasing " "--population or decreasing --min-observations".format(
+            args.min_observations
+        )
     )
 
 
@@ -112,36 +111,26 @@ def predict(args, model, truth):
     median = S2I.median(dim=0).values
     lines = ["Median prediction of new infections (starting on day 0):"]
     for r in range(args.num_regions):
-        lines.append(
-            "Region {}: {}".format(r, " ".join(map(str, map(int, median[:, r]))))
-        )
+        lines.append("Region {}: {}".format(r, " ".join(map(str, map(int, median[:, r])))))
     logging.info("\n".join(lines))
 
     # Optionally plot the latent and forecasted series of new infections.
     if args.plot:
         import matplotlib.pyplot as plt
 
-        fig, axes = plt.subplots(
-            args.num_regions, sharex=True, figsize=(6, 1 + args.num_regions)
-        )
+        fig, axes = plt.subplots(args.num_regions, sharex=True, figsize=(6, 1 + args.num_regions))
         time = torch.arange(args.duration + args.forecast)
         p05 = S2I.kthvalue(int(round(0.5 + 0.05 * args.num_samples)), dim=0).values
         p95 = S2I.kthvalue(int(round(0.5 + 0.95 * args.num_samples)), dim=0).values
         for r, ax in enumerate(axes):
-            ax.fill_between(
-                time, p05[:, r], p95[:, r], color="red", alpha=0.3, label="90% CI"
-            )
+            ax.fill_between(time, p05[:, r], p95[:, r], color="red", alpha=0.3, label="90% CI")
             ax.plot(time, median[:, r], "r-", label="median")
             ax.plot(time[: args.duration], model.data[:, r], "k.", label="observed")
             ax.plot(time, truth[:, r], "k--", label="truth")
             ax.axvline(args.duration - 0.5, color="gray", lw=1)
             ax.set_xlim(0, len(time) - 1)
             ax.set_ylim(0, None)
-        axes[0].set_title(
-            "New infections among {} regions each of size {}".format(
-                args.num_regions, args.population
-            )
-        )
+        axes[0].set_title("New infections among {} regions each of size {}".format(args.num_regions, args.population))
         axes[args.num_regions // 2].set_ylabel("inf./day")
         axes[-1].set_xlabel("day after first infection")
         axes[-1].legend(loc="upper left")
@@ -167,9 +156,7 @@ def main(args):
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith("1.9.0")
-    parser = argparse.ArgumentParser(
-        description="Regional compartmental epidemiology modeling using HMC"
-    )
+    parser = argparse.ArgumentParser(description="Regional compartmental epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=1000, type=int)
     parser.add_argument("-r", "--num-regions", default=2, type=int)
     parser.add_argument("-c", "--coupling", default=0.1, type=float)

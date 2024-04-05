@@ -56,12 +56,8 @@ def _sample_posterior(model, first_available_dim, temperature, *args, **kwargs):
             # TODO this should really be handled entirely under the hood by adjoint
             node["funsor"] = {"value": node["funsor"]["value"](**sample_subs)}
         else:
-            node["funsor"]["log_measure"] = approx_factors[
-                node["funsor"]["log_measure"]
-            ]
-            node["funsor"]["value"] = _get_support_value(
-                node["funsor"]["log_measure"], name
-            )
+            node["funsor"]["log_measure"] = approx_factors[node["funsor"]["log_measure"]]
+            node["funsor"]["value"] = _get_support_value(node["funsor"]["log_measure"], name)
             sample_subs[name] = node["funsor"]["value"]
 
     with replay(trace=sample_tr):

@@ -19,6 +19,7 @@ Dirichlet distributions [2], avoiding the need for Laplace approximations as in
     "Pathwise gradients beyond the reparametrization trick"
     https://arxiv.org/pdf/1806.01851.pdf
 """
+
 import argparse
 import functools
 import logging
@@ -42,12 +43,8 @@ logging.basicConfig(format="%(relativeCreated) 9d %(message)s", level=logging.IN
 def model(data=None, args=None, batch_size=None):
     # Globals.
     with pyro.plate("topics", args.num_topics):
-        topic_weights = pyro.sample(
-            "topic_weights", dist.Gamma(1.0 / args.num_topics, 1.0)
-        )
-        topic_words = pyro.sample(
-            "topic_words", dist.Dirichlet(torch.ones(args.num_words) / args.num_words)
-        )
+        topic_weights = pyro.sample("topic_weights", dist.Gamma(1.0 / args.num_topics, 1.0))
+        topic_words = pyro.sample("topic_words", dist.Dirichlet(torch.ones(args.num_words) / args.num_words))
 
     # Locals.
     with pyro.plate("documents", args.num_docs) as ind:
@@ -66,9 +63,7 @@ def model(data=None, args=None, batch_size=None):
                 dist.Categorical(doc_topics),
                 infer={"enumerate": "parallel"},
             )
-            data = pyro.sample(
-                "doc_words", dist.Categorical(topic_words[word_topics]), obs=data
-            )
+            data = pyro.sample("doc_words", dist.Categorical(topic_words[word_topics]), obs=data)
 
     return topic_weights, topic_words, data
 
@@ -76,11 +71,7 @@ def model(data=None, args=None, batch_size=None):
 # We will use amortized inference of the local topic variables, achieved by a
 # multi-layer perceptron. We'll wrap the guide in an nn.Module.
 def make_predictor(args):
-    layer_sizes = (
-        [args.num_words]
-        + [int(s) for s in args.layer_sizes.split("-")]
-        + [args.num_topics]
-    )
+    layer_sizes = [args.num_words] + [int(s) for s in args.layer_sizes.split("-")] + [args.num_topics]
     logging.info("Creating MLP with sizes {}".format(layer_sizes))
     layers = []
     for in_size, out_size in zip(layer_sizes, layer_sizes[1:]):
@@ -115,9 +106,7 @@ def parametrized_guide(predictor, data, args, batch_size=None):
         data = data[:, ind]
         # The neural network will operate on histograms rather than word
         # index vectors, so we'll convert the raw data to a histogram.
-        counts = torch.zeros(args.num_words, ind.size(0)).scatter_add(
-            0, data, torch.ones(data.shape)
-        )
+        counts = torch.zeros(args.num_words, ind.size(0)).scatter_add(0, data, torch.ones(data.shape))
         doc_topics = predictor(counts.transpose(0, 1))
         pyro.sample("doc_topics", dist.Delta(doc_topics, event_dim=1))
 
@@ -150,9 +139,7 @@ def main(args):
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith("1.9.0")
-    parser = argparse.ArgumentParser(
-        description="Amortized Latent Dirichlet Allocation"
-    )
+    parser = argparse.ArgumentParser(description="Amortized Latent Dirichlet Allocation")
     parser.add_argument("-t", "--num-topics", default=8, type=int)
     parser.add_argument("-w", "--num-words", default=1024, type=int)
     parser.add_argument("-d", "--num-docs", default=1000, type=int)

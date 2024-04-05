@@ -57,9 +57,7 @@ class PyroLightningModule(pl.LightningModule):
         self.model = loss_fn.model
         self.guide = loss_fn.guide
         self.lr = lr
-        self.predictive = pyro.infer.Predictive(
-            self.model, guide=self.guide, num_samples=1
-        )
+        self.predictive = pyro.infer.Predictive(self.model, guide=self.guide, num_samples=1)
 
     def forward(self, *args):
         return self.predictive(*args)
@@ -109,9 +107,7 @@ def main(args):
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith("1.9.0")
-    parser = argparse.ArgumentParser(
-        description="Distributed training via PyTorch Lightning"
-    )
+    parser = argparse.ArgumentParser(description="Distributed training via PyTorch Lightning")
     parser.add_argument("--size", default=1000000, type=int)
     parser.add_argument("--batch_size", default=100, type=int)
     parser.add_argument("--learning_rate", default=0.01, type=float)

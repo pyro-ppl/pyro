@@ -56,9 +56,7 @@ def test_neals_funnel_smoke(Guide, jit):
     samples = mcmc.get_samples()
     # XXX: `MCMC.get_samples` adds a leftmost batch dim to all sites, not uniformly at -max_plate_nesting-1;
     # hence the unsqueeze
-    transformed_samples = neutra.transform_sample(
-        samples["y_shared_latent"].unsqueeze(-2)
-    )
+    transformed_samples = neutra.transform_sample(samples["y_shared_latent"].unsqueeze(-2))
     assert "x" in transformed_samples
     assert "y" in transformed_samples
 
@@ -76,9 +74,7 @@ def test_reparam_log_joint(model, kwargs):
     neutra = NeuTraReparam(guide)
     reparam_model = neutra.reparam(model)
     _, pe_fn, transforms, _ = initialize_model(model, model_kwargs=kwargs)
-    init_params, pe_fn_neutra, _, _ = initialize_model(
-        reparam_model, model_kwargs=kwargs
-    )
+    init_params, pe_fn_neutra, _, _ = initialize_model(reparam_model, model_kwargs=kwargs)
     latent_x = list(init_params.values())[0]
     transformed_params = neutra.transform_sample(latent_x)
     pe_transformed = pe_fn_neutra(init_params)

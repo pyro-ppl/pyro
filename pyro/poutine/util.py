@@ -48,9 +48,7 @@ def prune_subsample_sites(trace: "Trace") -> "Trace":
     return trace
 
 
-def enum_extend(
-    trace: "Trace", msg: "Message", num_samples: Optional[int] = None
-) -> List["Trace"]:
+def enum_extend(trace: "Trace", msg: "Message", num_samples: Optional[int] = None) -> List["Trace"]:
     """
     :param trace: a partial trace
     :param msg: the message at a Pyro primitive site
@@ -80,9 +78,7 @@ def enum_extend(
     return extended_traces
 
 
-def mc_extend(
-    trace: "Trace", msg: "Message", num_samples: Optional[int] = None
-) -> List["Trace"]:
+def mc_extend(trace: "Trace", msg: "Message", num_samples: Optional[int] = None) -> List["Trace"]:
     """
     :param trace: a partial trace
     :param msg: the message at a Pyro primitive site
@@ -139,9 +135,4 @@ def all_escape(trace: "Trace", msg: "Message") -> bool:
     Used by EscapeMessenger to decide whether to do a nonlocal exit at a site.
     Subroutine for approximately integrating out variables for variance reduction.
     """
-    return (
-        msg["type"] == "sample"
-        and not msg["is_observed"]
-        and msg["name"] is not None
-        and msg["name"] not in trace
-    )
+    return msg["type"] == "sample" and not msg["is_observed"] and msg["name"] is not None and msg["name"] not in trace

@@ -33,9 +33,7 @@ class AdagradRMSProp(Optimizer):
     :type delta: float
     """
 
-    def __init__(
-        self, params, eta: float = 1.0, delta: float = 1.0e-16, t: float = 0.1
-    ):
+    def __init__(self, params, eta: float = 1.0, delta: float = 1.0e-16, t: float = 0.1):
         defaults = dict(eta=eta, delta=delta, t=t)
         super().__init__(params, defaults)
 

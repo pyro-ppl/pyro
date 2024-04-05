@@ -21,9 +21,7 @@ def assert_cov_validity(cov, eigenvalue_lbnd=0.0, condition_number_ubnd=1e6):
       number. Must be greater or equal to 1.0.
     """
     assert eigenvalue_lbnd >= 0.0, "Covariance eigenvalue lower bound must be > 0.0!"
-    assert (
-        condition_number_ubnd >= 1.0
-    ), "Covariance condition number bound must be >= 1.0!"
+    assert condition_number_ubnd >= 1.0, "Covariance condition number bound must be >= 1.0!"
 
     # Symmetry
     assert (cov.t() == cov).all(), "Covariance must be symmetric!"
@@ -39,9 +37,7 @@ def assert_cov_validity(cov, eigenvalue_lbnd=0.0, condition_number_ubnd=1e6):
     assert w_min >= eigenvalue_lbnd, "Covariance eigenvalues must be >= lower bound!"
 
     # Condition number upper bound
-    assert (
-        w_max / w_min <= condition_number_ubnd
-    ), "Condition number must be <= upper bound!"
+    assert w_max / w_min <= condition_number_ubnd, "Condition number must be <= upper bound!"
 
 
 def test_NcpContinuous():

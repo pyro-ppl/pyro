@@ -58,9 +58,7 @@ def assert_warning(model, guide, elbo):
 
 def constrained_model(data):
     locs = pyro.param("locs", torch.randn(3), constraint=constraints.real)
-    scales = pyro.param(
-        "scales", ops.exp(torch.randn(3)), constraint=constraints.positive
-    )
+    scales = pyro.param("scales", ops.exp(torch.randn(3)), constraint=constraints.positive)
     p = torch.tensor([0.5, 0.3, 0.2])
     x = pyro.sample("x", dist.Categorical(p))
     pyro.sample("obs", dist.Normal(locs[x], scales[x]), obs=data)
@@ -231,9 +229,7 @@ def test_elbo_jit(backend):
     elbo_test_case(backend, jit=True, expected_elbo=0.4780, data=data, steps=50)
 
 
-@pytest.mark.parametrize(
-    ["backend", "jit"], [("pyro", True), ("pyro", False), ("minipyro", False)]
-)
+@pytest.mark.parametrize(["backend", "jit"], [("pyro", True), ("pyro", False), ("minipyro", False)])
 def test_elbo_equivalence(backend, jit):
     """
     Given model and guide

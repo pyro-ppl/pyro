@@ -28,9 +28,7 @@ pytestmark = pytest.mark.stage("unit")
 
 
 @pytest.mark.parametrize("batch_size", [1, 2, 3])
-@pytest.mark.parametrize(
-    "block_size", [torch.Size([2, 2]), torch.Size([3, 1]), torch.Size([4, 2])]
-)
+@pytest.mark.parametrize("block_size", [torch.Size([2, 2]), torch.Size([3, 1]), torch.Size([4, 2])])
 def test_block_diag_embed(batch_size, block_size):
     m = torch.randn(block_size).unsqueeze(0).expand((batch_size,) + block_size)
     b = block_diag_embed(m)
@@ -100,9 +98,7 @@ def test_periodic_cumsum(period, size, left_shape, right_shape):
     for t in range(period):
         assert_equal(actual[dots + (t,)], tensor[dots + (t,)])
     for t in range(period, size):
-        assert_close(
-            actual[dots + (t,)], tensor[dots + (t,)] + actual[dots + (t - period,)]
-        )
+        assert_close(actual[dots + (t,)], tensor[dots + (t,)] + actual[dots + (t - period,)])
 
 
 @pytest.mark.parametrize("m", [2, 3, 4, 5, 6, 10])
@@ -125,17 +121,12 @@ def test_convolve(batch_shape, m, n, mode):
     kernel = torch.randn(*batch_shape, n)
     actual = convolve(signal, kernel, mode)
     expected = torch.stack(
-        [
-            torch.tensor(np.convolve(s, k, mode=mode))
-            for s, k in zip(signal.reshape(-1, m), kernel.reshape(-1, n))
-        ]
+        [torch.tensor(np.convolve(s, k, mode=mode)) for s, k in zip(signal.reshape(-1, m), kernel.reshape(-1, n))]
     ).reshape(*batch_shape, -1)
     assert_close(actual, expected)
 
 
-@pytest.mark.parametrize(
-    "size", [torch.Size([2, 2]), torch.Size([4, 3, 3]), torch.Size([4, 1, 2, 2])]
-)
+@pytest.mark.parametrize("size", [torch.Size([2, 2]), torch.Size([4, 3, 3]), torch.Size([4, 1, 2, 2])])
 @pytest.mark.parametrize("n", [1, 2, 3, 7, 8])
 def test_repeated_matmul(size, n):
     M = torch.randn(size)

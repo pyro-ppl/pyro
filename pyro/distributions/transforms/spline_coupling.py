@@ -93,9 +93,7 @@ class SplineCoupling(TransformModule):
         # One part of the input is (optionally) put through an element-wise spline and the other part through a
         # conditional one that inputs the first part.
         self.lower_spline = Spline(split_dim, count_bins, bound, order)
-        self.upper_spline = ConditionalSpline(
-            hypernet, input_dim - split_dim, count_bins, bound, order
-        )
+        self.upper_spline = ConditionalSpline(hypernet, input_dim - split_dim, count_bins, bound, order)
         self.split_dim = split_dim
         self.identity = identity
 
@@ -165,9 +163,7 @@ class SplineCoupling(TransformModule):
         return self._cache_log_detJ.sum(-1)
 
 
-def spline_coupling(
-    input_dim, split_dim=None, hidden_dims=None, count_bins=8, bound=3.0
-):
+def spline_coupling(input_dim, split_dim=None, hidden_dims=None, count_bins=8, bound=3.0):
     """
     A helper function to create a
     :class:`~pyro.distributions.transforms.SplineCoupling` object for consistency

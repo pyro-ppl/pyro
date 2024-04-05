@@ -24,9 +24,7 @@ class ProjectedNormalReparam(Reparam):
         value = msg["value"]
         is_observed = msg["is_observed"]
         if is_observed:
-            raise NotImplementedError(
-                "ProjectedNormalReparam does not support observe statements"
-            )
+            raise NotImplementedError("ProjectedNormalReparam does not support observe statements")
 
         fn, event_dim = self._unwrap(fn)
         assert isinstance(fn, dist.ProjectedNormal)

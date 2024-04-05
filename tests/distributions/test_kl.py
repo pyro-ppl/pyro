@@ -39,9 +39,7 @@ def test_kl_independent_normal(batch_shape, event_shape):
     shape = batch_shape + event_shape
     p = dist.Normal(torch.randn(shape), torch.randn(shape).exp())
     q = dist.Normal(torch.randn(shape), torch.randn(shape).exp())
-    actual = kl_divergence(
-        dist.Independent(p, len(event_shape)), dist.Independent(q, len(event_shape))
-    )
+    actual = kl_divergence(dist.Independent(p, len(event_shape)), dist.Independent(q, len(event_shape)))
     expected = sum_rightmost(kl_divergence(p, q), len(event_shape))
     assert_close(actual, expected)
 
@@ -79,9 +77,7 @@ def test_kl_independent_normal_mvn(batch_shape, size):
 
 @pytest.mark.parametrize("shape", [(5,), (4, 5), (2, 3, 5)], ids=str)
 @pytest.mark.parametrize("event_dim", [0, 1])
-@pytest.mark.parametrize(
-    "transform", [transforms.ExpTransform(), transforms.StickBreakingTransform()]
-)
+@pytest.mark.parametrize("transform", [transforms.ExpTransform(), transforms.StickBreakingTransform()])
 def test_kl_transformed_transformed(shape, event_dim, transform):
     p_base = dist.Normal(torch.zeros(shape), torch.ones(shape)).to_event(event_dim)
     q_base = dist.Normal(torch.ones(shape) * 2, torch.ones(shape)).to_event(event_dim)

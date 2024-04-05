@@ -56,8 +56,7 @@ class TraceTreeEvaluator:
             return
         if self.max_plate_nesting is None:
             raise ValueError(
-                "Finite value required for `max_plate_nesting` when model "
-                "has discrete (enumerable) sites."
+                "Finite value required for `max_plate_nesting` when model " "has discrete (enumerable) sites."
             )
         self._compute_log_prob_terms(model_trace)
         # 1. Infer model structure - compute parent-child relationship.
@@ -79,13 +78,7 @@ class TraceTreeEvaluator:
         """
         log_prob_shape = self._log_prob_shapes[ordinal]
         plate_dims = sorted([frame.dim for frame in ordinal - parent_ordinal])
-        enum_dims = set(
-            (
-                i
-                for i in range(-len(log_prob_shape), -self.max_plate_nesting)
-                if log_prob_shape[i] > 1
-            )
-        )
+        enum_dims = set((i for i in range(-len(log_prob_shape), -self.max_plate_nesting) if log_prob_shape[i] > 1))
         self._plate_dims[ordinal] = plate_dims
         self._enum_dims[ordinal] = set(enum_dims - parent_enum_dims)
         for c in self._children[ordinal]:
@@ -111,9 +104,7 @@ class TraceTreeEvaluator:
                 self._log_probs[ordering[name]].append(site["log_prob"])
         if not self._log_prob_shapes:
             for ordinal, log_prob in self._log_probs.items():
-                self._log_prob_shapes[ordinal] = broadcast_shape(
-                    *(t.shape for t in self._log_probs[ordinal])
-                )
+                self._log_prob_shapes[ordinal] = broadcast_shape(*(t.shape for t in self._log_probs[ordinal]))
 
     def _reduce(self, ordinal, agg_log_prob=torch.tensor(0.0)):
         """
@@ -191,8 +182,7 @@ class TraceEinsumEvaluator:
             return
         if self.max_plate_nesting is None:
             raise ValueError(
-                "Finite value required for `max_plate_nesting` when model "
-                "has discrete (enumerable) sites."
+                "Finite value required for `max_plate_nesting` when model " "has discrete (enumerable) sites."
             )
         model_trace.compute_log_prob()
         model_trace.pack_tensors()
@@ -201,13 +191,9 @@ class TraceEinsumEvaluator:
                 if is_validation_enabled():
                     check_site_shape(site, self.max_plate_nesting)
                 self.ordering[name] = frozenset(
-                    model_trace.plate_to_symbol[f.name]
-                    for f in site["cond_indep_stack"]
-                    if f.vectorized
+                    model_trace.plate_to_symbol[f.name] for f in site["cond_indep_stack"] if f.vectorized
                 )
-        self._enum_dims = set(model_trace.symbol_to_dim) - set(
-            model_trace.plate_to_symbol.values()
-        )
+        self._enum_dims = set(model_trace.symbol_to_dim) - set(model_trace.plate_to_symbol.values())
 
     def _get_log_factors(self, model_trace):
         """
@@ -222,9 +208,7 @@ class TraceEinsumEvaluator:
             if site["type"] == "sample" and not isinstance(site["fn"], _Subsample):
                 if is_validation_enabled():
                     check_site_shape(site, self.max_plate_nesting)
-                log_probs.setdefault(self.ordering[name], []).append(
-                    site["packed"]["log_prob"]
-                )
+                log_probs.setdefault(self.ordering[name], []).append(site["packed"]["log_prob"])
         return log_probs
 
     def log_prob(self, model_trace):
@@ -251,20 +235,13 @@ def _guess_max_plate_nesting(model, args, kwargs):
         model_trace = poutine.trace(model).get_trace(*args, **kwargs)
     sites = [site for site in model_trace.nodes.values() if site["type"] == "sample"]
 
-    dims = [
-        frame.dim
-        for site in sites
-        for frame in site["cond_indep_stack"]
-        if frame.vectorized
-    ]
+    dims = [frame.dim for site in sites for frame in site["cond_indep_stack"] if frame.vectorized]
     max_plate_nesting = -min(dims) if dims else 0
     return max_plate_nesting
 
 
 class _PEMaker:
-    def __init__(
-        self, model, model_args, model_kwargs, trace_prob_evaluator, transforms
-    ):
+    def __init__(self, model, model_args, model_kwargs, trace_prob_evaluator, transforms):
         self.model = model
         self.model_args = model_args
         self.model_kwargs = model_kwargs
@@ -275,14 +252,10 @@ class _PEMaker:
     def _potential_fn(self, params):
         params_constrained = {k: self.transforms[k].inv(v) for k, v in params.items()}
         cond_model = poutine.condition(self.model, params_constrained)
-        model_trace = poutine.trace(cond_model).get_trace(
-            *self.model_args, **self.model_kwargs
-        )
+        model_trace = poutine.trace(cond_model).get_trace(*self.model_args, **self.model_kwargs)
         log_joint = self.trace_prob_evaluator.log_prob(model_trace)
         for name, t in self.transforms.items():
-            log_joint = log_joint - torch.sum(
-                t.log_abs_det_jacobian(params_constrained[name], params[name])
-            )
+            log_joint = log_joint - torch.sum(t.log_abs_det_jacobian(params_constrained[name], params[name]))
         return -log_joint
 
     def _potential_fn_jit(self, skip_jit_warnings, jit_options, params):
@@ -313,9 +286,7 @@ class _PEMaker:
                 v.requires_grad_(True)
             return result
 
-    def get_potential_fn(
-        self, jit_compile=False, skip_jit_warnings=True, jit_options=None
-    ):
+    def get_potential_fn(self, jit_compile=False, skip_jit_warnings=True, jit_options=None):
         if jit_compile:
             jit_options = {"check_trace": False} if jit_options is None else jit_options
             return partial(self._potential_fn_jit, skip_jit_warnings, jit_options)
@@ -350,9 +321,7 @@ def _find_valid_initial_params(
         params = {k: transforms[k](v) for k, v in samples.items()}
         pe_grad, pe = potential_grad(potential_fn, params)
 
-        if torch.isfinite(pe) and all(
-            map(torch.all, map(torch.isfinite, pe_grad.values()))
-        ):
+        if torch.isfinite(pe) and all(map(torch.all, map(torch.isfinite, pe_grad.values()))):
             for k, v in params.items():
                 params_per_chain[k].append(v)
             num_found += 1
@@ -362,9 +331,7 @@ def _find_valid_initial_params(
                 else:
                     return {k: torch.stack(v) for k, v in params_per_chain.items()}
         trace = None
-    raise ValueError(
-        "Model specification seems incorrect - cannot find valid initial params."
-    )
+    raise ValueError("Model specification seems incorrect - cannot find valid initial params.")
 
 
 def initialize_model(
@@ -427,9 +394,7 @@ def initialize_model(
         max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
     # Wrap model in `poutine.enum` to enumerate over discrete latent sites.
     # No-op if model does not have any discrete latents.
-    model = poutine.enum(
-        config_enumerate(model), first_available_dim=-1 - max_plate_nesting
-    )
+    model = poutine.enum(config_enumerate(model), first_available_dim=-1 - max_plate_nesting)
     prototype_model = poutine.trace(InitMessenger(init_strategy)(model))
     model_trace = prototype_model.get_trace(*model_args, **model_kwargs)
     has_enumerable_sites = False
@@ -438,9 +403,7 @@ def initialize_model(
         fn = node["fn"]
         if isinstance(fn, _Subsample):
             if fn.subsample_size is not None and fn.subsample_size < fn.size:
-                raise NotImplementedError(
-                    "HMC/NUTS does not support model with subsample sites."
-                )
+                raise NotImplementedError("HMC/NUTS does not support model with subsample sites.")
             continue
         if node["fn"].has_enumerate_support:
             has_enumerable_sites = True
@@ -452,13 +415,9 @@ def initialize_model(
         if automatic_transform_enabled:
             transforms[name] = biject_to(node["fn"].support).inv
 
-    trace_prob_evaluator = TraceEinsumEvaluator(
-        model_trace, has_enumerable_sites, max_plate_nesting
-    )
+    trace_prob_evaluator = TraceEinsumEvaluator(model_trace, has_enumerable_sites, max_plate_nesting)
 
-    pe_maker = _PEMaker(
-        model, model_args, model_kwargs, trace_prob_evaluator, transforms
-    )
+    pe_maker = _PEMaker(model, model_args, model_kwargs, trace_prob_evaluator, transforms)
 
     if initial_params is None:
         prototype_params = {k: transforms[k](v) for k, v in prototype_samples.items()}
@@ -476,9 +435,7 @@ def initialize_model(
             init_strategy=init_strategy,
             trace=model_trace,
         )
-    potential_fn = pe_maker.get_potential_fn(
-        jit_compile, skip_jit_warnings, jit_options
-    )
+    potential_fn = pe_maker.get_potential_fn(jit_compile, skip_jit_warnings, jit_options)
     return initial_params, potential_fn, transforms, model_trace
 
 
@@ -496,9 +453,7 @@ def _safe(fn):
             val = fn(sample, *args, **kwargs)
         except Exception:
             warnings.warn(tb.format_exc())
-            val = torch.full(
-                sample.shape[2:], float("nan"), dtype=sample.dtype, device=sample.device
-            )
+            val = torch.full(sample.shape[2:], float("nan"), dtype=sample.dtype, device=sample.device)
         return val
 
     return wrapped
@@ -588,10 +543,7 @@ def print_summary(samples, prob=0.9, group_by_chain=True):
         return
     summary_dict = summary(samples, prob, group_by_chain)
 
-    row_names = {
-        k: k + "[" + ",".join(map(lambda x: str(x - 1), v.shape[2:])) + "]"
-        for k, v in samples.items()
-    }
+    row_names = {k: k + "[" + ",".join(map(lambda x: str(x - 1), v.shape[2:])) + "]" for k, v in samples.items()}
     max_len = max(max(map(lambda x: len(x), row_names.values())), 10)
     name_format = "{:>" + str(max_len) + "}"
     header_format = name_format + " {:>9}" * 7
@@ -608,11 +560,7 @@ def print_summary(samples, prob=0.9, group_by_chain=True):
         else:
             for idx in product(*map(range, shape)):
                 idx_str = "[{}]".format(",".join(map(str, idx)))
-                print(
-                    row_format.format(
-                        name + idx_str, *[v[idx] for v in stats_dict.values()]
-                    )
-                )
+                print(row_format.format(name + idx_str, *[v[idx] for v in stats_dict.values()]))
     print()
 
 
@@ -626,25 +574,15 @@ def _predictive_sequential(
     return_trace=False,
 ):
     collected = []
-    samples = [
-        {k: v[i] for k, v in posterior_samples.items()} for i in range(num_samples)
-    ]
+    samples = [{k: v[i] for k, v in posterior_samples.items()} for i in range(num_samples)]
     for i in range(num_samples):
-        trace = poutine.trace(poutine.condition(model, samples[i])).get_trace(
-            *model_args, **model_kwargs
-        )
+        trace = poutine.trace(poutine.condition(model, samples[i])).get_trace(*model_args, **model_kwargs)
         if return_trace:
             collected.append(trace)
         else:
-            collected.append(
-                {site: trace.nodes[site]["value"] for site in sample_sites}
-            )
+            collected.append({site: trace.nodes[site]["value"] for site in sample_sites})
 
-    return (
-        collected
-        if return_trace
-        else {site: torch.stack([s[site] for s in collected]) for site in sample_sites}
-    )
+    return collected if return_trace else {site: torch.stack([s[site] for s in collected]) for site in sample_sites}
 
 
 def predictive(model, posterior_samples, *args, **kwargs):
@@ -701,18 +639,12 @@ def predictive(model, posterior_samples, *args, **kwargs):
         elif num_samples != batch_size:
             warnings.warn(
                 "Sample's leading dimension size {} is different from the "
-                "provided {} num_samples argument. Defaulting to {}.".format(
-                    batch_size, num_samples, batch_size
-                ),
+                "provided {} num_samples argument. Defaulting to {}.".format(batch_size, num_samples, batch_size),
                 UserWarning,
             )
             num_samples = batch_size
 
-        sample = sample.reshape(
-            (num_samples,)
-            + (1,) * (max_plate_nesting - len(sample_shape))
-            + sample_shape
-        )
+        sample = sample.reshape((num_samples,) + (1,) * (max_plate_nesting - len(sample_shape)) + sample_shape)
         reshaped_samples[name] = sample
 
     if num_samples is None:
@@ -749,16 +681,12 @@ def predictive(model, posterior_samples, *args, **kwargs):
         """
 
         def wrapped_fn(*args, **kwargs):
-            with pyro.plate(
-                "_num_predictive_samples", num_samples, dim=-max_plate_nesting - 1
-            ):
+            with pyro.plate("_num_predictive_samples", num_samples, dim=-max_plate_nesting - 1):
                 return fn(*args, **kwargs)
 
         return wrapped_fn
 
-    trace = poutine.trace(
-        poutine.condition(_vectorized_fn(model), reshaped_samples)
-    ).get_trace(*args, **kwargs)
+    trace = poutine.trace(poutine.condition(_vectorized_fn(model), reshaped_samples)).get_trace(*args, **kwargs)
 
     if return_trace:
         return trace

@@ -9,7 +9,6 @@ understanding with generative models." Advances in Neural Information
 Processing Systems. 2016.
 """
 
-
 import argparse
 import math
 import os
@@ -52,9 +51,7 @@ def count_accuracy(X, true_counts, air, batch_size):
         counts += torch.mm(true_counts_m.t(), inferred_counts_m)
         error_ind = 1 - (true_counts_batch == inferred_counts).long()
         error_ix = error_ind.nonzero(as_tuple=False).squeeze()
-        error_latents.append(
-            latents_to_tensor((z_where, z_pres)).index_select(0, error_ix)
-        )
+        error_latents.append(latents_to_tensor((z_where, z_pres)).index_select(0, error_ix))
         error_indicators.append(error_ind)
 
     acc = counts.diag().sum().float() / X.size(0)
@@ -191,7 +188,7 @@ def main(**kwargs):
         use_baselines=not args.no_baselines,
         z_what_size=args.encoder_latent_size,
         use_cuda=args.cuda,
-        **model_args
+        **model_args,
     )
 
     if args.verbose:
@@ -212,11 +209,7 @@ def main(**kwargs):
         return "bl_" in param_name
 
     def per_param_optim_args(param_name):
-        lr = (
-            args.baseline_learning_rate
-            if isBaselineParam(param_name)
-            else args.learning_rate
-        )
+        lr = args.baseline_learning_rate if isBaselineParam(param_name) else args.learning_rate
         return {"lr": lr}
 
     adam = optim.Adam(per_param_optim_args)
@@ -228,9 +221,7 @@ def main(**kwargs):
     examples_to_viz = X[5:10]
 
     for i in range(1, args.num_steps + 1):
-        loss = svi.step(
-            X, batch_size=args.batch_size, z_pres_prior_p=partial(z_pres_prior_p, i)
-        )
+        loss = svi.step(X, batch_size=args.batch_size, z_pres_prior_p=partial(z_pres_prior_p, i))
 
         if args.progress_every > 0 and i % args.progress_every == 0:
             print(
@@ -255,9 +246,7 @@ def main(**kwargs):
         if args.eval_every > 0 and i % args.eval_every == 0:
             # Measure accuracy on subset of training data.
             acc, counts, error_z, error_ix = count_accuracy(X, true_counts, air, 1000)
-            print(
-                "i={}, accuracy={}, counts={}".format(i, acc, counts.numpy().tolist())
-            )
+            print("i={}, accuracy={}, counts={}".format(i, acc, counts.numpy().tolist()))
             if args.viz and error_ix.size(0) > 0:
                 vis.images(
                     draw_many(X[error_ix[0:5]], tensor_to_objs(error_z[0:5])),
@@ -271,9 +260,7 @@ def main(**kwargs):
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith("1.9.0")
-    parser = argparse.ArgumentParser(
-        description="Pyro AIR example", argument_default=argparse.SUPPRESS
-    )
+    parser = argparse.ArgumentParser(description="Pyro AIR example", argument_default=argparse.SUPPRESS)
     parser.add_argument(
         "-n",
         "--num-steps",
@@ -282,9 +269,7 @@ if __name__ == "__main__":
         help="number of optimization steps to take",
     )
     parser.add_argument("-b", "--batch-size", type=int, default=64, help="batch size")
-    parser.add_argument(
-        "-lr", "--learning-rate", type=float, default=1e-4, help="learning rate"
-    )
+    parser.add_argument("-lr", "--learning-rate", type=float, default=1e-4, help="learning rate")
     parser.add_argument(
         "-blr",
         "--baseline-learning-rate",
@@ -298,9 +283,7 @@ if __name__ == "__main__":
         default=1,
         help="number of steps between writing progress to stdout",
     )
-    parser.add_argument(
-        "--eval-every", type=int, default=0, help="number of steps between evaluations"
-    )
+    parser.add_argument("--eval-every", type=int, default=0, help="number of steps between evaluations")
     parser.add_argument(
         "--baseline-scalar",
         type=float,
@@ -326,21 +309,15 @@ if __name__ == "__main__":
         default=[200],
         help="decoder net hidden layer sizes",
     )
-    parser.add_argument(
-        "--predict-net", type=int, nargs="+", help="predict net hidden layer sizes"
-    )
-    parser.add_argument(
-        "--embed-net", type=int, nargs="+", help="embed net architecture"
-    )
+    parser.add_argument("--predict-net", type=int, nargs="+", help="predict net hidden layer sizes")
+    parser.add_argument("--embed-net", type=int, nargs="+", help="embed net architecture")
     parser.add_argument(
         "--bl-predict-net",
         type=int,
         nargs="+",
         help="baseline predict net hidden layer sizes",
     )
-    parser.add_argument(
-        "--non-linearity", type=str, help="non linearity to use throughout"
-    )
+    parser.add_argument("--non-linearity", type=str, help="non linearity to use throughout")
     parser.add_argument(
         "--viz",
         action="store_true",
@@ -363,15 +340,9 @@ if __name__ == "__main__":
         help="number of steps between parameter saves",
     )
     parser.add_argument("--cuda", action="store_true", default=False, help="use cuda")
-    parser.add_argument(
-        "--jit", action="store_true", default=False, help="use PyTorch jit"
-    )
-    parser.add_argument(
-        "-t", "--model-steps", type=int, default=3, help="number of time steps"
-    )
-    parser.add_argument(
-        "--rnn-hidden-size", type=int, default=256, help="rnn hidden size"
-    )
+    parser.add_argument("--jit", action="store_true", default=False, help="use PyTorch jit")
+    parser.add_argument("-t", "--model-steps", type=int, default=3, help="number of time steps")
+    parser.add_argument("--rnn-hidden-size", type=int, default=256, help="rnn hidden size")
     parser.add_argument(
         "--encoder-latent-size",
         type=int,
@@ -388,9 +359,7 @@ if __name__ == "__main__":
         action="store_true",
         help="apply sigmoid function to output of decoder network",
     )
-    parser.add_argument(
-        "--window-size", type=int, default=28, help="attention window size"
-    )
+    parser.add_argument("--window-size", type=int, default=28, help="attention window size")
     parser.add_argument(
         "--z-pres-prior",
         type=float,
@@ -409,9 +378,7 @@ if __name__ == "__main__":
         default="none",
         help="anneal z_pres prior during optimization",
     )
-    parser.add_argument(
-        "--anneal-prior-to", type=float, default=1e-7, help="target z_pres prior prob"
-    )
+    parser.add_argument("--anneal-prior-to", type=float, default=1e-7, help="target z_pres prior prob")
     parser.add_argument(
         "--anneal-prior-begin",
         type=int,
@@ -424,18 +391,10 @@ if __name__ == "__main__":
         default=100000,
         help="number of steps over which to anneal the prior",
     )
-    parser.add_argument(
-        "--pos-prior-mean", type=float, help="mean of the window position prior"
-    )
-    parser.add_argument(
-        "--pos-prior-sd", type=float, help="std. dev. of the window position prior"
-    )
-    parser.add_argument(
-        "--scale-prior-mean", type=float, help="mean of the window scale prior"
-    )
-    parser.add_argument(
-        "--scale-prior-sd", type=float, help="std. dev. of the window scale prior"
-    )
+    parser.add_argument("--pos-prior-mean", type=float, help="mean of the window position prior")
+    parser.add_argument("--pos-prior-sd", type=float, help="std. dev. of the window position prior")
+    parser.add_argument("--scale-prior-mean", type=float, help="mean of the window scale prior")
+    parser.add_argument("--scale-prior-sd", type=float, help="std. dev. of the window scale prior")
     parser.add_argument(
         "--no-masking",
         action="store_true",

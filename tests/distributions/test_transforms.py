@@ -81,10 +81,7 @@ class TransformTests(TestCase):
             for k in range(input_dim):
                 epsilon_vector = torch.zeros(1, input_dim)
                 epsilon_vector[0, j] = self.epsilon
-                delta = (
-                    transform(x + 0.5 * epsilon_vector)
-                    - transform(x - 0.5 * epsilon_vector)
-                ) / self.epsilon
+                delta = (transform(x + 0.5 * epsilon_vector) - transform(x - 0.5 * epsilon_vector)) / self.epsilon
                 jacobian[j, k] = float(delta[0, k].data.sum())
 
         # Apply permutation for autoregressive flows with a network
@@ -149,18 +146,14 @@ class TransformTests(TestCase):
 
         batch_shape = base_shape[: len(base_shape) - transform.domain.event_dim]
         input_event_shape = base_shape[len(base_shape) - transform.domain.event_dim :]
-        output_event_shape = base_shape[
-            len(base_shape) - transform.codomain.event_dim :
-        ]
+        output_event_shape = base_shape[len(base_shape) - transform.codomain.event_dim :]
         output_shape = batch_shape + output_event_shape
         assert transform.forward_shape(input_event_shape) == output_event_shape
         assert transform.forward_shape(base_shape) == output_shape
         assert transform.inverse_shape(output_event_shape) == input_event_shape
         assert transform.inverse_shape(output_shape) == base_shape
 
-    def _test_autodiff(
-        self, input_dim, transform, inverse=False, base_dist_type="normal"
-    ):
+    def _test_autodiff(self, input_dim, transform, inverse=False, base_dist_type="normal"):
         """
         This method essentially tests whether autodiff will not throw any errors
         when you're doing maximum-likelihood learning with the transform. Many
@@ -199,20 +192,14 @@ class TransformTests(TestCase):
         for event_shape in [(2,), (5,)]:
             if event_dim > 1:
                 event_shape = tuple([event_shape[0] + i for i in range(event_dim)])
-            transform = transform_factory(
-                event_shape[0] if len(event_shape) == 1 else event_shape
-            )
+            transform = transform_factory(event_shape[0] if len(event_shape) == 1 else event_shape)
 
             if inverse:
-                self._test_inverse(
-                    event_shape, transform, base_dist_type=base_dist_type
-                )
+                self._test_inverse(event_shape, transform, base_dist_type=base_dist_type)
             if shape:
                 for shape in [(3,), (3, 4), (3, 4, 5)]:
                     base_shape = shape + event_shape
-                    self._test_shape(
-                        base_shape, transform, base_dist_type=base_dist_type
-                    )
+                    self._test_shape(base_shape, transform, base_dist_type=base_dist_type)
             if jacobian and transform.bijective:
                 if event_dim > 1:
                     transform = Flatten(transform, event_shape)
@@ -226,9 +213,7 @@ class TransformTests(TestCase):
                     base_dist_type=base_dist_type,
                 )
 
-    def _test_conditional(
-        self, conditional_transform_factory, context_dim=3, event_dim=1, **kwargs
-    ):
+    def _test_conditional(self, conditional_transform_factory, context_dim=3, event_dim=1, **kwargs):
         def transform_factory(input_dim, context_dim=context_dim):
             z = torch.rand(1, context_dim)
             cond_transform = conditional_transform_factory(input_dim, context_dim)
@@ -267,40 +252,30 @@ class TransformTests(TestCase):
 
     def test_block_autoregressive_jacobians(self):
         for activation in ["ELU", "LeakyReLU", "sigmoid", "tanh"]:
-            self._test(
-                partial(T.block_autoregressive, activation=activation), inverse=False
-            )
+            self._test(partial(T.block_autoregressive, activation=activation), inverse=False)
 
         for residual in [None, "normal", "gated"]:
-            self._test(
-                partial(T.block_autoregressive, residual=residual), inverse=False
-            )
+            self._test(partial(T.block_autoregressive, residual=residual), inverse=False)
 
     def test_conditional_affine_autoregressive(self):
         self._test_conditional(T.conditional_affine_autoregressive)
 
     def test_conditional_affine_coupling(self):
         for dim in [-1, -2]:
-            self._test_conditional(
-                partial(T.conditional_affine_coupling, dim=dim), event_dim=-dim
-            )
+            self._test_conditional(partial(T.conditional_affine_coupling, dim=dim), event_dim=-dim)
 
     def test_conditional_generalized_channel_permute(self, context_dim=3):
         for shape in [(3, 16, 16), (1, 3, 32, 32), (2, 5, 3, 64, 64)]:
             # NOTE: Without changing the interface to generalized_channel_permute I can't reuse general
             # test for `event_dim > 1` transforms
             z = torch.rand(context_dim)
-            transform = T.conditional_generalized_channel_permute(
-                context_dim=3, channels=shape[-3]
-            ).condition(z)
+            transform = T.conditional_generalized_channel_permute(context_dim=3, channels=shape[-3]).condition(z)
             self._test_shape(shape, transform)
             self._test_inverse(shape, transform)
 
         for width_dim in [2, 4, 6]:
             input_dim = (width_dim**2) * 3
-            self._test_jacobian(
-                input_dim, Flatten(transform, (3, width_dim, width_dim))
-            )
+            self._test_jacobian(input_dim, Flatten(transform, (3, width_dim, width_dim)))
 
     def test_conditional_householder(self):
         self._test_conditional(T.conditional_householder)
@@ -352,9 +327,7 @@ class TransformTests(TestCase):
 
         for width_dim in [2, 4, 6]:
             input_dim = (width_dim**2) * 3
-            self._test_jacobian(
-                input_dim, Flatten(transform, (3, width_dim, width_dim))
-            )
+            self._test_jacobian(input_dim, Flatten(transform, (3, width_dim, width_dim)))
 
     def test_householder(self):
         self._test(partial(T.householder, count_transforms=2))
@@ -367,9 +340,7 @@ class TransformTests(TestCase):
         # NOTE: Need following since helper function unimplemented
         def transform_factory(input_dim):
             loc = torch.randn(input_dim)
-            scale_tril = torch.randn(input_dim).exp().diag() + 0.03 * torch.randn(
-                input_dim, input_dim
-            )
+            scale_tril = torch.randn(input_dim).exp().diag() + 0.03 * torch.randn(input_dim, input_dim)
             scale_tril = scale_tril.tril(0)
             return T.LowerCholeskyAffine(loc, scale_tril)
 
@@ -380,9 +351,7 @@ class TransformTests(TestCase):
 
     def test_neural_autoregressive(self):
         for activation in ["ELU", "LeakyReLU", "sigmoid", "tanh"]:
-            self._test(
-                partial(T.neural_autoregressive, activation=activation), inverse=False
-            )
+            self._test(partial(T.neural_autoregressive, activation=activation), inverse=False)
 
     def test_ordered_transform(self):
         # NOTE: Need following since transform takes no input parameters
@@ -461,11 +430,7 @@ def test_cholesky_transform(batch_shape, dim, transform):
     def vec_to_mat(x_vec):
         x_mat = x_vec.new_zeros(batch_shape + (dim, dim))
         x_mat[..., tril_mask] = x_vec
-        x_mat = (
-            x_mat
-            + x_mat.transpose(-2, -1)
-            - x_mat.diagonal(dim1=-2, dim2=-1).diag_embed()
-        )
+        x_mat = x_mat + x_mat.transpose(-2, -1) - x_mat.diagonal(dim1=-2, dim2=-1).diag_embed()
         if domain == dist.constraints.corr_matrix:
             x_mat = x_mat + x_mat.new_ones(x_mat.shape[-1]).diag_embed()
         return x_mat
@@ -535,9 +500,7 @@ def test_inverse_conditional_transform_module(batch_shape, input_dim, context_di
 @pytest.mark.parametrize("input_dim", [2, 3, 5])
 @pytest.mark.parametrize("context_dim", [2, 3, 5])
 @pytest.mark.parametrize("cache_size", [0, 1])
-def test_conditional_compose_transform_module(
-    batch_shape, input_dim, context_dim, cache_size
-):
+def test_conditional_compose_transform_module(batch_shape, input_dim, context_dim, cache_size):
     conditional_transforms = [
         T.AffineTransform(1.0, 2.0),
         T.Spline(input_dim),
@@ -545,9 +508,7 @@ def test_conditional_compose_transform_module(
         T.SoftplusTransform(),
         T.conditional_spline(input_dim, context_dim, [6]),
     ]
-    cond_transform = dist.conditional.ConditionalComposeTransformModule(
-        conditional_transforms, cache_size=cache_size
-    )
+    cond_transform = dist.conditional.ConditionalComposeTransformModule(conditional_transforms, cache_size=cache_size)
 
     base_dist = dist.Normal(0, 1).expand(batch_shape + (input_dim,)).to_event(1)
     cond_dist = dist.ConditionalTransformedDistribution(base_dist, [cond_transform])
@@ -563,9 +524,7 @@ def test_conditional_compose_transform_module(
 
     actual_params = set(cond_transform.parameters())
     expected_params = set(
-        torch.nn.ModuleList(
-            [t for t in conditional_transforms if isinstance(t, torch.nn.Module)]
-        ).parameters()
+        torch.nn.ModuleList([t for t in conditional_transforms if isinstance(t, torch.nn.Module)]).parameters()
     )
     assert set() != actual_params == expected_params
 

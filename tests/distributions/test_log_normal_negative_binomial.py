@@ -15,9 +15,7 @@ def test_lnnb_shapes(num_quad_points, shape):
     total_count = 5.0
     multiplicative_noise_scale = torch.rand(shape)
 
-    d = LogNormalNegativeBinomial(
-        total_count, logits, multiplicative_noise_scale, num_quad_points=num_quad_points
-    )
+    d = LogNormalNegativeBinomial(total_count, logits, multiplicative_noise_scale, num_quad_points=num_quad_points)
 
     assert d.batch_shape == shape
     assert d.log_prob(torch.ones(shape)).shape == shape
@@ -28,13 +26,9 @@ def test_lnnb_shapes(num_quad_points, shape):
 
 @pytest.mark.parametrize("total_count", [0.5, 4.0])
 @pytest.mark.parametrize("multiplicative_noise_scale", [0.01, 0.25])
-def test_lnnb_mean_variance(
-    total_count, multiplicative_noise_scale, num_quad_points=128, N=512
-):
+def test_lnnb_mean_variance(total_count, multiplicative_noise_scale, num_quad_points=128, N=512):
     logits = torch.tensor(2.0)
-    d = LogNormalNegativeBinomial(
-        total_count, logits, multiplicative_noise_scale, num_quad_points=num_quad_points
-    )
+    d = LogNormalNegativeBinomial(total_count, logits, multiplicative_noise_scale, num_quad_points=num_quad_points)
 
     values = torch.arange(N)
     probs = d.log_prob(values).exp()

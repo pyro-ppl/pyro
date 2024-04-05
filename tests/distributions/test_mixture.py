@@ -51,12 +51,8 @@ def test_masked_mixture_univariate(component0, component1, sample_shape, batch_s
 @pytest.mark.parametrize("batch_shape", [(), (7,), (5, 3)])
 def test_masked_mixture_multivariate(sample_shape, batch_shape):
     event_shape = torch.Size((8,))
-    component0 = dist.MultivariateNormal(
-        torch.zeros(event_shape), torch.eye(event_shape[0])
-    )
-    component1 = dist.Uniform(
-        torch.zeros(event_shape), torch.ones(event_shape)
-    ).to_event(1)
+    component0 = dist.MultivariateNormal(torch.zeros(event_shape), torch.eye(event_shape[0]))
+    component1 = dist.Uniform(torch.zeros(event_shape), torch.ones(event_shape)).to_event(1)
     if batch_shape:
         component0 = component0.expand_by(batch_shape)
         component1 = component1.expand_by(batch_shape)
@@ -115,18 +111,7 @@ def test_expand(sample_shape, batch_shape, event_shape):
     assert d.variance.shape == ones_shape + event_shape
     assert d.sample(sample_shape).shape == sample_shape + ones_shape + event_shape
 
-    assert (
-        d.expand(sample_shape + batch_shape).batch_shape == sample_shape + batch_shape
-    )
-    assert (
-        d.expand(sample_shape + batch_shape).sample().shape
-        == sample_shape + batch_shape + event_shape
-    )
-    assert (
-        d.expand(sample_shape + batch_shape).mean.shape
-        == sample_shape + batch_shape + event_shape
-    )
-    assert (
-        d.expand(sample_shape + batch_shape).variance.shape
-        == sample_shape + batch_shape + event_shape
-    )
+    assert d.expand(sample_shape + batch_shape).batch_shape == sample_shape + batch_shape
+    assert d.expand(sample_shape + batch_shape).sample().shape == sample_shape + batch_shape + event_shape
+    assert d.expand(sample_shape + batch_shape).mean.shape == sample_shape + batch_shape + event_shape
+    assert d.expand(sample_shape + batch_shape).variance.shape == sample_shape + batch_shape + event_shape

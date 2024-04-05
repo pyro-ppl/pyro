@@ -23,9 +23,7 @@ class Binary(Likelihood):
 
     def __init__(self, response_function=None):
         super().__init__()
-        self.response_function = (
-            torch.sigmoid if response_function is None else response_function
-        )
+        self.response_function = torch.sigmoid if response_function is None else response_function
 
     def forward(self, f_loc, f_var, y=None):
         r"""

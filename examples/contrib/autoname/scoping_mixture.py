@@ -25,9 +25,7 @@ def model(K, data):
 
 @scope(prefix="local")
 def local_model(weights, locs, scale, data):
-    assignment = pyro.sample(
-        "assignment", dist.Categorical(weights).expand_by([len(data)])
-    )
+    assignment = pyro.sample("assignment", dist.Categorical(weights).expand_by([len(data)]))
     return pyro.sample("obs", dist.Normal(locs[assignment], scale), obs=data)
 
 
@@ -53,9 +51,7 @@ def main(args):
 
     data = torch.tensor([0.0, 1.0, 2.0, 20.0, 30.0, 40.0])
     optim = pyro.optim.Adam({"lr": 0.1})
-    inference = SVI(
-        model, config_enumerate(guide), optim, loss=TraceEnum_ELBO(max_plate_nesting=1)
-    )
+    inference = SVI(model, config_enumerate(guide), optim, loss=TraceEnum_ELBO(max_plate_nesting=1))
 
     print("Step\tLoss")
     loss = 0.0

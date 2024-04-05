@@ -49,9 +49,7 @@ class LKJ(TransformedDistribution):
     def __init__(self, dim, concentration=1.0, validate_args=None):
         base_dist = LKJCholesky(dim, concentration)
         self.dim, self.concentration = base_dist.dim, base_dist.concentration
-        super(LKJ, self).__init__(
-            base_dist, CorrMatrixCholeskyTransform().inv, validate_args=validate_args
-        )
+        super(LKJ, self).__init__(base_dist, CorrMatrixCholeskyTransform().inv, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(LKJCholesky, _instance)

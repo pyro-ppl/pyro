@@ -85,9 +85,7 @@ class ReweightedWakeSleep(ELBO):
         strict_enumeration_warning=True,
     ):
         # force K > 1 otherwise SNIS not possible
-        assert (
-            num_particles > 1
-        ), "Reweighted Wake Sleep needs to be run with more than one particle"
+        assert num_particles > 1, "Reweighted Wake Sleep needs to be run with more than one particle"
 
         super().__init__(
             num_particles=num_particles,
@@ -97,9 +95,7 @@ class ReweightedWakeSleep(ELBO):
         )
         self.insomnia = insomnia
         self.model_has_params = model_has_params
-        self.num_sleep_particles = (
-            num_particles if num_sleep_particles is None else num_sleep_particles
-        )
+        self.num_sleep_particles = num_particles if num_sleep_particles is None else num_sleep_particles
 
         assert insomnia >= 0 and insomnia <= 1, "insomnia should be in [0, 1]"
 
@@ -130,18 +126,14 @@ class ReweightedWakeSleep(ELBO):
             log_joints = []
             log_qs = []
 
-            for model_trace, guide_trace in self._get_traces(
-                model, guide, args, kwargs
-            ):
+            for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
                 log_joint = 0.0
                 log_q = 0.0
 
                 for _, site in model_trace.nodes.items():
                     if site["type"] == "sample":
                         if self.vectorize_particles:
-                            log_p_site = (
-                                site["log_prob"].reshape(self.num_particles, -1).sum(-1)
-                            )
+                            log_p_site = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
                         else:
                             log_p_site = site["log_prob_sum"]
                         log_joint = log_joint + log_p_site
@@ -149,9 +141,7 @@ class ReweightedWakeSleep(ELBO):
                 for _, site in guide_trace.nodes.items():
                     if site["type"] == "sample":
                         if self.vectorize_particles:
-                            log_q_site = (
-                                site["log_prob"].reshape(self.num_particles, -1).sum(-1)
-                            )
+                            log_q_site = site["log_prob"].reshape(self.num_particles, -1).sum(-1)
                         else:
                             log_q_site = site["log_prob_sum"]
                         log_q = log_q + log_q_site
@@ -159,9 +149,7 @@ class ReweightedWakeSleep(ELBO):
                 log_joints.append(log_joint)
                 log_qs.append(log_q)
 
-            log_joints = (
-                log_joints[0] if self.vectorize_particles else torch.stack(log_joints)
-            )
+            log_joints = log_joints[0] if self.vectorize_particles else torch.stack(log_joints)
             log_qs = log_qs[0] if self.vectorize_particles else torch.stack(log_qs)
             log_weights = log_joints - log_qs.detach()
 
@@ -191,9 +179,7 @@ class ReweightedWakeSleep(ELBO):
             for _ in range(1 if self.vectorize_particles else self.num_sleep_particles):
                 _model_trace = poutine.trace(_model).get_trace(*args, **kwargs)
                 _model_trace.detach_()
-                _guide_trace = self._get_matched_trace(
-                    _model_trace, _guide, args, kwargs
-                )
+                _guide_trace = self._get_matched_trace(_model_trace, _guide, args, kwargs)
                 _log_q += _guide_trace.log_prob_sum()
 
             sleep_phi_loss = -_log_q / self.num_sleep_particles
@@ -206,8 +192,7 @@ class ReweightedWakeSleep(ELBO):
             else (
                 wake_phi_loss
                 if self.insomnia == 1
-                else self.insomnia * wake_phi_loss
-                + (1.0 - self.insomnia) * sleep_phi_loss
+                else self.insomnia * wake_phi_loss + (1.0 - self.insomnia) * sleep_phi_loss
             )
         )
 
@@ -265,9 +250,7 @@ class ReweightedWakeSleep(ELBO):
                 model_trace.nodes[node]["is_observed"] = True
                 kwargs["observations"][node] = model_trace.nodes[node]["value"]
 
-        guide_trace = poutine.trace(poutine.replay(guide, model_trace)).get_trace(
-            *args, **kwargs
-        )
+        guide_trace = poutine.trace(poutine.replay(guide, model_trace)).get_trace(*args, **kwargs)
         check_model_guide_match(model_trace, guide_trace)
         guide_trace = prune_subsample_sites(guide_trace)
 

@@ -48,9 +48,7 @@ class StructuredReparam(Reparam):
 
     def __init__(self, guide: AutoStructured):
         if not isinstance(guide, AutoStructured):
-            raise TypeError(
-                f"StructuredReparam expected an AutoStructured guide, but got {type(guide)}"
-            )
+            raise TypeError(f"StructuredReparam expected an AutoStructured guide, but got {type(guide)}")
         self.guide = guide.requires_grad_(False)
         self.deltas = {}
 
@@ -70,8 +68,7 @@ class StructuredReparam(Reparam):
             return {"fn": fn, "value": value, "is_observed": is_observed}
         if is_observed:
             raise NotImplementedError(
-                f"At pyro.sample({repr(name)},...), "
-                "StructuredReparam does not support observe statements"
+                f"At pyro.sample({repr(name)},...), " "StructuredReparam does not support observe statements"
             )
 
         if name not in self.deltas:  # On first sample site.

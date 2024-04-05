@@ -243,12 +243,7 @@ class CountMeanVarianceStats(StreamingStats):
         lhs_weight = lhs.n_samples / res.n_samples
         rhs_weight = rhs.n_samples / res.n_samples
         res._mean = lhs_weight * lhs._mean + rhs_weight * rhs._mean
-        res._m2 = (
-            lhs._m2
-            + rhs._m2
-            + (lhs.n_samples * rhs.n_samples / res.n_samples)
-            * (lhs._mean - rhs._mean) ** 2
-        )
+        res._m2 = lhs._m2 + rhs._m2 + (lhs.n_samples * rhs.n_samples / res.n_samples) * (lhs._mean - rhs._mean) ** 2
         return result
 
     def get(self) -> Dict[str, Union[int, torch.Tensor]]:

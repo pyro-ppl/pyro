@@ -120,9 +120,7 @@ class RationalQuadratic(Isotropy):
             return self._diag(X)
 
         r2 = self._square_scaled_dist(X, Z)
-        return self.variance * (1 + (0.5 / self.scale_mixture) * r2).pow(
-            -self.scale_mixture
-        )
+        return self.variance * (1 + (0.5 / self.scale_mixture) * r2).pow(-self.scale_mixture)
 
 
 class Exponential(Isotropy):

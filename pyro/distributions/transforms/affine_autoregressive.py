@@ -129,9 +129,7 @@ class AffineAutoregressive(TransformModule):
         the base distribution (or the output of a previous transform)
         """
         mean, log_scale = self.arn(x)
-        log_scale = clamp_preserve_gradients(
-            log_scale, self.log_scale_min_clip, self.log_scale_max_clip
-        )
+        log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         self._cached_log_scale = log_scale
         scale = torch.exp(log_scale)
 
@@ -165,9 +163,7 @@ class AffineAutoregressive(TransformModule):
             x[idx] = (y[..., idx] - mean) * inverse_scale
 
         x = torch.stack(x, dim=-1)
-        log_scale = clamp_preserve_gradients(
-            log_scale, min=self.log_scale_min_clip, max=self.log_scale_max_clip
-        )
+        log_scale = clamp_preserve_gradients(log_scale, min=self.log_scale_min_clip, max=self.log_scale_max_clip)
         self._cached_log_scale = log_scale
         return x
 
@@ -185,9 +181,7 @@ class AffineAutoregressive(TransformModule):
             log_scale = self._cached_log_scale
         elif not self.stable:
             _, log_scale = self.arn(x)
-            log_scale = clamp_preserve_gradients(
-                log_scale, self.log_scale_min_clip, self.log_scale_max_clip
-            )
+            log_scale = clamp_preserve_gradients(log_scale, self.log_scale_min_clip, self.log_scale_max_clip)
         else:
             _, logit_scale = self.arn(x)
             log_scale = self.logsigmoid(logit_scale + self.sigmoid_bias)
@@ -373,9 +367,7 @@ def affine_autoregressive(input_dim, hidden_dims=None, **kwargs):
     return AffineAutoregressive(arn, **kwargs)
 
 
-def conditional_affine_autoregressive(
-    input_dim, context_dim, hidden_dims=None, **kwargs
-):
+def conditional_affine_autoregressive(input_dim, context_dim, hidden_dims=None, **kwargs):
     """
     A helper function to create an
     :class:`~pyro.distributions.transforms.ConditionalAffineAutoregressive` object

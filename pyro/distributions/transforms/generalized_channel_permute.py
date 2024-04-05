@@ -30,9 +30,7 @@ class ConditionedGeneralizedChannelPermute(Transform):
 
     @property
     def L(self):
-        return self.LU.tril(diagonal=-1) + torch.eye(
-            self.LU.size(-1), dtype=self.LU.dtype, device=self.LU.device
-        )
+        return self.LU.tril(diagonal=-1) + torch.eye(self.LU.size(-1), dtype=self.LU.dtype, device=self.LU.device)
 
     @property
     def U(self):
@@ -102,9 +100,7 @@ class ConditionedGeneralizedChannelPermute(Transform):
 
         h, w = x.shape[-2:]
         log_det = h * w * self.U_diag.abs().log().sum()
-        return log_det * torch.ones(
-            x.size()[:-3], dtype=x.dtype, layout=x.layout, device=x.device
-        )
+        return log_det * torch.ones(x.size()[:-3], dtype=x.dtype, layout=x.layout, device=x.device)
 
 
 @copy_docs_from(ConditionedGeneralizedChannelPermute)
@@ -269,12 +265,8 @@ class ConditionalGeneralizedChannelPermute(ConditionalTransformModule):
         self.nn = nn
         self.channels = channels
         if permutation is None:
-            permutation = torch.randperm(channels, device="cpu").to(
-                torch.Tensor().device
-            )
-        P = torch.eye(len(permutation), len(permutation))[
-            permutation.type(dtype=torch.int64)
-        ]
+            permutation = torch.randperm(channels, device="cpu").to(torch.Tensor().device)
+        P = torch.eye(len(permutation), len(permutation))[permutation.type(dtype=torch.int64)]
         self.register_buffer("permutation", P)
 
     def condition(self, context):

@@ -18,9 +18,7 @@ class NaiveDirichlet(Dirichlet):
 
     def __init__(self, concentration, validate_args=None):
         super().__init__(concentration)
-        self._gamma = Gamma(
-            concentration, torch.ones_like(concentration), validate_args=validate_args
-        )
+        self._gamma = Gamma(concentration, torch.ones_like(concentration), validate_args=validate_args)
 
     def rsample(self, sample_shape=torch.Size()):
         gammas = self._gamma.rsample(sample_shape)

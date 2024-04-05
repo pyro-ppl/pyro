@@ -30,9 +30,7 @@ class SimplexToOrderedTransform(Transform):
 
     def __init__(self, anchor_point=None):
         super().__init__()
-        self.anchor_point = (
-            anchor_point if anchor_point is not None else torch.tensor(0.0)
-        )
+        self.anchor_point = anchor_point if anchor_point is not None else torch.tensor(0.0)
 
     def _call(self, x):
         s = torch.cumsum(x[..., :-1], axis=-1)
@@ -44,18 +42,14 @@ class SimplexToOrderedTransform(Transform):
         s = expit(y)
         # x0 = s0, x1 = s1 - s0, x2 = s2 - s1,..., xn = 1 - s[n-1]
         # add two boundary points 0 and 1
-        s = torch.concat(
-            [torch.zeros_like(s)[..., :1], s, torch.ones_like(s)[..., :1]], dim=-1
-        )
+        s = torch.concat([torch.zeros_like(s)[..., :1], s, torch.ones_like(s)[..., :1]], dim=-1)
         x = s[..., 1:] - s[..., :-1]
         return x
 
     def log_abs_det_jacobian(self, x, y):
         # |dp/dc| = |dx/dy| = prod(ds/dy) = prod(expit'(y))
         # we know log derivative of expit(y) is `-softplus(y) - softplus(-y)`
-        J_logdet = (
-            torch.nn.functional.softplus(y) + torch.nn.functional.softplus(-y)
-        ).sum(-1)
+        J_logdet = (torch.nn.functional.softplus(y) + torch.nn.functional.softplus(-y)).sum(-1)
         return J_logdet
 
     def __eq__(self, other):

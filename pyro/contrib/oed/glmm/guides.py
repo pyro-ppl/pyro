@@ -21,16 +21,7 @@ from pyro.ops.linalg import rinverse
 
 
 class LinearModelPosteriorGuide(nn.Module):
-    def __init__(
-        self,
-        d,
-        w_sizes,
-        y_sizes,
-        regressor_init=0.0,
-        scale_tril_init=3.0,
-        use_softplus=True,
-        **kwargs
-    ):
+    def __init__(self, d, w_sizes, y_sizes, regressor_init=0.0, scale_tril_init=3.0, use_softplus=True, **kwargs):
         """
         Guide for linear models. No amortisation happens over designs.
         Amortisation over data is taken care of by analytic formulae for
@@ -52,17 +43,12 @@ class LinearModelPosteriorGuide(nn.Module):
             d = (d,)
         self.regressor = nn.ParameterDict(
             {
-                l: nn.Parameter(
-                    regressor_init * torch.ones(*(d + (p, sum(y_sizes.values()))))
-                )
+                l: nn.Parameter(regressor_init * torch.ones(*(d + (p, sum(y_sizes.values())))))
                 for l, p in w_sizes.items()
             }
         )
         self.scale_tril = nn.ParameterDict(
-            {
-                l: nn.Parameter(scale_tril_init * lexpand(torch.eye(p), *d))
-                for l, p in w_sizes.items()
-            }
+            {l: nn.Parameter(scale_tril_init * lexpand(torch.eye(p), *d)) for l, p in w_sizes.items()}
         )
         self.w_sizes = w_sizes
         self.use_softplus = use_softplus
@@ -113,9 +99,7 @@ class LinearModelLaplaceGuide(nn.Module):
         self.means = nn.ParameterDict()
         if tau_label is not None:
             w_sizes[tau_label] = 1
-        for l, mu_l in tensor_to_dict(
-            w_sizes, init_value * torch.ones(*(d + (sum(w_sizes.values()),)))
-        ).items():
+        for l, mu_l in tensor_to_dict(w_sizes, init_value * torch.ones(*(d + (sum(w_sizes.values()),)))).items():
             self.means[l] = nn.Parameter(mu_l)
         self.scale_trils = {}
         self.w_sizes = w_sizes
@@ -177,9 +161,7 @@ class LinearModelLaplaceGuide(nn.Module):
                 continue
             hess_l = self._hessian_diag(loss, mu_l, event_shape=(self.w_sizes[l],))
             cov_l = rinverse(hess_l)
-            self.scale_trils[l] = torch.linalg.cholesky(
-                cov_l.transpose(-2, -1)
-            ).transpose(-2, -1)
+            self.scale_trils[l] = torch.linalg.cholesky(cov_l.transpose(-2, -1)).transpose(-2, -1)
 
     def forward(self, design, target_labels=None):
         """
@@ -205,9 +187,7 @@ class LinearModelLaplaceGuide(nn.Module):
             else:
                 # Laplace approximation via MVN with hessian
                 for l in target_labels:
-                    w_dist = dist.MultivariateNormal(
-                        self.means[l], scale_tril=self.scale_trils[l]
-                    )
+                    w_dist = dist.MultivariateNormal(self.means[l], scale_tril=self.scale_trils[l])
                     pyro.sample(l, w_dist)
 
 
@@ -233,16 +213,7 @@ class SigmoidGuide(LinearModelPosteriorGuide):
 
 
 class NormalInverseGammaGuide(LinearModelPosteriorGuide):
-    def __init__(
-        self,
-        d,
-        w_sizes,
-        mf=False,
-        tau_label="tau",
-        alpha_init=100.0,
-        b0_init=100.0,
-        **kwargs
-    ):
+    def __init__(self, d, w_sizes, mf=False, tau_label="tau", alpha_init=100.0, b0_init=100.0, **kwargs):
         super().__init__(d, w_sizes, **kwargs)
         self.alpha = nn.Parameter(alpha_init * torch.ones(d))
         self.b0 = nn.Parameter(b0_init * torch.ones(d))
@@ -252,9 +223,7 @@ class NormalInverseGammaGuide(LinearModelPosteriorGuide):
     def get_params(self, y_dict, design, target_labels):
         y = torch.cat(list(y_dict.values()), dim=-1)
 
-        coefficient_labels = [
-            label for label in target_labels if label != self.tau_label
-        ]
+        coefficient_labels = [label for label in target_labels if label != self.tau_label]
         mu, scale_tril = self.linear_model_formula(y, design, coefficient_labels)
         mu_vec = torch.cat(list(mu.values()), dim=-1)
 
@@ -277,13 +246,9 @@ class NormalInverseGammaGuide(LinearModelPosteriorGuide):
         for label in target_labels:
             if label != self.tau_label:
                 if self.mf:
-                    w_dist = dist.MultivariateNormal(
-                        mu[label], scale_tril=scale_tril[label]
-                    )
+                    w_dist = dist.MultivariateNormal(mu[label], scale_tril=scale_tril[label])
                 else:
-                    w_dist = dist.MultivariateNormal(
-                        mu[label], scale_tril=scale_tril[label] * obs_sd
-                    )
+                    w_dist = dist.MultivariateNormal(mu[label], scale_tril=scale_tril[label] * obs_sd)
                 pyro.sample(label, w_dist)
 
 
@@ -303,9 +268,7 @@ class GuideDV(nn.Module):
         theta_dict = {l: trace.nodes[l]["value"] for l in target_labels}
 
         conditional_guide = pyro.condition(self.guide, data=theta_dict)
-        cond_trace = poutine.trace(conditional_guide).get_trace(
-            y_dict, design, observation_labels, target_labels
-        )
+        cond_trace = poutine.trace(conditional_guide).get_trace(y_dict, design, observation_labels, target_labels)
         cond_trace.compute_log_prob()
 
         posterior_lp = sum(cond_trace.nodes[l]["log_prob"] for l in target_labels)

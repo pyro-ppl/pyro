@@ -92,13 +92,7 @@ def _compute_tmc_estimate(model_trace, guide_trace):
             list(guide_trace.plate_to_symbol.values()),
         )
     )
-    (tmc,) = einsum(
-        eqn,
-        *log_factors,
-        plates=plates,
-        backend="pyro.ops.einsum.torch_log",
-        modulo_total=False
-    )
+    (tmc,) = einsum(eqn, *log_factors, plates=plates, backend="pyro.ops.einsum.torch_log", modulo_total=False)
     return tmc
 
 
@@ -135,9 +129,7 @@ class TraceTMC_ELBO(ELBO):
         Returns a single trace from the guide, and the model that is run
         against it.
         """
-        model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_plate_nesting, model, guide, args, kwargs
-        )
+        model_trace, guide_trace = get_importance_trace("flat", self.max_plate_nesting, model, guide, args, kwargs)
 
         if is_validation_enabled():
             check_traceenum_requirements(model_trace, guide_trace)
@@ -182,9 +174,7 @@ class TraceTMC_ELBO(ELBO):
         model = model_enum(model)
 
         q = queue.LifoQueue()
-        guide = poutine.queue(
-            guide, q, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend
-        )
+        guide = poutine.queue(guide, q, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend)
         for i in range(1 if self.vectorize_particles else self.num_particles):
             q.put(poutine.Trace())
             while not q.empty():

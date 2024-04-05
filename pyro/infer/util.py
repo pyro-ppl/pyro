@@ -108,9 +108,7 @@ def get_dependent_plate_dims(sites):
     """
     Return a list of unique dims for plates that are not common to all sites.
     """
-    plate_sets = [
-        site["cond_indep_stack"] for site in sites if site["type"] == "sample"
-    ]
+    plate_sets = [site["cond_indep_stack"] for site in sites if site["type"] == "sample"]
     all_plates = set().union(*plate_sets)
     common_plates = all_plates.intersection(*plate_sets)
     sum_plates = all_plates - common_plates
@@ -225,9 +223,7 @@ class Dice:
     """
 
     def __init__(self, guide_trace, ordering):
-        log_denoms = defaultdict(
-            float
-        )  # avoids double-counting when sequentially enumerating
+        log_denoms = defaultdict(float)  # avoids double-counting when sequentially enumerating
         log_probs = defaultdict(list)  # accounts for upstream probabilties
 
         for name, site in guide_trace.nodes.items():
@@ -274,9 +270,7 @@ class Dice:
             expected_cost = 0.0
             for ordinal, cost_terms in costs.items():
                 log_factors = self._get_log_factors(ordinal)
-                scale = math.exp(
-                    sum(x for x in log_factors if not isinstance(x, torch.Tensor))
-                )
+                scale = math.exp(sum(x for x in log_factors if not isinstance(x, torch.Tensor)))
                 log_factors = [x for x in log_factors if isinstance(x, torch.Tensor)]
 
                 # Collect log_prob terms to query for marginal probability.
@@ -301,10 +295,7 @@ class Dice:
                     require_backward(query)
                 root = ring.sumproduct(log_factors, sum_dims)
                 root._pyro_backward()
-                probs = {
-                    key: query._pyro_backward_result.exp()
-                    for key, query in queries.items()
-                }
+                probs = {key: query._pyro_backward_result.exp() for key, query in queries.items()}
 
                 # Aggregate prob * cost terms.
                 for cost in cost_terms:
@@ -340,9 +331,7 @@ def check_fully_reparametrized(guide_site):
         and is_identically_zero(score_function_term)
     )
     if not fully_rep:
-        raise NotImplementedError(
-            "All distributions in the guide must be fully reparameterized."
-        )
+        raise NotImplementedError("All distributions in the guide must be fully reparameterized.")
 
 
 def plate_log_prob_sum(trace: Trace, plate_symbol: str) -> torch.Tensor:

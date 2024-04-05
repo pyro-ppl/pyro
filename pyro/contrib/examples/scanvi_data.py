@@ -70,8 +70,9 @@ class BatchDataLoader(object):
             _slice = slices[batch_order[i]]
             if _slice[1]:
                 # labeled
-                yield self.data_x[_slice[0]], nn.functional.one_hot(
-                    self.data_y[_slice[0]], num_classes=self.num_classes
+                yield (
+                    self.data_x[_slice[0]],
+                    nn.functional.one_hot(self.data_y[_slice[0]], num_classes=self.num_classes),
                 )
             else:
                 # unlabeled
@@ -114,9 +115,7 @@ def get_data(dataset="pbmc", batch_size=100, cuda=False):
     if dataset == "mock":
         num_genes = 17
         num_data = 200
-        X = torch.distributions.Poisson(rate=10.0).sample(
-            sample_shape=(num_data, num_genes)
-        )
+        X = torch.distributions.Poisson(rate=10.0).sample(sample_shape=(num_data, num_genes))
         Y = torch.zeros(num_data, dtype=torch.long)
         Y[50:100] = 1
         Y[100:] = -1
@@ -129,9 +128,7 @@ def get_data(dataset="pbmc", batch_size=100, cuda=False):
     import scanpy as sc
     import scvi
 
-    adata = scvi.data.purified_pbmc_dataset(
-        subset_datasets=["regulatory_t", "naive_t", "memory_t", "naive_cytotoxic"]
-    )
+    adata = scvi.data.purified_pbmc_dataset(subset_datasets=["regulatory_t", "naive_t", "memory_t", "naive_cytotoxic"])
 
     gene_subset = [
         "CD4",

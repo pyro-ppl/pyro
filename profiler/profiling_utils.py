@@ -32,10 +32,7 @@ class ProfilePrinter:
     def _formatted_values(self, values):
         if self._field_format is not None:
             assert len(self._field_format) == len(values)
-            return [
-                f.format(val) if f else str(val)
-                for f, val in zip(self._field_format, values)
-            ]
+            return [f.format(val) if f else str(val) for f, val in zip(self._field_format, values)]
         return values
 
     def _add_using_row_format(self, values):
@@ -117,8 +114,6 @@ class Profile:
                 prof_file = os.path.join(PROF_DIR, self.fn_id(*args, **kwargs))
                 return profile_cprofile(fn_callable, prof_file=prof_file)
             else:
-                raise ValueError(
-                    "Invalid profiling tool specified: {}.".format(self.tool)
-                )
+                raise ValueError("Invalid profiling tool specified: {}.".format(self.tool))
 
         return wrapped_fn

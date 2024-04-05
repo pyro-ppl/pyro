@@ -27,11 +27,7 @@ def _block_fn(
     is_not_exposed = (msg["name"] not in expose) and (msg_type not in expose_types)
 
     # decision rule for hiding:
-    if (
-        (msg["name"] in hide)
-        or (msg_type in hide_types)
-        or (is_not_exposed and hide_all)
-    ):  # noqa: E129
+    if (msg["name"] in hide) or (msg_type in hide_types) or (is_not_exposed and hide_all):  # noqa: E129
         return True
     # otherwise expose
     else:
@@ -48,9 +44,7 @@ def _make_default_hide_fn(
 ) -> Callable[["Message"], bool]:
     # first, some sanity checks:
     # hide_all and expose_all intersect?
-    assert (hide_all is False and expose_all is False) or (
-        hide_all != expose_all
-    ), "cannot hide and expose a site"
+    assert (hide_all is False and expose_all is False) or (hide_all != expose_all), "cannot hide and expose a site"
 
     # hide and expose intersect?
     if hide is None:
@@ -76,16 +70,12 @@ def _make_default_hide_fn(
     else:
         hide_all = True
 
-    assert set(hide_types).isdisjoint(
-        set(expose_types)
-    ), "cannot hide and expose a site type"
+    assert set(hide_types).isdisjoint(set(expose_types)), "cannot hide and expose a site type"
 
     return partial(_block_fn, expose, expose_types, hide, hide_types, hide_all)
 
 
-def _negate_fn(
-    fn: Callable[["Message"], Optional[bool]]
-) -> Callable[["Message"], bool]:
+def _negate_fn(fn: Callable[["Message"], Optional[bool]]) -> Callable[["Message"], bool]:
     # typed version of lambda msg: not fn(msg)
     def negated_fn(msg: "Message") -> bool:
         return not fn(msg)
@@ -161,9 +151,7 @@ class BlockMessenger(Messenger):
         elif expose_fn is not None:
             self.hide_fn = _negate_fn(expose_fn)
         else:
-            self.hide_fn = _make_default_hide_fn(
-                hide_all, expose_all, hide, expose, hide_types, expose_types
-            )
+            self.hide_fn = _make_default_hide_fn(hide_all, expose_all, hide, expose, hide_types, expose_types)
 
     def _process_message(self, msg: "Message") -> None:
         msg["stop"] = bool(self.hide_fn(msg))

@@ -22,17 +22,13 @@ def bounding_box(z_where, x_size):
 
 def arr2img(arr):
     # arr is expected to be a 2d array of floats in [0,1]
-    return Image.frombuffer(
-        "L", arr.shape, (arr * 255).astype(np.uint8).tostring(), "raw", "L", 0, 1
-    )
+    return Image.frombuffer("L", arr.shape, (arr * 255).astype(np.uint8).tostring(), "raw", "L", 0, 1)
 
 
 def img2arr(img):
     # assumes color image
     # returns an array suitable for sending to visdom
-    return (
-        np.array(img.getdata(), np.uint8).reshape(img.size + (3,)).transpose((2, 0, 1))
-    )
+    return np.array(img.getdata(), np.uint8).reshape(img.size + (3,)).transpose((2, 0, 1))
 
 
 def colors(k):

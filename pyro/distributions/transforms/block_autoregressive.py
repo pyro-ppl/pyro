@@ -75,20 +75,14 @@ class BlockAutoregressive(TransformModule):
     bijective = True
     autoregressive = True
 
-    def __init__(
-        self, input_dim, hidden_factors=[8, 8], activation="tanh", residual=None
-    ):
+    def __init__(self, input_dim, hidden_factors=[8, 8], activation="tanh", residual=None):
         super().__init__(cache_size=1)
 
         if any([h < 1 for h in hidden_factors]):
-            raise ValueError(
-                "Hidden factors, {}, must all be >= 1".format(hidden_factors)
-            )
+            raise ValueError("Hidden factors, {}, must all be >= 1".format(hidden_factors))
 
         if residual not in [None, "normal", "gated"]:
-            raise ValueError(
-                'Invalid value {} for keyword argument "residual"'.format(residual)
-            )
+            raise ValueError('Invalid value {} for keyword argument "residual"'.format(residual))
 
         # Mix in activation function methods
         name_to_mixin = {
@@ -104,9 +98,7 @@ class BlockAutoregressive(TransformModule):
         # Initialize modules for each layer in transform
         self.residual = residual
         self.input_dim = input_dim
-        self.layers = nn.ModuleList(
-            [MaskedBlockLinear(input_dim, input_dim * hidden_factors[0], input_dim)]
-        )
+        self.layers = nn.ModuleList([MaskedBlockLinear(input_dim, input_dim * hidden_factors[0], input_dim)])
         for idx in range(1, len(hidden_factors)):
             self.layers.append(
                 MaskedBlockLinear(
@@ -115,9 +107,7 @@ class BlockAutoregressive(TransformModule):
                     input_dim,
                 )
             )
-        self.layers.append(
-            MaskedBlockLinear(input_dim * hidden_factors[-1], input_dim, input_dim)
-        )
+        self.layers.append(MaskedBlockLinear(input_dim * hidden_factors[-1], input_dim, input_dim))
         self._cached_logDetJ = None
 
         if residual == "gated":
@@ -182,9 +172,7 @@ class BlockAutoregressive(TransformModule):
         cached on the forward call)
         """
 
-        raise KeyError(
-            "BlockAutoregressive object expected to find key in intermediates cache but didn't"
-        )
+        raise KeyError("BlockAutoregressive object expected to find key in intermediates cache but didn't")
 
     def log_abs_det_jacobian(self, x, y):
         """
@@ -218,14 +206,10 @@ class MaskedBlockLinear(torch.nn.Module):
             weight[
                 i * out_features // dim : (i + 1) * out_features // dim,
                 0 : (i + 1) * in_features // dim,
-            ] = torch.nn.init.xavier_uniform_(
-                torch.Tensor(out_features // dim, (i + 1) * in_features // dim)
-            )
+            ] = torch.nn.init.xavier_uniform_(torch.Tensor(out_features // dim, (i + 1) * in_features // dim))
 
         self._weight = torch.nn.Parameter(weight)
-        self._diag_weight = torch.nn.Parameter(
-            torch.nn.init.uniform_(torch.Tensor(out_features, 1)).log()
-        )
+        self._diag_weight = torch.nn.Parameter(torch.nn.init.uniform_(torch.Tensor(out_features, 1)).log())
 
         self.bias = (
             torch.nn.Parameter(
@@ -250,9 +234,7 @@ class MaskedBlockLinear(torch.nn.Module):
 
         # Off-diagonal block mask for lower triangular weight matrix
         mask_o = torch.tril(torch.ones(dim, dim), diagonal=-1).unsqueeze(-1)
-        mask_o = mask_o.repeat(1, out_features // dim, in_features // dim).view(
-            out_features, in_features
-        )
+        mask_o = mask_o.repeat(1, out_features // dim, in_features // dim).view(out_features, in_features)
         self.register_buffer("mask_o", mask_o)
 
     def get_weights(self):
@@ -275,9 +257,7 @@ class MaskedBlockLinear(torch.nn.Module):
         # taking the log gives the right hand side below:
         wpl = self._diag_weight + self._weight - 0.5 * torch.log(w_squared_norm + eps)
 
-        return w, wpl[self.mask_d.bool()].view(
-            self.dim, self.out_features // self.dim, self.in_features // self.dim
-        )
+        return w, wpl[self.mask_d.bool()].view(self.dim, self.out_features // self.dim, self.in_features // self.dim)
 
     def forward(self, x):
         w, wpl = self.get_weights()

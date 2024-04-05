@@ -42,16 +42,11 @@ TEST_CASES = [
 ]
 
 TEST_IDS = [
-    "_".join(
-        [t[0].__name__, t[4].__class__.__name__.split(".")[-1], str(t[2].dim()) + "D"]
-    )
-    for t in TEST_CASES
+    "_".join([t[0].__name__, t[4].__class__.__name__.split(".")[-1], str(t[2].dim()) + "D"]) for t in TEST_CASES
 ]
 
 
-@pytest.mark.parametrize(
-    "model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS
-)
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 def test_inference(model_class, X, y, kernel, likelihood):
     if isinstance(likelihood, MultiClass):
         latent_shape = y.shape[:-1] + (likelihood.num_classes,)
@@ -65,9 +60,7 @@ def test_inference(model_class, X, y, kernel, likelihood):
     train(gp, num_steps=1)
 
 
-@pytest.mark.parametrize(
-    "model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS
-)
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
     if isinstance(likelihood, MultiClass):
         latent_shape = torch.Size([likelihood.num_classes])
@@ -81,9 +74,7 @@ def test_inference_with_empty_latent_shape(model_class, X, y, kernel, likelihood
     train(gp, num_steps=1)
 
 
-@pytest.mark.parametrize(
-    "model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS
-)
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 def test_forward(model_class, X, y, kernel, likelihood):
     if isinstance(likelihood, MultiClass):
         latent_shape = y.shape[:-1] + (likelihood.num_classes,)
@@ -102,9 +93,7 @@ def test_forward(model_class, X, y, kernel, likelihood):
     assert ynew.shape == y.shape[:-1] + (Xnew.shape[0],)
 
 
-@pytest.mark.parametrize(
-    "model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS
-)
+@pytest.mark.parametrize("model_class, X, y, kernel, likelihood", TEST_CASES, ids=TEST_IDS)
 def test_forward_with_empty_latent_shape(model_class, X, y, kernel, likelihood):
     if isinstance(likelihood, MultiClass):
         latent_shape = torch.Size([likelihood.num_classes])

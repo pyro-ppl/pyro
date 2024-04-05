@@ -60,9 +60,7 @@ class DualAveraging:
         """
         self._t += 1
         # g_avg = (g_1 + ... + g_t) / t
-        self._g_avg = (1 - 1 / (self._t + self.t0)) * self._g_avg + g / (
-            self._t + self.t0
-        )
+        self._g_avg = (1 - 1 / (self._t + self.t0)) * self._g_avg + g / (self._t + self.t0)
         # According to formula (3.4) of [1], we have
         #     x_t = argmin{ g_avg . x + loc_t . |x - x0|^2 },
         # where loc_t := beta_t / t, beta_t := (gamma/2) * sqrt(t)

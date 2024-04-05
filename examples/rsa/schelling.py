@@ -10,6 +10,7 @@ by recursively reasoning about one another.
 
 Taken from: http://forestdb.org/models/schelling.html
 """
+
 import argparse
 
 import torch
@@ -72,9 +73,7 @@ def main(args):
 
     print(
         "Empirical frequency of Bob choosing their favored location "
-        + "given preference {} and recursion depth {}: {}".format(
-            shared_preference, bob_depth, bob_prob
-        )
+        + "given preference {} and recursion depth {}: {}".format(shared_preference, bob_depth, bob_prob)
     )
 
 

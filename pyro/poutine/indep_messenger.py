@@ -111,8 +111,7 @@ class IndepMessenger(Messenger):
     def __iter__(self) -> Iterator[int]:
         if self._vectorized is True or self.dim is not None:
             raise ValueError(
-                "cannot use plate {} as both vectorized and non-vectorized"
-                "independence context".format(self.name)
+                "cannot use plate {} as both vectorized and non-vectorized" "independence context".format(self.name)
             )
 
         self._vectorized = False

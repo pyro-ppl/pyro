@@ -37,18 +37,12 @@ def simulate(mu, length=2.0, phi=np.pi / 6.0, dt=0.005, noise_sigma=None):
     T = torch.zeros(())
     velocity = torch.zeros(())
     displacement = torch.zeros(())
-    acceleration = (
-        torch.tensor(little_g * np.sin(phi)) - torch.tensor(little_g * np.cos(phi)) * mu
-    )
+    acceleration = torch.tensor(little_g * np.sin(phi)) - torch.tensor(little_g * np.cos(phi)) * mu
 
-    if (
-        acceleration.numpy() <= 0.0
-    ):  # the box doesn't slide if the friction is too large
+    if acceleration.numpy() <= 0.0:  # the box doesn't slide if the friction is too large
         return torch.tensor(1.0e5)  # return a very large time instead of infinity
 
-    while (
-        displacement.numpy() < length
-    ):  # otherwise slide to the end of the inclined plane
+    while displacement.numpy() < length:  # otherwise slide to the end of the inclined plane
         displacement += velocity * dt
         velocity += acceleration * dt
         T += dt
@@ -73,12 +67,7 @@ def analytic_T(mu, length=2.0, phi=np.pi / 6.0):
 print("generating simulated data using the true coefficient of friction %.3f" % mu0)
 N_obs = 20
 torch.manual_seed(2)
-observed_data = torch.tensor(
-    [
-        simulate(torch.tensor(mu0), noise_sigma=time_measurement_sigma)
-        for _ in range(N_obs)
-    ]
-)
+observed_data = torch.tensor([simulate(torch.tensor(mu0), noise_sigma=time_measurement_sigma) for _ in range(N_obs)])
 observed_mean = np.mean([T.item() for T in observed_data])
 
 
@@ -113,18 +102,13 @@ def main(args):
     # report results
     inferred_mu = posterior_mean.item()
     inferred_mu_uncertainty = posterior_std_dev.item()
-    print(
-        "the coefficient of friction inferred by pyro is %.3f +- %.3f"
-        % (inferred_mu, inferred_mu_uncertainty)
-    )
+    print("the coefficient of friction inferred by pyro is %.3f +- %.3f" % (inferred_mu, inferred_mu_uncertainty))
 
     # note that, given the finite step size in the simulator, the simulated descent times will
     # not precisely match the numbers from the analytic result.
     # in particular the first two numbers reported below should match each other pretty closely
     # but will be systematically off from the third number
-    print(
-        "the mean observed descent time in the dataset is: %.4f seconds" % observed_mean
-    )
+    print("the mean observed descent time in the dataset is: %.4f seconds" % observed_mean)
     print(
         "the (forward) simulated descent time for the inferred (mean) mu is: %.4f seconds"
         % simulate(posterior_mean).item()

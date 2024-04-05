@@ -33,13 +33,9 @@ class MaternKernel(PyroModule):
         Arno Solin.
     """
 
-    def __init__(
-        self, nu=1.5, num_gps=1, length_scale_init=None, kernel_scale_init=None
-    ):
+    def __init__(self, nu=1.5, num_gps=1, length_scale_init=None, kernel_scale_init=None):
         if nu not in [0.5, 1.5, 2.5]:
-            raise NotImplementedError(
-                "The only supported values of nu are 0.5, 1.5 and 2.5"
-            )
+            raise NotImplementedError("The only supported values of nu are 0.5, 1.5 and 2.5")
         self.nu = nu
         self.state_dim = {0.5: 1, 1.5: 2, 2.5: 3}[nu]
         self.num_gps = num_gps
@@ -54,12 +50,8 @@ class MaternKernel(PyroModule):
 
         super().__init__()
 
-        self.length_scale = PyroParam(
-            length_scale_init, constraint=constraints.positive
-        )
-        self.kernel_scale = PyroParam(
-            kernel_scale_init, constraint=constraints.positive
-        )
+        self.length_scale = PyroParam(length_scale_init, constraint=constraints.positive)
+        self.kernel_scale = PyroParam(kernel_scale_init, constraint=constraints.positive)
 
         if self.state_dim > 1:
             for x in range(self.state_dim):

@@ -95,9 +95,7 @@ class BiosequenceDataset(Dataset):
         self.alphabet_length = len(alphabet)
 
         # Build dataset.
-        self.seq_data = torch.cat(
-            [self._one_hot(seq, alphabet, self.max_length).unsqueeze(0) for seq in seqs]
-        )
+        self.seq_data = torch.cat([self._one_hot(seq, alphabet, self.max_length).unsqueeze(0) for seq in seqs])
 
     def _load_fasta(self, source):
         """A basic multiline fasta parser."""
@@ -127,9 +125,7 @@ class BiosequenceDataset(Dataset):
             device=self.device,
         )
         # Pad.
-        x = torch.cat(
-            [oh, torch.zeros([length - len(seq), len(alphabet)], device=self.device)]
-        )
+        x = torch.cat([oh, torch.zeros([length - len(seq), len(alphabet)], device=self.device)])
 
         return x
 
@@ -162,9 +158,7 @@ def write(x, alphabet, file, truncate_stop=False, append=False, scores=None):
     if truncate_stop:
         mask = (
             torch.cumsum(
-                torch.matmul(
-                    x, torch.tensor(print_alphabet == "*", dtype=torch.double)
-                ),
+                torch.matmul(x, torch.tensor(print_alphabet == "*", dtype=torch.double)),
                 -1,
             )
             > 0
@@ -173,22 +167,11 @@ def write(x, alphabet, file, truncate_stop=False, append=False, scores=None):
         x[:, :, -1] = mask
     else:
         x[:, :, -1] = (torch.sum(x, -1) < 0.5).to(torch.double)
-    index = (
-        torch.matmul(x, torch.arange(x.shape[-1], dtype=torch.double))
-        .to(torch.long)
-        .cpu()
-        .numpy()
-    )
+    index = torch.matmul(x, torch.arange(x.shape[-1], dtype=torch.double)).to(torch.long).cpu().numpy()
     if scores is None:
-        seqs = [
-            ">{}\n".format(j) + "".join(elem) + "\n"
-            for j, elem in enumerate(print_alphabet[index])
-        ]
+        seqs = [">{}\n".format(j) + "".join(elem) + "\n" for j, elem in enumerate(print_alphabet[index])]
     else:
-        seqs = [
-            ">{}\n".format(j) + "".join(elem) + "\n"
-            for j, elem in zip(scores, print_alphabet[index])
-        ]
+        seqs = [">{}\n".format(j) + "".join(elem) + "\n" for j, elem in zip(scores, print_alphabet[index])]
     if append:
         open_flag = "a"
     else:

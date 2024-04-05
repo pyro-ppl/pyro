@@ -36,9 +36,7 @@ def test_ProfileHMM_smoke(jit):
     assert not np.isnan(losses[-1])
 
     # Evaluate.
-    train_lp, test_lp, train_perplex, test_perplex = model.evaluate(
-        dataset, dataset, jit
-    )
+    train_lp, test_lp, train_perplex, test_perplex = model.evaluate(dataset, dataset, jit)
     assert train_lp < 0.0
     assert test_lp < 0.0
     assert train_perplex > 0.0
@@ -50,9 +48,7 @@ def test_ProfileHMM_smoke(jit):
 @pytest.mark.parametrize("ARD_prior", [False, True])
 @pytest.mark.parametrize("substitution_matrix", [False, True])
 @pytest.mark.parametrize("jit", [False, True])
-def test_FactorMuE_smoke(
-    indel_factor_dependence, z_prior_distribution, ARD_prior, substitution_matrix, jit
-):
+def test_FactorMuE_smoke(indel_factor_dependence, z_prior_distribution, ARD_prior, substitution_matrix, jit):
     # Setup dataset.
     seqs = ["BABBA", "BAAB", "BABBB"]
     alph = "AB"
@@ -92,9 +88,7 @@ def test_FactorMuE_smoke(
     assert torch.allclose(model._beta_anneal(100, 2, 6, 2), torch.tensor(1.0))
 
     # Evaluate.
-    train_lp, test_lp, train_perplex, test_perplex = model.evaluate(
-        dataset, dataset, jit
-    )
+    train_lp, test_lp, train_perplex, test_perplex = model.evaluate(dataset, dataset, jit)
     assert train_lp < 0.0
     assert test_lp < 0.0
     assert train_perplex > 0.0

@@ -123,47 +123,33 @@ class ProfileHMM(nn.Module):
                 # Observations.
                 pyro.sample(
                     "obs_seq",
-                    MissingDataDiscreteHMM(
-                        initial_logits, transition_logits, observation_logits
-                    ),
+                    MissingDataDiscreteHMM(initial_logits, transition_logits, observation_logits),
                     obs=seq_data,
                 )
 
     def guide(self, seq_data, local_scale):
         # Sequence.
-        precursor_seq_q_mn = pyro.param(
-            "precursor_seq_q_mn", torch.zeros(self.precursor_seq_shape)
-        )
-        precursor_seq_q_sd = pyro.param(
-            "precursor_seq_q_sd", torch.zeros(self.precursor_seq_shape)
-        )
+        precursor_seq_q_mn = pyro.param("precursor_seq_q_mn", torch.zeros(self.precursor_seq_shape))
+        precursor_seq_q_sd = pyro.param("precursor_seq_q_sd", torch.zeros(self.precursor_seq_shape))
         pyro.sample(
             "precursor_seq",
             dist.Normal(precursor_seq_q_mn, softplus(precursor_seq_q_sd)).to_event(2),
         )
-        insert_seq_q_mn = pyro.param(
-            "insert_seq_q_mn", torch.zeros(self.insert_seq_shape)
-        )
-        insert_seq_q_sd = pyro.param(
-            "insert_seq_q_sd", torch.zeros(self.insert_seq_shape)
-        )
+        insert_seq_q_mn = pyro.param("insert_seq_q_mn", torch.zeros(self.insert_seq_shape))
+        insert_seq_q_sd = pyro.param("insert_seq_q_sd", torch.zeros(self.insert_seq_shape))
         pyro.sample(
             "insert_seq",
             dist.Normal(insert_seq_q_mn, softplus(insert_seq_q_sd)).to_event(2),
         )
 
         # Indels.
-        insert_q_mn = pyro.param(
-            "insert_q_mn", torch.ones(self.indel_shape) * self.indel_prior
-        )
+        insert_q_mn = pyro.param("insert_q_mn", torch.ones(self.indel_shape) * self.indel_prior)
         insert_q_sd = pyro.param("insert_q_sd", torch.zeros(self.indel_shape))
         pyro.sample(
             "insert",
             dist.Normal(insert_q_mn, softplus(insert_q_sd)).to_event(3),
         )
-        delete_q_mn = pyro.param(
-            "delete_q_mn", torch.ones(self.indel_shape) * self.indel_prior
-        )
+        delete_q_mn = pyro.param("delete_q_mn", torch.ones(self.indel_shape) * self.indel_prior)
         delete_q_sd = pyro.param("delete_q_sd", torch.zeros(self.indel_shape))
         pyro.sample(
             "delete",
@@ -231,9 +217,7 @@ class ProfileHMM(nn.Module):
             for seq_data, L_data in dataload:
                 if self.is_cuda:
                     seq_data = seq_data.cuda()
-                loss = svi.step(
-                    seq_data, torch.tensor(len(dataset) / seq_data.shape[0])
-                )
+                loss = svi.step(seq_data, torch.tensor(len(dataset) / seq_data.shape[0]))
                 losses.append(loss)
                 scheduler.step()
             print(epoch, loss, " ", datetime.datetime.now() - t0)
@@ -262,13 +246,9 @@ class ProfileHMM(nn.Module):
         svi = SVI(self.model, self.guide, scheduler, loss=elbo)
 
         # Compute elbo and perplexity.
-        train_lp, train_perplex = self._evaluate_local_elbo(
-            svi, dataload_train, len(dataset_train)
-        )
+        train_lp, train_perplex = self._evaluate_local_elbo(svi, dataload_train, len(dataset_train))
         if dataset_test is not None:
-            test_lp, test_perplex = self._evaluate_local_elbo(
-                svi, dataload_test, len(dataset_test)
-            )
+            test_lp, test_perplex = self._evaluate_local_elbo(svi, dataload_test, len(dataset_test))
             return train_lp, test_lp, train_perplex, test_perplex
         else:
             return train_lp, None, train_perplex, None
@@ -284,19 +264,12 @@ class ProfileHMM(nn.Module):
             for seq_data, L_data in dataload:
                 if self.is_cuda:
                     seq_data, L_data = seq_data.cuda(), L_data.cuda()
-                conditioned_model = poutine.condition(
-                    self.model, data={"obs_seq": seq_data}
-                )
+                conditioned_model = poutine.condition(self.model, data={"obs_seq": seq_data})
                 args = (seq_data, torch.tensor(1.0))
                 guide_tr = poutine.trace(self.guide).get_trace(*args)
-                model_tr = poutine.trace(
-                    poutine.replay(conditioned_model, trace=guide_tr)
-                ).get_trace(*args)
+                model_tr = poutine.trace(poutine.replay(conditioned_model, trace=guide_tr)).get_trace(*args)
                 local_elbo = (
-                    (
-                        model_tr.log_prob_sum(self._local_variables)
-                        - guide_tr.log_prob_sum(self._local_variables)
-                    )
+                    (model_tr.log_prob_sum(self._local_variables) - guide_tr.log_prob_sum(self._local_variables))
                     .cpu()
                     .numpy()
                 )
@@ -415,9 +388,8 @@ class FactorMuE(nn.Module):
         self.latent_alphabet_length = latent_alphabet_length
         self.indel_shape = (latent_seq_length, 3, 2)
         self.total_factor_size = (
-            (2 * latent_seq_length + 1) * latent_alphabet_length
-            + 2 * indel_factor_dependence * latent_seq_length * 3 * 2
-        )
+            2 * latent_seq_length + 1
+        ) * latent_alphabet_length + 2 * indel_factor_dependence * latent_seq_length * 3 * 2
 
         # Architecture.
         self.indel_factor_dependence = indel_factor_dependence
@@ -460,13 +432,9 @@ class FactorMuE(nn.Module):
             ind1 = ind0 + self.latent_seq_length * 3 * 2
             ind2 = ind1 + self.latent_seq_length * 3 * 2
             insert_v, delete_v = v[:, ind0:ind1], v[:, ind1:ind2]
-            insert_v = (
-                insert_v.reshape([-1, self.latent_seq_length, 3, 2]) + self.indel_prior
-            )
+            insert_v = insert_v.reshape([-1, self.latent_seq_length, 3, 2]) + self.indel_prior
             out["insert_logits"] = insert_v - insert_v.logsumexp(-1, True)
-            delete_v = (
-                delete_v.reshape([-1, self.latent_seq_length, 3, 2]) + self.indel_prior
-            )
+            delete_v = delete_v.reshape([-1, self.latent_seq_length, 3, 2]) + self.indel_prior
             out["delete_logits"] = delete_v - delete_v.logsumexp(-1, True)
         # Extract precursor and insertion sequences.
         ind0 = self.latent_seq_length * self.latent_alphabet_length
@@ -475,9 +443,7 @@ class FactorMuE(nn.Module):
         precursor_seq_v = (precursor_seq_v * softplus(inverse_temp)).reshape(
             [-1, self.latent_seq_length, self.latent_alphabet_length]
         )
-        out["precursor_seq_logits"] = precursor_seq_v - precursor_seq_v.logsumexp(
-            -1, True
-        )
+        out["precursor_seq_logits"] = precursor_seq_v - precursor_seq_v.logsumexp(-1, True)
         insert_seq_v = (insert_seq_v * softplus(inverse_temp)).reshape(
             [-1, self.latent_seq_length + 1, self.latent_alphabet_length]
         )
@@ -534,9 +500,7 @@ class FactorMuE(nn.Module):
             delete_logits = delete - delete.logsumexp(-1, True)
 
         # Inverse temperature.
-        inverse_temp = pyro.sample(
-            "inverse_temp", dist.Normal(self.inverse_temp_prior, torch.tensor(1.0))
-        )
+        inverse_temp = pyro.sample("inverse_temp", dist.Normal(self.inverse_temp_prior, torch.tensor(1.0)))
 
         # Substitution matrix.
         if self.substitution_matrix:
@@ -544,8 +508,7 @@ class FactorMuE(nn.Module):
                 "substitute",
                 dist.Normal(
                     torch.zeros([self.latent_alphabet_length, self.alphabet_length]),
-                    self.substitution_prior_scale
-                    * torch.ones([self.latent_alphabet_length, self.alphabet_length]),
+                    self.substitution_prior_scale * torch.ones([self.latent_alphabet_length, self.alphabet_length]),
                 ).to_event(2),
             )
 
@@ -556,16 +519,12 @@ class FactorMuE(nn.Module):
                     if self.z_prior_distribution == "Normal":
                         z = pyro.sample(
                             "latent",
-                            dist.Normal(
-                                torch.zeros(self.z_dim), torch.ones(self.z_dim)
-                            ).to_event(1),
+                            dist.Normal(torch.zeros(self.z_dim), torch.ones(self.z_dim)).to_event(1),
                         )
                     elif self.z_prior_distribution == "Laplace":
                         z = pyro.sample(
                             "latent",
-                            dist.Laplace(
-                                torch.zeros(self.z_dim), torch.ones(self.z_dim)
-                            ).to_event(1),
+                            dist.Laplace(torch.zeros(self.z_dim), torch.ones(self.z_dim)).to_event(1),
                         )
 
                 # Decode latent sequence.
@@ -601,9 +560,7 @@ class FactorMuE(nn.Module):
                 # Draw samples.
                 pyro.sample(
                     "obs_seq",
-                    MissingDataDiscreteHMM(
-                        initial_logits, transition_logits, observation_logits
-                    ),
+                    MissingDataDiscreteHMM(initial_logits, transition_logits, observation_logits),
                     obs=seq_data,
                 )
 
@@ -629,27 +586,17 @@ class FactorMuE(nn.Module):
 
         # Indel probabilities.
         if not self.indel_factor_dependence:
-            insert_q_mn = pyro.param(
-                "insert_q_mn", torch.ones(self.indel_shape) * self.indel_prior
-            )
+            insert_q_mn = pyro.param("insert_q_mn", torch.ones(self.indel_shape) * self.indel_prior)
             insert_q_sd = pyro.param("insert_q_sd", torch.zeros(self.indel_shape))
-            pyro.sample(
-                "insert", dist.Normal(insert_q_mn, softplus(insert_q_sd)).to_event(3)
-            )
-            delete_q_mn = pyro.param(
-                "delete_q_mn", torch.ones(self.indel_shape) * self.indel_prior
-            )
+            pyro.sample("insert", dist.Normal(insert_q_mn, softplus(insert_q_sd)).to_event(3))
+            delete_q_mn = pyro.param("delete_q_mn", torch.ones(self.indel_shape) * self.indel_prior)
             delete_q_sd = pyro.param("delete_q_sd", torch.zeros(self.indel_shape))
-            pyro.sample(
-                "delete", dist.Normal(delete_q_mn, softplus(delete_q_sd)).to_event(3)
-            )
+            pyro.sample("delete", dist.Normal(delete_q_mn, softplus(delete_q_sd)).to_event(3))
 
         # Inverse temperature.
         inverse_temp_q_mn = pyro.param("inverse_temp_q_mn", torch.tensor(0.0))
         inverse_temp_q_sd = pyro.param("inverse_temp_q_sd", torch.tensor(0.0))
-        pyro.sample(
-            "inverse_temp", dist.Normal(inverse_temp_q_mn, softplus(inverse_temp_q_sd))
-        )
+        pyro.sample("inverse_temp", dist.Normal(inverse_temp_q_mn, softplus(inverse_temp_q_sd)))
 
         # Substitution matrix.
         if self.substitution_matrix:
@@ -795,13 +742,9 @@ class FactorMuE(nn.Module):
         svi = SVI(self.model, self.guide, scheduler, loss=elbo)
 
         # Compute elbo and perplexity.
-        train_lp, train_perplex = self._evaluate_local_elbo(
-            svi, dataload_train, len(dataset_train)
-        )
+        train_lp, train_perplex = self._evaluate_local_elbo(svi, dataload_train, len(dataset_train))
         if dataset_test is not None:
-            test_lp, test_perplex = self._evaluate_local_elbo(
-                svi, dataload_test, len(dataset_test)
-            )
+            test_lp, test_perplex = self._evaluate_local_elbo(svi, dataload_test, len(dataset_test))
             return train_lp, test_lp, train_perplex, test_perplex
         else:
             return train_lp, None, train_perplex, None
@@ -817,19 +760,12 @@ class FactorMuE(nn.Module):
             for seq_data, L_data in dataload:
                 if self.is_cuda:
                     seq_data, L_data = seq_data.cuda(), L_data.cuda()
-                conditioned_model = poutine.condition(
-                    self.model, data={"obs_seq": seq_data}
-                )
+                conditioned_model = poutine.condition(self.model, data={"obs_seq": seq_data})
                 args = (seq_data, torch.tensor(1.0), torch.tensor(1.0))
                 guide_tr = poutine.trace(self.guide).get_trace(*args)
-                model_tr = poutine.trace(
-                    poutine.replay(conditioned_model, trace=guide_tr)
-                ).get_trace(*args)
+                model_tr = poutine.trace(poutine.replay(conditioned_model, trace=guide_tr)).get_trace(*args)
                 local_elbo = (
-                    (
-                        model_tr.log_prob_sum(self._local_variables)
-                        - guide_tr.log_prob_sum(self._local_variables)
-                    )
+                    (model_tr.log_prob_sum(self._local_variables) - guide_tr.log_prob_sum(self._local_variables))
                     .cpu()
                     .numpy()
                 )
@@ -866,7 +802,5 @@ class FactorMuE(nn.Module):
             # Encode seq.
             z_loc = self.encoder(data[ind][0])[0]
             # Reconstruct
-            decoded = self.decoder(
-                z_loc, param("W_q_mn"), param("B_q_mn"), param("inverse_temp_q_mn")
-            )
+            decoded = self.decoder(z_loc, param("W_q_mn"), param("B_q_mn"), param("inverse_temp_q_mn"))
             return torch.exp(decoded["precursor_seq_logits"])

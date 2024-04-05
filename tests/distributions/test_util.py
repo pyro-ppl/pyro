@@ -82,10 +82,7 @@ def test_broadcast_shape_error(shapes):
     ],
 )
 def test_broadcast_shape_strict(shapes):
-    assert (
-        broadcast_shape(*shapes, strict=True)
-        == np.broadcast(*map(np.empty, shapes)).shape
-    )
+    assert broadcast_shape(*shapes, strict=True) == np.broadcast(*map(np.empty, shapes)).shape
 
 
 @pytest.mark.parametrize(
@@ -185,9 +182,7 @@ def test_detach_transformed(shape):
     scale = torch.tensor(1.0, requires_grad=True)
     a = torch.tensor(2.0, requires_grad=True)
     b = torch.tensor(3.0, requires_grad=True)
-    d1 = dist.TransformedDistribution(
-        dist.Normal(loc, scale), dist.transforms.AffineTransform(a, b)
-    )
+    d1 = dist.TransformedDistribution(dist.Normal(loc, scale), dist.transforms.AffineTransform(a, b))
     if shape is not None:
         d1 = d1.expand(shape)
 
@@ -286,9 +281,7 @@ def test_deep_to_transformed(shape, dtype):
     scale = torch.tensor(1.0, requires_grad=False)
     a = torch.tensor(2.0, requires_grad=True)
     b = torch.tensor(3.0, requires_grad=False)
-    d1 = dist.TransformedDistribution(
-        dist.Normal(loc, scale), dist.transforms.AffineTransform(a, b)
-    )
+    d1 = dist.TransformedDistribution(dist.Normal(loc, scale), dist.transforms.AffineTransform(a, b))
     if shape is not None:
         d1 = d1.expand(shape)
 

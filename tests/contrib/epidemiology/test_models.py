@@ -76,9 +76,7 @@ def test_simple_sir_smoke(duration, forecast, options, algo):
     model = SimpleSIRModel(population, recovery_time, data)
     num_samples = 5
     if algo == "mcmc":
-        model.fit_mcmc(
-            warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options
-        )
+        model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
     else:
         model.fit_svi(num_steps=2, num_samples=num_samples, **options)
 
@@ -109,9 +107,7 @@ def test_simple_seir_smoke(duration, forecast, options, algo):
     recovery_time = 7.0
 
     # Generate data.
-    model = SimpleSEIRModel(
-        population, incubation_time, recovery_time, [None] * duration
-    )
+    model = SimpleSEIRModel(population, incubation_time, recovery_time, [None] * duration)
     assert model.full_mass == [("R0", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
@@ -123,9 +119,7 @@ def test_simple_seir_smoke(duration, forecast, options, algo):
     model = SimpleSEIRModel(population, incubation_time, recovery_time, data)
     num_samples = 5
     if algo == "mcmc":
-        model.fit_mcmc(
-            warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options
-        )
+        model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
     else:
         model.fit_svi(num_steps=2, num_samples=num_samples, **options)
 
@@ -154,9 +148,7 @@ def test_simple_seird_smoke(duration, forecast, options, algo):
     mortality_rate = 0.1
 
     # Generate data.
-    model = SimpleSEIRDModel(
-        population, incubation_time, recovery_time, mortality_rate, [None] * duration
-    )
+    model = SimpleSEIRDModel(population, incubation_time, recovery_time, mortality_rate, [None] * duration)
     assert model.full_mass == [("R0", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
@@ -165,14 +157,10 @@ def test_simple_seird_smoke(duration, forecast, options, algo):
     assert data.sum() > 0, "failed to generate positive data"
 
     # Infer.
-    model = SimpleSEIRDModel(
-        population, incubation_time, recovery_time, mortality_rate, data
-    )
+    model = SimpleSEIRDModel(population, incubation_time, recovery_time, mortality_rate, data)
     num_samples = 5
     if algo == "mcmc":
-        model.fit_mcmc(
-            warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options
-        )
+        model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
     else:
         model.fit_svi(num_steps=2, num_samples=num_samples, **options)
 
@@ -236,9 +224,7 @@ def test_overdispersed_seir_smoke(duration, forecast, options):
     recovery_time = 7.0
 
     # Generate data.
-    model = OverdispersedSEIRModel(
-        population, incubation_time, recovery_time, [None] * duration
-    )
+    model = OverdispersedSEIRModel(population, incubation_time, recovery_time, [None] * duration)
     assert model.full_mass == [("R0", "rho", "od")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
@@ -312,9 +298,7 @@ def test_superspreading_seir_smoke(duration, forecast, options):
     recovery_time = 7.0
 
     # Generate data.
-    model = SuperspreadingSEIRModel(
-        population, incubation_time, recovery_time, [None] * duration
-    )
+    model = SuperspreadingSEIRModel(population, incubation_time, recovery_time, [None] * duration)
     assert model.full_mass == [("R0", "k", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5, "k": 1.0})["obs"]
@@ -352,9 +336,7 @@ def test_coalescent_likelihood_smoke(duration, forecast, options, algo):
     recovery_time = 7.0
 
     # Generate data.
-    model = SuperspreadingSEIRModel(
-        population, incubation_time, recovery_time, [None] * duration
-    )
+    model = SuperspreadingSEIRModel(population, incubation_time, recovery_time, [None] * duration)
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5, "k": 1.0})["obs"]
         if data.sum():
@@ -375,9 +357,7 @@ def test_coalescent_likelihood_smoke(duration, forecast, options, algo):
     )
     num_samples = 5
     if algo == "mcmc":
-        model.fit_mcmc(
-            warmup_steps=2, num_samples=num_samples, max_tree_depth=2, **options
-        )
+        model.fit_mcmc(warmup_steps=2, num_samples=num_samples, max_tree_depth=2, **options)
     else:
         model.fit_svi(num_steps=2, num_samples=num_samples, **options)
 
@@ -545,9 +525,7 @@ def test_regional_smoke(duration, forecast, options, algo):
     recovery_time = 7.0
 
     # Generate data.
-    model = RegionalSIRModel(
-        population, coupling, recovery_time, data=[None] * duration
-    )
+    model = RegionalSIRModel(population, coupling, recovery_time, data=[None] * duration)
     assert model.full_mass == [("R0", "rho_c1", "rho_c0", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
@@ -560,9 +538,7 @@ def test_regional_smoke(duration, forecast, options, algo):
     model = RegionalSIRModel(population, coupling, recovery_time, data)
     num_samples = 5
     if algo == "mcmc":
-        model.fit_mcmc(
-            warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options
-        )
+        model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
     else:
         model.fit_svi(num_steps=2, num_samples=num_samples, **options)
 
@@ -604,9 +580,7 @@ def test_regional_finalize_smoke(duration, forecast, options, algo):
     recovery_time = 7.0
 
     # Generate data.
-    model = RegionalSIRModelWithFinalize(
-        population, coupling, recovery_time, data=[None] * duration
-    )
+    model = RegionalSIRModelWithFinalize(population, coupling, recovery_time, data=[None] * duration)
     assert model.full_mass == [("R0", "rho_c1", "rho_c0", "rho")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5, "rho": 0.5})["obs"]
@@ -619,9 +593,7 @@ def test_regional_finalize_smoke(duration, forecast, options, algo):
     model = RegionalSIRModelWithFinalize(population, coupling, recovery_time, data)
     num_samples = 5
     if algo == "mcmc":
-        model.fit_mcmc(
-            warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options
-        )
+        model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
     else:
         model.fit_svi(num_steps=2, num_samples=num_samples, **options)
 
@@ -655,9 +627,7 @@ def test_hetero_regional_smoke(duration, forecast, options, algo):
     recovery_time = 7.0
 
     # Generate data.
-    model = HeterogeneousRegionalSIRModel(
-        population, coupling, recovery_time, data=[None] * duration
-    )
+    model = HeterogeneousRegionalSIRModel(population, coupling, recovery_time, data=[None] * duration)
     assert model.full_mass == [("R0", "R_drift", "rho0", "rho_drift")]
     for attempt in range(100):
         data = model.generate({"R0": 1.5})["obs"]
@@ -670,9 +640,7 @@ def test_hetero_regional_smoke(duration, forecast, options, algo):
     model = HeterogeneousRegionalSIRModel(population, coupling, recovery_time, data)
     num_samples = 5
     if algo == "mcmc":
-        model.fit_mcmc(
-            warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options
-        )
+        model.fit_mcmc(warmup_steps=1, num_samples=num_samples, max_tree_depth=2, **options)
     else:
         model.fit_svi(num_steps=2, num_samples=num_samples, **options)
 

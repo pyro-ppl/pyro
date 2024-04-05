@@ -145,11 +145,7 @@ def log_I1(orders: int, value: torch.Tensor, terms=250):
     indices = k[:orders].view(-1, 1) + k.view(1, -1)
     assert indices.shape == (orders, terms)
 
-    seqs = (
-        2 * lvalues[None, :, :]
-        - lfactorials[None, None, :]
-        - lgammas.gather(1, indices)[:, None, :]
-    ).logsumexp(-1)
+    seqs = (2 * lvalues[None, :, :] - lfactorials[None, None, :] - lgammas.gather(1, indices)[:, None, :]).logsumexp(-1)
     assert seqs.shape == (orders, vshape.numel())
 
     i1s = lvalues[..., :orders].T + seqs
@@ -178,9 +174,9 @@ def get_quad_rule(num_quad, prototype_tensor):
     quad_rule = hermgauss(num_quad)
     quad_points = quad_rule[0] * np.sqrt(2.0)
     log_weights = np.log(quad_rule[1]) - 0.5 * np.log(np.pi)
-    return torch.from_numpy(quad_points).type_as(prototype_tensor), torch.from_numpy(
-        log_weights
-    ).type_as(prototype_tensor)
+    return torch.from_numpy(quad_points).type_as(prototype_tensor), torch.from_numpy(log_weights).type_as(
+        prototype_tensor
+    )
 
 
 def sparse_multinomial_likelihood(total_count, nonzero_logits, nonzero_value):
@@ -199,9 +195,7 @@ def sparse_multinomial_likelihood(total_count, nonzero_logits, nonzero_value):
         )
     """
     return (
-        _log_factorial_sum(total_count)
-        - _log_factorial_sum(nonzero_value)
-        + torch.dot(nonzero_logits, nonzero_value)
+        _log_factorial_sum(total_count) - _log_factorial_sum(nonzero_value) + torch.dot(nonzero_logits, nonzero_value)
     )
 
 

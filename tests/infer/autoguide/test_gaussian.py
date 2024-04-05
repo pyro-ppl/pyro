@@ -113,9 +113,7 @@ def check_structure(model, expected_str, expected_dependencies=None):
         precision = mvn.precision_matrix
         actual = precision.abs().gt(1e-5).long()
         str_to_number = {"?": 1, ".": 0}
-        expected = torch.tensor(
-            [[str_to_number[c] for c in row if c != " "] for row in expected_str]
-        )
+        expected = torch.tensor([[str_to_number[c] for c in row if c != " "] for row in expected_str])
         assert (actual == expected).all()
 
 
@@ -155,12 +153,8 @@ def check_backends_agree(model):
         tr.trace.compute_log_prob()
     entropy2 = -tr.trace.nodes["_AutoGaussianFunsor_latent"]["log_prob"].mean()
     assert_close(entropy1, entropy2, atol=1e-2)
-    grads1 = torch.autograd.grad(
-        entropy1, [params1[k] for k in names], allow_unused=True
-    )
-    grads2 = torch.autograd.grad(
-        entropy2, [params2[k] for k in names], allow_unused=True
-    )
+    grads1 = torch.autograd.grad(entropy1, [params1[k] for k in names], allow_unused=True)
+    grads2 = torch.autograd.grad(entropy2, [params2[k] for k in names], allow_unused=True)
     for name, grad1, grad2 in zip(names, grads1, grads2):
         # Gradients should agree to very high precision.
         if grad1 is None and grad2 is not None:
@@ -177,9 +171,7 @@ def check_backends_agree(model):
     grads1 = torch.autograd.grad(loss1, [params1[k] for k in names], allow_unused=True)
     grads2 = torch.autograd.grad(loss2, [params2[k] for k in names], allow_unused=True)
     for name, grad1, grad2 in zip(names, grads1, grads2):
-        assert_close(
-            grad1, grad2, atol=0.05, rtol=0.05, msg=f"{name}:\n{grad1} vs {grad2}"
-        )
+        assert_close(grad1, grad2, atol=0.05, rtol=0.05, msg=f"{name}:\n{grad1} vs {grad2}")
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -477,21 +469,13 @@ def pyrocov_model(dataset):
     # Assume relative growth rate depends strongly on mutations and weakly on place.
     coef_loc = torch.zeros(F)
     coef = pyro.sample("coef", dist.Logistic(coef_loc, coef_scale).to_event(1))  # [F]
-    rate_loc = pyro.deterministic(
-        "rate_loc", 0.01 * coef @ features.T, event_dim=1
-    )  # [S]
+    rate_loc = pyro.deterministic("rate_loc", 0.01 * coef @ features.T, event_dim=1)  # [S]
 
     # Assume initial infections depend strongly on strain and place.
-    init_loc = pyro.sample(
-        "init_loc", dist.Normal(torch.zeros(S), init_loc_scale).to_event(1)
-    )  # [S]
+    init_loc = pyro.sample("init_loc", dist.Normal(torch.zeros(S), init_loc_scale).to_event(1))  # [S]
     with pyro.plate("place", P, dim=-1):
-        rate = pyro.sample(
-            "rate", dist.Normal(rate_loc, rate_scale).to_event(1)
-        )  # [P, S]
-        init = pyro.sample(
-            "init", dist.Normal(init_loc, init_scale).to_event(1)
-        )  # [P, S]
+        rate = pyro.sample("rate", dist.Normal(rate_loc, rate_scale).to_event(1))  # [P, S]
+        init = pyro.sample("init", dist.Normal(init_loc, init_scale).to_event(1))  # [P, S]
 
         # Finally observe counts.
         with pyro.plate("time", T, dim=-2):
@@ -529,16 +513,10 @@ def pyrocov_model_relaxed(dataset):
     )  # [S]
 
     # Assume initial infections depend strongly on strain and place.
-    init_loc = pyro.sample(
-        "init_loc", dist.Normal(torch.zeros(S), init_loc_scale).to_event(1)
-    )  # [S]
+    init_loc = pyro.sample("init_loc", dist.Normal(torch.zeros(S), init_loc_scale).to_event(1))  # [S]
     with pyro.plate("place", P, dim=-1):
-        rate = pyro.sample(
-            "rate", dist.Normal(rate_loc, rate_scale).to_event(1)
-        )  # [P, S]
-        init = pyro.sample(
-            "init", dist.Normal(init_loc, init_scale).to_event(1)
-        )  # [P, S]
+        rate = pyro.sample("rate", dist.Normal(rate_loc, rate_scale).to_event(1))  # [P, S]
+        init = pyro.sample("init", dist.Normal(init_loc, init_scale).to_event(1))  # [P, S]
 
         # Finally observe counts.
         with pyro.plate("time", T, dim=-2):
@@ -575,9 +553,7 @@ def pyrocov_model_plated(dataset):
         coef = pyro.sample("coef", dist.Logistic(0, coef_scale))  # [F]
     rate_loc_loc = 0.01 * coef @ features.T
     with strain_plate:
-        rate_loc = pyro.sample(
-            "rate_loc", dist.Normal(rate_loc_loc, rate_loc_scale)
-        )  # [S]
+        rate_loc = pyro.sample("rate_loc", dist.Normal(rate_loc_loc, rate_loc_scale))  # [S]
         init_loc = pyro.sample("init_loc", dist.Normal(0, init_loc_scale))  # [S]
     with place_plate, strain_plate:
         rate = pyro.sample("rate", dist.Normal(rate_loc, rate_scale))  # [P, S]
@@ -616,14 +592,10 @@ def pyrocov_model_poisson(dataset):
     pois_loc = pyro.sample("pois_loc", dist.Normal(0, 2))
     pois_scale = pyro.sample("pois_scale", dist.LogNormal(0, 2))
 
-    coef = pyro.sample(
-        "coef", dist.Logistic(torch.zeros(F), coef_scale).to_event(1)
-    )  # [F]
+    coef = pyro.sample("coef", dist.Logistic(torch.zeros(F), coef_scale).to_event(1))  # [F]
     rate_loc_loc = 0.01 * coef @ features.T
     with strain_plate:
-        rate_loc = pyro.sample(
-            "rate_loc", dist.Normal(rate_loc_loc, rate_loc_scale)
-        )  # [S]
+        rate_loc = pyro.sample("rate_loc", dist.Normal(rate_loc_loc, rate_loc_scale))  # [S]
         init_loc = pyro.sample("init_loc", dist.Normal(0, init_loc_scale))  # [S]
     with place_plate, strain_plate:
         rate = pyro.sample("rate", dist.Normal(rate_loc, rate_scale))  # [P, S]
@@ -643,12 +615,8 @@ def pyrocov_model_poisson(dataset):
 class PoissonGuide(AutoGuideList):
     def __init__(self, model, backend):
         super().__init__(model)
-        self.append(
-            AutoGaussian(poutine.block(model, hide_fn=self.hide_fn_1), backend=backend)
-        )
-        self.append(
-            AutoGaussian(poutine.block(model, hide_fn=self.hide_fn_2), backend=backend)
-        )
+        self.append(AutoGaussian(poutine.block(model, hide_fn=self.hide_fn_1), backend=backend))
+        self.append(AutoGaussian(poutine.block(model, hide_fn=self.hide_fn_2), backend=backend))
 
     @staticmethod
     def hide_fn_1(msg):

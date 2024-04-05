@@ -35,9 +35,7 @@ class VonMises3D(TorchDistribution):
     def __init__(self, concentration, validate_args=None):
         if concentration.dim() < 1 or concentration.shape[-1] != 3:
             raise ValueError(
-                "Expected concentration to have rightmost dim 3, actual shape = {}".format(
-                    concentration.shape
-                )
+                "Expected concentration to have rightmost dim 3, actual shape = {}".format(concentration.shape)
             )
         self.concentration = concentration
         batch_shape, event_shape = concentration.shape[:-1], concentration.shape[-1:]
@@ -46,11 +44,7 @@ class VonMises3D(TorchDistribution):
     def log_prob(self, value):
         if self._validate_args:
             if value.dim() < 1 or value.shape[-1] != 3:
-                raise ValueError(
-                    "Expected value to have rightmost dim 3, actual shape = {}".format(
-                        value.shape
-                    )
-                )
+                raise ValueError("Expected value to have rightmost dim 3, actual shape = {}".format(value.shape))
             if not (torch.abs(value.norm(2, -1) - 1) < 1e-6).all():
                 raise ValueError("direction vectors are not normalized")
         scale = self.concentration.norm(2, -1)

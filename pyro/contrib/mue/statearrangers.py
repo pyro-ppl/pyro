@@ -182,20 +182,14 @@ class Profile(nn.Module):
         )
         # Broadcasting for concatenation.
         if len(precursor_seq_logits.size()) > len(insert_seq_logits.size()):
-            insert_seq_logits = insert_seq_logits.unsqueeze(0).expand(
-                [precursor_seq_logits.size()[0], -1, -1]
-            )
+            insert_seq_logits = insert_seq_logits.unsqueeze(0).expand([precursor_seq_logits.size()[0], -1, -1])
         elif len(insert_seq_logits.size()) > len(precursor_seq_logits.size()):
-            precursor_seq_logits = precursor_seq_logits.unsqueeze(0).expand(
-                [insert_seq_logits.size()[0], -1, -1]
-            )
+            precursor_seq_logits = precursor_seq_logits.unsqueeze(0).expand([insert_seq_logits.size()[0], -1, -1])
         seq_logits = torch.cat([precursor_seq_logits, insert_seq_logits], dim=-2)
 
         # Option to include the substitution matrix.
         if substitute_logits is not None:
-            observation_logits = torch.logsumexp(
-                seq_logits.unsqueeze(-1) + substitute_logits.unsqueeze(-3), dim=-2
-            )
+            observation_logits = torch.logsumexp(seq_logits.unsqueeze(-1) + substitute_logits.unsqueeze(-3), dim=-2)
         else:
             observation_logits = seq_logits
 

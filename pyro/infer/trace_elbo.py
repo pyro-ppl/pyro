@@ -54,9 +54,7 @@ class Trace_ELBO(ELBO):
         Returns a single trace from the guide, and the model that is run
         against it.
         """
-        model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_plate_nesting, model, guide, args, kwargs
-        )
+        model_trace, guide_trace = get_importance_trace("flat", self.max_plate_nesting, model, guide, args, kwargs)
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
         return model_trace, guide_trace
@@ -70,9 +68,7 @@ class Trace_ELBO(ELBO):
         """
         elbo = 0.0
         for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
-            elbo_particle = torch_item(model_trace.log_prob_sum()) - torch_item(
-                guide_trace.log_prob_sum()
-            )
+            elbo_particle = torch_item(model_trace.log_prob_sum()) - torch_item(guide_trace.log_prob_sum())
             elbo += elbo_particle / self.num_particles
 
         loss = -elbo
@@ -97,17 +93,13 @@ class Trace_ELBO(ELBO):
                 elbo_particle = elbo_particle - torch_item(site["log_prob_sum"])
 
                 if not is_identically_zero(entropy_term):
-                    surrogate_elbo_particle = (
-                        surrogate_elbo_particle - entropy_term.sum()
-                    )
+                    surrogate_elbo_particle = surrogate_elbo_particle - entropy_term.sum()
 
                 if not is_identically_zero(score_function_term):
                     if log_r is None:
                         log_r = _compute_log_r(model_trace, guide_trace)
                     site = log_r.sum_to(site["cond_indep_stack"])
-                    surrogate_elbo_particle = (
-                        surrogate_elbo_particle + (site * score_function_term).sum()
-                    )
+                    surrogate_elbo_particle = surrogate_elbo_particle + (site * score_function_term).sum()
 
         return -elbo_particle, -surrogate_elbo_particle
 
@@ -119,9 +111,7 @@ class Trace_ELBO(ELBO):
         loss = 0.0
         surrogate_loss = 0.0
         for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
-            loss_particle, surrogate_loss_particle = self._differentiable_loss_particle(
-                model_trace, guide_trace
-            )
+            loss_particle, surrogate_loss_particle = self._differentiable_loss_particle(model_trace, guide_trace)
             surrogate_loss += surrogate_loss_particle / self.num_particles
             loss += loss_particle / self.num_particles
         warn_if_nan(surrogate_loss, "loss")
@@ -138,21 +128,15 @@ class Trace_ELBO(ELBO):
         loss = 0.0
         # grab a trace from the generator
         for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
-            loss_particle, surrogate_loss_particle = self._differentiable_loss_particle(
-                model_trace, guide_trace
-            )
+            loss_particle, surrogate_loss_particle = self._differentiable_loss_particle(model_trace, guide_trace)
             loss += loss_particle / self.num_particles
 
             # collect parameters to train from model and guide
             trainable_params = any(
-                site["type"] == "param"
-                for trace in (model_trace, guide_trace)
-                for site in trace.nodes.values()
+                site["type"] == "param" for trace in (model_trace, guide_trace) for site in trace.nodes.values()
             )
 
-            if trainable_params and getattr(
-                surrogate_loss_particle, "requires_grad", False
-            ):
+            if trainable_params and getattr(surrogate_loss_particle, "requires_grad", False):
                 surrogate_loss_particle = surrogate_loss_particle / self.num_particles
                 surrogate_loss_particle.backward(retain_graph=self.retain_graph)
         warn_if_nan(loss, "loss")
@@ -181,18 +165,14 @@ class JitTrace_ELBO(Trace_ELBO):
             # build a closure for loss_and_surrogate_loss
             weakself = weakref.ref(self)
 
-            @pyro.ops.jit.trace(
-                ignore_warnings=self.ignore_jit_warnings, jit_options=self.jit_options
-            )
+            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings, jit_options=self.jit_options)
             def loss_and_surrogate_loss(*args, **kwargs):
                 kwargs.pop("_pyro_model_id")
                 kwargs.pop("_pyro_guide_id")
                 self = weakself()
                 loss = 0.0
                 surrogate_loss = 0.0
-                for model_trace, guide_trace in self._get_traces(
-                    model, guide, args, kwargs
-                ):
+                for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
                     elbo_particle = 0
                     surrogate_elbo_particle = 0
                     log_r = None
@@ -201,36 +181,25 @@ class JitTrace_ELBO(Trace_ELBO):
                     for name, site in model_trace.nodes.items():
                         if site["type"] == "sample":
                             elbo_particle = elbo_particle + site["log_prob_sum"]
-                            surrogate_elbo_particle = (
-                                surrogate_elbo_particle + site["log_prob_sum"]
-                            )
+                            surrogate_elbo_particle = surrogate_elbo_particle + site["log_prob_sum"]
 
                     for name, site in guide_trace.nodes.items():
                         if site["type"] == "sample":
-                            log_prob, score_function_term, entropy_term = site[
-                                "score_parts"
-                            ]
+                            log_prob, score_function_term, entropy_term = site["score_parts"]
 
                             elbo_particle = elbo_particle - site["log_prob_sum"]
 
                             if not is_identically_zero(entropy_term):
-                                surrogate_elbo_particle = (
-                                    surrogate_elbo_particle - entropy_term.sum()
-                                )
+                                surrogate_elbo_particle = surrogate_elbo_particle - entropy_term.sum()
 
                             if not is_identically_zero(score_function_term):
                                 if log_r is None:
                                     log_r = _compute_log_r(model_trace, guide_trace)
                                 site = log_r.sum_to(site["cond_indep_stack"])
-                                surrogate_elbo_particle = (
-                                    surrogate_elbo_particle
-                                    + (site * score_function_term).sum()
-                                )
+                                surrogate_elbo_particle = surrogate_elbo_particle + (site * score_function_term).sum()
 
                     loss = loss - elbo_particle / self.num_particles
-                    surrogate_loss = (
-                        surrogate_loss - surrogate_elbo_particle / self.num_particles
-                    )
+                    surrogate_loss = surrogate_loss - surrogate_elbo_particle / self.num_particles
 
                 return loss, surrogate_loss
 
@@ -239,17 +208,13 @@ class JitTrace_ELBO(Trace_ELBO):
         return self._loss_and_surrogate_loss(*args, **kwargs)
 
     def differentiable_loss(self, model, guide, *args, **kwargs):
-        loss, surrogate_loss = self.loss_and_surrogate_loss(
-            model, guide, *args, **kwargs
-        )
+        loss, surrogate_loss = self.loss_and_surrogate_loss(model, guide, *args, **kwargs)
 
         warn_if_nan(loss, "loss")
         return loss + (surrogate_loss - surrogate_loss.detach())
 
     def loss_and_grads(self, model, guide, *args, **kwargs):
-        loss, surrogate_loss = self.loss_and_surrogate_loss(
-            model, guide, *args, **kwargs
-        )
+        loss, surrogate_loss = self.loss_and_surrogate_loss(model, guide, *args, **kwargs)
         surrogate_loss.backward()
         loss = loss.item()
 

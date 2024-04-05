@@ -25,14 +25,10 @@ class MaskMessenger(Messenger):
     def __init__(self, mask: Union[bool, torch.BoolTensor]) -> None:
         if isinstance(mask, torch.Tensor):
             if mask.dtype != torch.bool:
-                raise ValueError(
-                    "Expected mask to be a BoolTensor but got {}".format(type(mask))
-                )
+                raise ValueError("Expected mask to be a BoolTensor but got {}".format(type(mask)))
 
         elif mask not in (True, False):
-            raise ValueError(
-                "Expected mask to be a boolean but got {}".format(type(mask))
-            )
+            raise ValueError("Expected mask to be a boolean but got {}".format(type(mask)))
         super().__init__()
         self.mask = mask
 

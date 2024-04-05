@@ -52,9 +52,7 @@ def generate_data(small_test, include_stop, device):
         mult_dat = 10
 
     seqs = ["BABBA"] * mult_dat + ["BAAB"] * mult_dat + ["BABBB"] * mult_dat
-    dataset = BiosequenceDataset(
-        seqs, "list", "AB", include_stop=include_stop, device=device
-    )
+    dataset = BiosequenceDataset(seqs, "list", "AB", include_stop=include_stop, device=device)
 
     return dataset
 
@@ -86,9 +84,7 @@ def main(args):
         indices = torch.randperm(sum(data_lengths), device=device).tolist()
         dataset_train, dataset_test = [
             torch.utils.data.Subset(dataset, indices[(offset - length) : offset])
-            for offset, length in zip(
-                torch._utils._accumulate(data_lengths), data_lengths
-            )
+            for offset, length in zip(torch._utils._accumulate(data_lengths), data_lengths)
         ]
     else:
         dataset_train = dataset
@@ -139,9 +135,7 @@ def main(args):
     )
 
     # Evaluate.
-    train_lp, test_lp, train_perplex, test_perplex = model.evaluate(
-        dataset_train, dataset_test, args.jit
-    )
+    train_lp, test_lp, train_perplex, test_perplex = model.evaluate(dataset_train, dataset_test, args.jit)
     print("train logp: {} perplex: {}".format(train_lp, train_perplex))
     print("test logp: {} perplex: {}".format(test_lp, test_perplex))
 
@@ -156,22 +150,14 @@ def main(args):
         plt.xlabel("step")
         plt.ylabel("loss")
         if not args.no_save:
-            plt.savefig(
-                os.path.join(
-                    args.out_folder, "FactorMuE_plot.loss_{}.pdf".format(time_stamp)
-                )
-            )
+            plt.savefig(os.path.join(args.out_folder, "FactorMuE_plot.loss_{}.pdf".format(time_stamp)))
 
         plt.figure(figsize=(6, 6))
         plt.scatter(z_locs[:, 0], z_locs[:, 1])
         plt.xlabel(r"$z_1$")
         plt.ylabel(r"$z_2$")
         if not args.no_save:
-            plt.savefig(
-                os.path.join(
-                    args.out_folder, "FactorMuE_plot.latent_{}.pdf".format(time_stamp)
-                )
-            )
+            plt.savefig(os.path.join(args.out_folder, "FactorMuE_plot.latent_{}.pdf".format(time_stamp)))
 
         if not args.indel_factor:
             # Plot indel parameters. See statearrangers.py for details on the
@@ -206,11 +192,7 @@ def main(args):
                 )
 
     if not args.no_save:
-        pyro.get_param_store().save(
-            os.path.join(
-                args.out_folder, "FactorMuE_results.params_{}.out".format(time_stamp)
-            )
-        )
+        pyro.get_param_store().save(os.path.join(args.out_folder, "FactorMuE_results.params_{}.out".format(time_stamp)))
         with open(
             os.path.join(
                 args.out_folder,
@@ -219,13 +201,9 @@ def main(args):
             "w",
         ) as ow:
             ow.write("train_lp,test_lp,train_perplex,test_perplex\n")
-            ow.write(
-                "{},{},{},{}\n".format(train_lp, test_lp, train_perplex, test_perplex)
-            )
+            ow.write("{},{},{},{}\n".format(train_lp, test_lp, train_perplex, test_perplex))
         np.savetxt(
-            os.path.join(
-                args.out_folder, "FactorMuE_results.embed_loc_{}.txt".format(time_stamp)
-            ),
+            os.path.join(args.out_folder, "FactorMuE_results.embed_loc_{}.txt".format(time_stamp)),
             z_locs.cpu().numpy(),
         )
         np.savetxt(
@@ -268,18 +246,14 @@ if __name__ == "__main__":
     )
     parser.add_argument("-r", "--rng-seed", default=0, type=int)
     parser.add_argument("--rng-data-seed", default=0, type=int)
-    parser.add_argument(
-        "-f", "--file", default=None, type=str, help="Input file (fasta format)."
-    )
+    parser.add_argument("-f", "--file", default=None, type=str, help="Input file (fasta format).")
     parser.add_argument(
         "-a",
         "--alphabet",
         default="amino-acid",
         help="Alphabet (amino-acid OR dna OR ATGC ...).",
     )
-    parser.add_argument(
-        "-zdim", "--z-dim", default=2, type=int, help="z space dimension."
-    )
+    parser.add_argument("-zdim", "--z-dim", default=2, type=int, help="z space dimension.")
     parser.add_argument("-b", "--batch-size", default=10, type=int, help="Batch size.")
     parser.add_argument(
         "-M",
@@ -382,36 +356,28 @@ if __name__ == "__main__":
         type=float,
         help="Gamma parameter for multistage learning rate.",
     )
-    parser.add_argument(
-        "-e", "--n-epochs", default=10, type=int, help="Number of epochs of training."
-    )
+    parser.add_argument("-e", "--n-epochs", default=10, type=int, help="Number of epochs of training.")
     parser.add_argument(
         "--anneal",
         default=0.0,
         type=float,
         help="Number of epochs to anneal beta over.",
     )
-    parser.add_argument(
-        "--no-plots", default=False, action="store_true", help="Make plots."
-    )
+    parser.add_argument("--no-plots", default=False, action="store_true", help="Make plots.")
     parser.add_argument(
         "--no-save",
         default=False,
         action="store_true",
         help="Do not save plots and results.",
     )
-    parser.add_argument(
-        "-outf", "--out-folder", default=".", help="Folder to save plots."
-    )
+    parser.add_argument("-outf", "--out-folder", default=".", help="Folder to save plots.")
     parser.add_argument(
         "--split",
         default=0.2,
         type=float,
         help=("Fraction of dataset to holdout for testing"),
     )
-    parser.add_argument(
-        "--jit", default=False, action="store_true", help="JIT compile the ELBO."
-    )
+    parser.add_argument("--jit", default=False, action="store_true", help="JIT compile the ELBO.")
     parser.add_argument("--cuda", default=False, action="store_true", help="Use GPU.")
     parser.add_argument(
         "--cpu-data",

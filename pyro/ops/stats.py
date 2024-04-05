@@ -79,9 +79,7 @@ def split_gelman_rubin(input, chain_dim=0, sample_dim=1):
     new_input = torch.stack([input[:, :N_half], input[:, -N_half:]], dim=1)
     new_input = new_input.reshape((-1, N_half) + input.shape[2:])
     split_rhat = gelman_rubin(new_input)
-    return split_rhat.squeeze(max(sample_dim, chain_dim)).squeeze(
-        min(sample_dim, chain_dim)
-    )
+    return split_rhat.squeeze(max(sample_dim, chain_dim)).squeeze(min(sample_dim, chain_dim))
 
 
 def autocorrelation(input, dim=0):
@@ -116,9 +114,7 @@ def autocorrelation(input, dim=0):
     # truncate and normalize the result, setting autocorrelation to 1 for all
     # constant channels
     autocorr = autocorr[..., :N]
-    autocorr = autocorr / torch.tensor(
-        range(N, 0, -1), dtype=input.dtype, device=input.device
-    )
+    autocorr = autocorr / torch.tensor(range(N, 0, -1), dtype=input.dtype, device=input.device)
     variance = autocorr[..., :1]
     constant = (variance == 0).expand_as(autocorr)
     autocorr = autocorr / variance.clamp(min=torch.finfo(variance.dtype).tiny)
@@ -303,10 +299,7 @@ def weighed_quantile(
     weights = weights / weights.max(dim, keepdim=True)[0]
     # Calculate indices
     indices_above = (
-        (weights[..., None] <= probs)
-        .sum(dim, keepdim=True)
-        .swapaxes(dim, -1)
-        .clamp(max=input.size(dim) - 1)[..., 0]
+        (weights[..., None] <= probs).sum(dim, keepdim=True).swapaxes(dim, -1).clamp(max=input.size(dim) - 1)[..., 0]
     )
     indices_below = (indices_above - 1).clamp(min=0)
     # Calculate below and above qunatiles
@@ -375,9 +368,7 @@ def _weighted_mean(input, log_weights, dim=0, keepdim=False):
 
 def _weighted_variance(input, log_weights, dim=0, keepdim=False, unbiased=True):
     # Ref: https://en.wikipedia.org/wiki/Weighted_arithmetic_mean#Frequency_weights
-    deviation_squared = (
-        input - _weighted_mean(input, log_weights, dim, keepdim=True)
-    ).pow(2)
+    deviation_squared = (input - _weighted_mean(input, log_weights, dim, keepdim=True)).pow(2)
     correction = log_weights.size(0) / (log_weights.size(0) - 1.0) if unbiased else 1.0
     return _weighted_mean(deviation_squared, log_weights, dim, keepdim) * correction
 
@@ -398,9 +389,7 @@ def waic(input, log_weights=None, pointwise=False, dim=0):
     :returns tuple: tuple of WAIC and effective number of parameters.
     """
     if log_weights is None:
-        log_weights = torch.zeros(
-            input.size(dim), dtype=input.dtype, device=input.device
-        )
+        log_weights = torch.zeros(input.size(dim), dtype=input.dtype, device=input.device)
 
     # computes log pointwise predictive density: formula (3) of [1]
     dim = input.dim() + dim if dim < 0 else dim
@@ -492,8 +481,9 @@ def crps_empirical(pred, truth):
     """
     if pred.shape[1:] != (1,) * (pred.dim() - truth.dim() - 1) + truth.shape:
         raise ValueError(
-            "Expected pred to have one extra sample dim on left. "
-            "Actual shapes: {} versus {}".format(pred.shape, truth.shape)
+            "Expected pred to have one extra sample dim on left. " "Actual shapes: {} versus {}".format(
+                pred.shape, truth.shape
+            )
         )
     opts = dict(device=pred.device, dtype=pred.dtype)
     num_samples = pred.size(0)
@@ -502,9 +492,7 @@ def crps_empirical(pred, truth):
 
     pred = pred.sort(dim=0).values
     diff = pred[1:] - pred[:-1]
-    weight = torch.arange(1, num_samples, **opts) * torch.arange(
-        num_samples - 1, 0, -1, **opts
-    )
+    weight = torch.arange(1, num_samples, **opts) * torch.arange(num_samples - 1, 0, -1, **opts)
     weight = weight.reshape(weight.shape + (1,) * (diff.dim() - 1))
 
     return (pred - truth).abs().mean(0) - (diff * weight).sum(0) / num_samples**2

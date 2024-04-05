@@ -90,9 +90,7 @@ class _CorrMatrix(Constraint):
 
     def check(self, value):
         # check for diagonal equal to 1
-        unit_variance = torch.all(
-            torch.abs(torch.diagonal(value, dim1=-2, dim2=-1) - 1) < 1e-6, dim=-1
-        )
+        unit_variance = torch.all(torch.abs(torch.diagonal(value, dim1=-2, dim2=-1) - 1) < 1e-6, dim=-1)
         # TODO: fix upstream - positive_definite has an extra dimension in front of output shape
         return positive_definite.check(value) & unit_variance
 
@@ -142,9 +140,7 @@ class _UnitLowerCholesky(Constraint):
 
     def check(self, value):
         value_tril = value.tril()
-        lower_triangular = (
-            (value_tril == value).view(value.shape[:-2] + (-1,)).min(-1)[0]
-        )
+        lower_triangular = (value_tril == value).view(value.shape[:-2] + (-1,)).min(-1)[0]
 
         ones_diagonal = (value.diagonal(dim1=-2, dim2=-1) == 1).min(-1)[0]
         return lower_triangular & ones_diagonal
@@ -225,9 +221,7 @@ __doc__ += "\n".join(
                 "alias of :class:`torch.distributions.constraints.{}`".format(_name)
                 if globals()[_name].__module__.startswith("torch")
                 else ".. autoclass:: {}".format(
-                    _name
-                    if type(globals()[_name]) is type
-                    else type(globals()[_name]).__name__
+                    _name if type(globals()[_name]) is type else type(globals()[_name]).__name__
                 )
             ),
         )

@@ -84,9 +84,7 @@ class CoalescentTimes(TorchDistribution):
         # in the number of lineages, which changes at each event.
         binomial = phylogeny.binomial[..., :-1]
         interval = phylogeny.times[..., :-1] - phylogeny.times[..., 1:]
-        log_prob = self.rate.log() * coal_times.size(-1) - self.rate * (
-            binomial * interval
-        ).sum(-1)
+        log_prob = self.rate.log() * coal_times.size(-1) - self.rate * (binomial * interval).sum(-1)
 
         # Scaling by those rates and accounting for log|jacobian|, the density
         # is that of a collection of independent Exponential intervals.
@@ -165,9 +163,7 @@ class CoalescentTimesWithRate(TorchDistribution):
         new = self._get_checked_instance(CoalescentTimesWithRate, _instance)
         new.leaf_times = self.leaf_times
         new.rate_grid = self.rate_grid
-        super(CoalescentTimesWithRate, new).__init__(
-            batch_shape, self.event_shape, validate_args=False
-        )
+        super(CoalescentTimesWithRate, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get("_validate_args")
         return new
 
@@ -193,9 +189,7 @@ class CoalescentTimesWithRate(TorchDistribution):
         # Compute survival factors for closed intervals.
         cumsum = self.rate_grid.cumsum(-1)
         cumsum = torch.nn.functional.pad(cumsum, (1, 0), value=0)
-        integral = _interpolate_gather(
-            cumsum, phylogeny.times[..., 1:]
-        )  # ignore the final lonely leaf
+        integral = _interpolate_gather(cumsum, phylogeny.times[..., 1:])  # ignore the final lonely leaf
         integral = integral[..., :-1] - integral[..., 1:]
         integral = integral.clamp(min=torch.finfo(integral.dtype).tiny)  # avoid nan
         log_prob = -(phylogeny.binomial[..., 1:-1] * integral).sum(-1)
@@ -316,10 +310,7 @@ class CoalescentRateLikelihood:
         """
         const = self._const[..., t]
         linear = self._linear[..., t] * rate_grid
-        log = (
-            self._log[..., t]
-            * rate_grid.clamp(min=torch.finfo(rate_grid.dtype).tiny).log()
-        )
+        log = self._log[..., t] * rate_grid.clamp(min=torch.finfo(rate_grid.dtype).tiny).log()
         return const + linear + log
 
 
@@ -462,9 +453,7 @@ def _make_phylogeny(leaf_times, coal_times):
     # (coal_times) into a pair (times, signs) of arrays of length 2N-1, where
     # leaf sample sign is +1 and coalescent sign is -1.
     times = torch.cat([coal_times, leaf_times], dim=-1)
-    signs = torch.linspace(
-        1.5 - N, N - 0.5, 2 * N - 1
-    ).sign()  # e.g. [-1, -1, +1, +1, +1]
+    signs = torch.linspace(1.5 - N, N - 0.5, 2 * N - 1).sign()  # e.g. [-1, -1, +1, +1, +1]
 
     # Sort the events reverse-ordered in time, i.e. latest to earliest.
     times, index = times.sort(dim=-1, descending=True)
@@ -494,9 +483,7 @@ def _sample_coalescent_times(leaf_times):
     # instead we simply sequentially sample and stack.
     if batch_shape:
         flat_leaf_times = leaf_times.reshape(-1, N)
-        flat_coal_times = torch.stack(
-            list(map(_sample_coalescent_times, flat_leaf_times))
-        )
+        flat_coal_times = torch.stack(list(map(_sample_coalescent_times, flat_leaf_times)))
         return flat_coal_times.reshape(batch_shape + (N - 1,))
     assert leaf_times.shape == (N,)
 

@@ -30,8 +30,7 @@ class GumbelSoftmaxReparam(Reparam):
         assert isinstance(fn, dist.RelaxedOneHotCategorical)
         if is_observed:
             raise NotImplementedError(
-                "SoftmaxReparam does not support observe statements"
-                f" (at sample site {repr(name)})"
+                "SoftmaxReparam does not support observe statements" f" (at sample site {repr(name)})"
             )
 
         # Differentiably invert transform.

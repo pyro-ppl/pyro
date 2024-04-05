@@ -30,14 +30,8 @@ def test_independent(base_dist, sample_shape, batch_shape, reinterpreted_batch_n
             d = dist.Independent(base_dist, reinterpreted_batch_ndims)
     else:
         d = dist.Independent(base_dist, reinterpreted_batch_ndims)
-        assert (
-            d.batch_shape == batch_shape[: len(batch_shape) - reinterpreted_batch_ndims]
-        )
-        assert (
-            d.event_shape
-            == batch_shape[len(batch_shape) - reinterpreted_batch_ndims :]
-            + base_dist.event_shape
-        )
+        assert d.batch_shape == batch_shape[: len(batch_shape) - reinterpreted_batch_ndims]
+        assert d.event_shape == batch_shape[len(batch_shape) - reinterpreted_batch_ndims :] + base_dist.event_shape
 
         assert d.sample().shape == batch_shape + base_dist.event_shape
         assert d.mean.shape == batch_shape + base_dist.event_shape
@@ -46,11 +40,7 @@ def test_independent(base_dist, sample_shape, batch_shape, reinterpreted_batch_n
         assert x.shape == sample_shape + d.batch_shape + d.event_shape
 
         log_prob = d.log_prob(x)
-        assert (
-            log_prob.shape
-            == sample_shape
-            + batch_shape[: len(batch_shape) - reinterpreted_batch_ndims]
-        )
+        assert log_prob.shape == sample_shape + batch_shape[: len(batch_shape) - reinterpreted_batch_ndims]
         assert not torch_isnan(log_prob)
         log_prob_0 = base_dist.log_prob(x)
         assert_equal(log_prob, _sum_rightmost(log_prob_0, reinterpreted_batch_ndims))
@@ -118,21 +108,10 @@ def test_expand(sample_shape, batch_shape, event_shape):
     assert d0.variance.shape == ones_shape + event_shape
     assert d0.sample(sample_shape).shape == sample_shape + ones_shape + event_shape
 
-    assert (
-        d0.expand(sample_shape + batch_shape).batch_shape == sample_shape + batch_shape
-    )
-    assert (
-        d0.expand(sample_shape + batch_shape).sample().shape
-        == sample_shape + batch_shape + event_shape
-    )
-    assert (
-        d0.expand(sample_shape + batch_shape).mean.shape
-        == sample_shape + batch_shape + event_shape
-    )
-    assert (
-        d0.expand(sample_shape + batch_shape).variance.shape
-        == sample_shape + batch_shape + event_shape
-    )
+    assert d0.expand(sample_shape + batch_shape).batch_shape == sample_shape + batch_shape
+    assert d0.expand(sample_shape + batch_shape).sample().shape == sample_shape + batch_shape + event_shape
+    assert d0.expand(sample_shape + batch_shape).mean.shape == sample_shape + batch_shape + event_shape
+    assert d0.expand(sample_shape + batch_shape).variance.shape == sample_shape + batch_shape + event_shape
 
     base_dist = dist.MultivariateNormal(
         torch.zeros(2).expand(*(event_shape + (2,))),
@@ -146,6 +125,5 @@ def test_expand(sample_shape, batch_shape, event_shape):
         expanded_batch_ndims = getattr(expanded, "reinterpreted_batch_ndims", 0)
         assert expanded.batch_shape == batch_shape
         assert expanded.event_shape == (
-            base_dist.batch_shape[len(base_dist.batch_shape) - expanded_batch_ndims :]
-            + base_dist.event_shape
+            base_dist.batch_shape[len(base_dist.batch_shape) - expanded_batch_ndims :] + base_dist.event_shape
         )

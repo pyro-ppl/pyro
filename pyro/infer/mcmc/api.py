@@ -9,6 +9,7 @@ This module offers a modified interface for MCMC inference with the following ob
     code that works with different backends.
   - minimal memory consumption with multiprocessing and CUDA.
 """
+
 import copy
 import json
 import logging
@@ -45,16 +46,12 @@ from pyro.util import optional
 MAX_SEED = 2**32 - 1
 
 
-def logger_thread(
-    log_queue, warmup_steps, num_samples, num_chains, disable_progbar=False
-):
+def logger_thread(log_queue, warmup_steps, num_samples, num_chains, disable_progbar=False):
     """
     Logging thread that asynchronously consumes logging events from `log_queue`,
     and handles them appropriately.
     """
-    progress_bars = ProgressBar(
-        warmup_steps, num_samples, disable=disable_progbar, num_bars=num_chains
-    )
+    progress_bars = ProgressBar(warmup_steps, num_samples, disable=disable_progbar, num_bars=num_chains)
     logger = logging.getLogger(__name__)
     logger.propagate = False
     logger.addHandler(TqdmHandler())
@@ -73,9 +70,7 @@ def logger_thread(
                 pbar_pos = int(logger_id.split(":")[-1])
                 num_samples[pbar_pos] += 1
                 if num_samples[pbar_pos] == warmup_steps:
-                    progress_bars.set_description(
-                        "Sample [{}]".format(pbar_pos + 1), pos=pbar_pos
-                    )
+                    progress_bars.set_description("Sample [{}]".format(pbar_pos + 1), pos=pbar_pos)
                 diagnostics = json.loads(msg, object_pairs_hook=OrderedDict)
                 progress_bars.set_postfix(diagnostics, pos=pbar_pos, refresh=False)
                 progress_bars.update(pos=pbar_pos)
@@ -125,13 +120,7 @@ class _Worker:
 
         try:
             for sample in _gen_samples(
-                self.kernel,
-                self.warmup_steps,
-                self.num_samples,
-                logging_hook,
-                None,
-                *args,
-                **kwargs
+                self.kernel, self.warmup_steps, self.num_samples, logging_hook, None, *args, **kwargs
             ):
                 self.result_queue.put_nowait((self.chain_id, sample))
                 self.event.wait()
@@ -217,9 +206,7 @@ class _UnarySampler:
                 initial_params = {k: v[i] for k, v in self.initial_params.items()}
                 self.kernel.initial_params = initial_params
 
-            progress_bar = ProgressBar(
-                self.warmup_steps, self.num_samples, disable=self.disable_progbar
-            )
+            progress_bar = ProgressBar(self.warmup_steps, self.num_samples, disable=self.disable_progbar)
             logger = initialize_logger(logger, "", progress_bar)
             hook_w_logging = _add_logging_hook(logger, progress_bar, self.hook)
             for sample in _gen_samples(
@@ -229,7 +216,7 @@ class _UnarySampler:
                 hook_w_logging,
                 i if self.num_chains > 1 else None,
                 *args,
-                **kwargs
+                **kwargs,
             ):
                 yield sample, i  # sample, chain_id
             self.kernel.cleanup()
@@ -264,9 +251,7 @@ class _MultiSampler:
             self.ctx = mp.get_context(mp_context)
         self.result_queue = self.ctx.Queue()
         self.log_queue = self.ctx.Queue()
-        self.logger = initialize_logger(
-            logging.getLogger("pyro.infer.mcmc"), "MAIN", log_queue=self.log_queue
-        )
+        self.logger = initialize_logger(logging.getLogger("pyro.infer.mcmc"), "MAIN", log_queue=self.log_queue)
         self.num_samples = num_samples
         self.initial_params = initial_params
         self.log_thread = threading.Thread(
@@ -286,11 +271,7 @@ class _MultiSampler:
     def init_workers(self, *args, **kwargs):
         self.workers = []
         for i in range(self.num_chains):
-            init_params = (
-                {k: v[i] for k, v in self.initial_params.items()}
-                if self.initial_params is not None
-                else None
-            )
+            init_params = {k: v[i] for k, v in self.initial_params.items()} if self.initial_params is not None else None
             worker = _Worker(
                 i,
                 self.result_queue,
@@ -303,11 +284,7 @@ class _MultiSampler:
                 hook=self.hook,
             )
             worker.daemon = True
-            self.workers.append(
-                self.ctx.Process(
-                    name=str(i), target=worker.run, args=args, kwargs=kwargs
-                )
-            )
+            self.workers.append(self.ctx.Process(name=str(i), target=worker.run, args=args, kwargs=kwargs))
 
     def terminate(self, terminate_workers=False):
         if self.log_thread.is_alive():
@@ -383,10 +360,7 @@ class AbstractMCMC(ABC):
             self.transforms = {}
 
     def _validate_kernel(self, initial_params):
-        if (
-            isinstance(self.kernel, (HMC, NUTS))
-            and self.kernel.potential_fn is not None
-        ):
+        if isinstance(self.kernel, (HMC, NUTS)) and self.kernel.potential_fn is not None:
             if initial_params is None:
                 raise ValueError(
                     "Must provide valid initial parameters to begin sampling"
@@ -397,8 +371,7 @@ class AbstractMCMC(ABC):
         for v in initial_params.values():
             if v.shape[0] != self.num_chains:
                 raise ValueError(
-                    "The leading dimension of tensors in `initial_params` "
-                    "must match the number of chains."
+                    "The leading dimension of tensors in `initial_params` " "must match the number of chains."
                 )
 
 
@@ -465,9 +438,7 @@ class MCMC(AbstractMCMC):
         save_params=None,
     ):
         super().__init__(kernel, num_chains, transforms)
-        self.warmup_steps = (
-            num_samples if warmup_steps is None else warmup_steps
-        )  # Stan
+        self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
         self.disable_validation = disable_validation
         self._samples = None
@@ -490,15 +461,12 @@ class MCMC(AbstractMCMC):
                         mp_context = "spawn"
 
             # verify num_chains is compatible with available CPU.
-            available_cpu = max(
-                mp.cpu_count() - 1, 1
-            )  # reserving 1 for the main process.
+            available_cpu = max(mp.cpu_count() - 1, 1)  # reserving 1 for the main process.
             if num_chains <= available_cpu:
                 parallel = True
             else:
                 warnings.warn(
-                    "num_chains={} is more than available_cpu={}. "
-                    "Chains will be drawn sequentially.".format(
+                    "num_chains={} is more than available_cpu={}. " "Chains will be drawn sequentially.".format(
                         num_chains, available_cpu
                     )
                 )
@@ -585,9 +553,7 @@ class MCMC(AbstractMCMC):
         for k in sorted(z_structure):
             shape = z_structure[k]
             next_pos = pos + shape.numel()
-            z_acc[k] = z_flat_acc[:, :, pos:next_pos].reshape(
-                (self.num_chains, self.num_samples) + shape
-            )
+            z_acc[k] = z_flat_acc[:, :, pos:next_pos].reshape((self.num_chains, self.num_samples) + shape)
             pos = next_pos
         assert pos == z_flat_acc.shape[-1]
 
@@ -621,10 +587,7 @@ class MCMC(AbstractMCMC):
         """
         diag = diagnostics(self._samples)
         for diag_name in self._diagnostics[0]:
-            diag[diag_name] = {
-                "chain {}".format(i): self._diagnostics[i][diag_name]
-                for i in range(self.num_chains)
-            }
+            diag[diag_name] = {"chain {}".format(i): self._diagnostics[i][diag_name] for i in range(self.num_chains)}
         return diag
 
     def summary(self, prob=0.9):
@@ -640,12 +603,7 @@ class MCMC(AbstractMCMC):
         if "divergences" in self._diagnostics[0]:
             print(
                 "Number of divergences: {}".format(
-                    sum(
-                        [
-                            len(self._diagnostics[i]["divergences"])
-                            for i in range(self.num_chains)
-                        ]
-                    )
+                    sum([len(self._diagnostics[i]["divergences"]) for i in range(self.num_chains)])
                 )
             )
 
@@ -674,9 +632,7 @@ class StreamingMCMC(AbstractMCMC):
         save_params=None,
     ):
         super().__init__(kernel, num_chains, transforms)
-        self.warmup_steps = (
-            num_samples if warmup_steps is None else warmup_steps
-        )  # Stan
+        self.warmup_steps = num_samples if warmup_steps is None else warmup_steps  # Stan
         self.num_samples = num_samples
         self.disable_validation = disable_validation
         self._samples = None
@@ -751,10 +707,7 @@ class StreamingMCMC(AbstractMCMC):
                             z_acc[name] = self.transforms[name].inv(z)
 
                     self._statistics.update(
-                        {
-                            (chain_id, name): transformed_sample
-                            for name, transformed_sample in z_acc.items()
-                        }
+                        {(chain_id, name): transformed_sample for name, transformed_sample in z_acc.items()}
                     )
 
         # terminate the sampler (shut down worker processes)
@@ -787,8 +740,5 @@ class StreamingMCMC(AbstractMCMC):
         statistics = self._statistics.get()
         diag = diagnostics_from_stats(statistics, self.num_samples, self.num_chains)
         for diag_name in self._diagnostics[0]:
-            diag[diag_name] = {
-                "chain {}".format(i): self._diagnostics[i][diag_name]
-                for i in range(self.num_chains)
-            }
+            diag[diag_name] = {"chain {}".format(i): self._diagnostics[i][diag_name] for i in range(self.num_chains)}
         return diag

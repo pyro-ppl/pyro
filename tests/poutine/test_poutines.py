@@ -90,9 +90,7 @@ class TraceHandlerTests(NormalNormalNormalHandlerTestCase):
 
     def test_trace_return(self):
         model_trace = poutine.trace(self.model).get_trace()
-        assert_equal(
-            model_trace.nodes["latent1"]["value"], model_trace.nodes["_RETURN"]["value"]
-        )
+        assert_equal(model_trace.nodes["latent1"]["value"], model_trace.nodes["_RETURN"]["value"])
 
     def test_trace_param_only(self):
         model_trace = poutine.trace(self.model, param_only=True).get_trace()
@@ -102,13 +100,9 @@ class TraceHandlerTests(NormalNormalNormalHandlerTestCase):
 class ReplayHandlerTests(NormalNormalNormalHandlerTestCase):
     def test_replay_full(self):
         guide_trace = poutine.trace(self.guide).get_trace()
-        model_trace = poutine.trace(
-            poutine.replay(self.model, trace=guide_trace)
-        ).get_trace()
+        model_trace = poutine.trace(poutine.replay(self.model, trace=guide_trace)).get_trace()
         for name in self.full_sample_sites.keys():
-            assert_equal(
-                model_trace.nodes[name]["value"], guide_trace.nodes[name]["value"]
-            )
+            assert_equal(model_trace.nodes[name]["value"], guide_trace.nodes[name]["value"])
 
     def test_replay_full_repeat(self):
         model_trace = poutine.trace(self.model).get_trace()
@@ -157,24 +151,16 @@ class BlockHandlerTests(NormalNormalNormalHandlerTestCase):
             assert guide_trace.nodes[name]["type"] in ("args", "return")
 
     def test_block_full_hide(self):
-        model_trace = poutine.trace(
-            poutine.block(self.model, hide=self.model_sites)
-        ).get_trace()
-        guide_trace = poutine.trace(
-            poutine.block(self.guide, hide=self.guide_sites)
-        ).get_trace()
+        model_trace = poutine.trace(poutine.block(self.model, hide=self.model_sites)).get_trace()
+        guide_trace = poutine.trace(poutine.block(self.guide, hide=self.guide_sites)).get_trace()
         for name in model_trace.nodes.keys():
             assert model_trace.nodes[name]["type"] in ("args", "return")
         for name in guide_trace.nodes.keys():
             assert guide_trace.nodes[name]["type"] in ("args", "return")
 
     def test_block_full_expose(self):
-        model_trace = poutine.trace(
-            poutine.block(self.model, expose=self.model_sites)
-        ).get_trace()
-        guide_trace = poutine.trace(
-            poutine.block(self.guide, expose=self.guide_sites)
-        ).get_trace()
+        model_trace = poutine.trace(poutine.block(self.model, expose=self.model_sites)).get_trace()
+        guide_trace = poutine.trace(poutine.block(self.guide, expose=self.guide_sites)).get_trace()
         for name in self.model_sites:
             assert name in model_trace
         for name in self.guide_sites:
@@ -192,12 +178,8 @@ class BlockHandlerTests(NormalNormalNormalHandlerTestCase):
             assert True
 
     def test_block_partial_hide(self):
-        model_trace = poutine.trace(
-            poutine.block(self.model, hide=self.partial_sample_sites.keys())
-        ).get_trace()
-        guide_trace = poutine.trace(
-            poutine.block(self.guide, hide=self.partial_sample_sites.keys())
-        ).get_trace()
+        model_trace = poutine.trace(poutine.block(self.model, hide=self.partial_sample_sites.keys())).get_trace()
+        guide_trace = poutine.trace(poutine.block(self.guide, hide=self.partial_sample_sites.keys())).get_trace()
         for name in self.full_sample_sites.keys():
             if name in self.partial_sample_sites:
                 assert name not in model_trace
@@ -207,12 +189,8 @@ class BlockHandlerTests(NormalNormalNormalHandlerTestCase):
                 assert name in guide_trace
 
     def test_block_partial_expose(self):
-        model_trace = poutine.trace(
-            poutine.block(self.model, expose=self.partial_sample_sites.keys())
-        ).get_trace()
-        guide_trace = poutine.trace(
-            poutine.block(self.guide, expose=self.partial_sample_sites.keys())
-        ).get_trace()
+        model_trace = poutine.trace(poutine.block(self.model, expose=self.partial_sample_sites.keys())).get_trace()
+        guide_trace = poutine.trace(poutine.block(self.guide, expose=self.partial_sample_sites.keys())).get_trace()
         for name in self.full_sample_sites.keys():
             if name in self.partial_sample_sites:
                 assert name in model_trace
@@ -223,9 +201,7 @@ class BlockHandlerTests(NormalNormalNormalHandlerTestCase):
 
     def test_block_tutorial_case(self):
         model_trace = poutine.trace(self.model).get_trace()
-        guide_trace = poutine.trace(
-            poutine.block(self.guide, hide_types=["observe"])
-        ).get_trace()
+        guide_trace = poutine.trace(poutine.block(self.guide, hide_types=["observe"])).get_trace()
 
         assert "latent1" in model_trace
         assert "latent1" in guide_trace
@@ -295,8 +271,7 @@ class QueueHandlerDiscreteTest(TestCase):
                     [
                         int(tr.nodes[name]["value"].view(-1).item())
                         for name in tr
-                        if tr.nodes[name]["type"] == "sample"
-                        and not tr.nodes[name]["is_observed"]
+                        if tr.nodes[name]["type"] == "sample" and not tr.nodes[name]["is_observed"]
                     ]
                 )
             )
@@ -385,9 +360,7 @@ class LiftHandlerTests(TestCase):
 
     def test_splice(self):
         tr = poutine.trace(self.guide).get_trace()
-        lifted_tr = poutine.trace(
-            poutine.lift(self.guide, prior=self.prior)
-        ).get_trace()
+        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior)).get_trace()
         for name in tr.nodes.keys():
             if name in ("loc1", "loc2", "scale1", "scale2"):
                 assert name not in lifted_tr
@@ -399,9 +372,7 @@ class LiftHandlerTests(TestCase):
 
     def test_prior_dict(self):
         tr = poutine.trace(self.guide).get_trace()
-        lifted_tr = poutine.trace(
-            poutine.lift(self.guide, prior=self.prior_dict)
-        ).get_trace()
+        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.prior_dict)).get_trace()
         for name in tr.nodes.keys():
             assert name in lifted_tr
             if name in {"scale1", "loc1", "scale2", "loc2"}:
@@ -412,9 +383,7 @@ class LiftHandlerTests(TestCase):
 
     def test_unlifted_param(self):
         tr = poutine.trace(self.guide).get_trace()
-        lifted_tr = poutine.trace(
-            poutine.lift(self.guide, prior=self.partial_dict)
-        ).get_trace()
+        lifted_tr = poutine.trace(poutine.lift(self.guide, prior=self.partial_dict)).get_trace()
         for name in tr.nodes.keys():
             assert name in lifted_tr
             if name in ("scale1", "loc1"):
@@ -428,9 +397,7 @@ class LiftHandlerTests(TestCase):
     def test_random_module(self):
         pyro.clear_param_store()
         with pyro.validation_enabled():
-            lifted_tr = poutine.trace(
-                pyro.random_module("name", self.model, prior=self.prior)
-            ).get_trace()
+            lifted_tr = poutine.trace(pyro.random_module("name", self.model, prior=self.prior)).get_trace()
         for name in lifted_tr.nodes.keys():
             if lifted_tr.nodes[name]["type"] == "param":
                 assert lifted_tr.nodes[name]["type"] == "sample"
@@ -443,9 +410,7 @@ class LiftHandlerTests(TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             with pyro.validation_enabled():
-                poutine.trace(
-                    pyro.random_module("name", self.model, prior=bad_prior)
-                ).get_trace()
+                poutine.trace(pyro.random_module("name", self.model, prior=bad_prior)).get_trace()
             assert len(w), "No warnings were raised"
             for warning in w:
                 logger.info(warning)
@@ -519,9 +484,7 @@ class IndirectLambdaHandlerTests(TestCase):
     def setUp(self):
         def model(batch_size_outer=2, batch_size_inner=2):
             data = [[torch.ones(1)] * 2] * 2
-            loc_latent = pyro.sample(
-                "loc_latent", dist.Normal(torch.zeros(1), torch.ones(1))
-            )
+            loc_latent = pyro.sample("loc_latent", dist.Normal(torch.zeros(1), torch.ones(1)))
             for i in pyro.plate("plate_outer", 2, batch_size_outer):
                 for j in pyro.plate("plate_inner_%d" % i, 2, batch_size_inner):
                     pyro.sample(
@@ -530,9 +493,7 @@ class IndirectLambdaHandlerTests(TestCase):
                     )
 
         self.model = model
-        self.expected_nodes = set(
-            ["z_0_0", "z_0_1", "z_1_0", "z_1_1", "loc_latent", "_INPUT", "_RETURN"]
-        )
+        self.expected_nodes = set(["z_0_0", "z_0_1", "z_1_0", "z_1_1", "loc_latent", "_INPUT", "_RETURN"])
         self.expected_edges = set(
             [
                 ("loc_latent", "z_0_0"),
@@ -547,10 +508,7 @@ class IndirectLambdaHandlerTests(TestCase):
         # Ignore structure on plate_* nodes.
         actual_nodes = set(n for n in tracegraph.nodes if not n.startswith("plate_"))
         actual_edges = set(
-            (n1, n2)
-            for n1, n2 in tracegraph.edges
-            if not n1.startswith("plate_")
-            if not n2.startswith("plate_")
+            (n1, n2) for n1, n2 in tracegraph.edges if not n1.startswith("plate_") if not n2.startswith("plate_")
         )
         assert actual_nodes == self.expected_nodes
         assert actual_edges == self.expected_edges
@@ -584,18 +542,14 @@ class SubstituteHandlerTests(NormalNormalNormalHandlerTestCase):
         data1 = {"loc1": torch.randn(2)}
         data2 = {"loc1": torch.randn(2)}
         with poutine.trace() as tr:
-            cm = poutine.substitute(
-                poutine.substitute(self.guide, data=data1), data=data2
-            )
+            cm = poutine.substitute(poutine.substitute(self.guide, data=data1), data=data2)
             cm()
         assert tr.trace.nodes["loc1"]["value"] is data2["loc1"]
 
     def test_stack_success(self):
         data1 = {"loc1": torch.randn(2)}
         data2 = {"loc2": torch.randn(2)}
-        tr = poutine.trace(
-            poutine.substitute(poutine.substitute(self.guide, data=data1), data=data2)
-        ).get_trace()
+        tr = poutine.trace(poutine.substitute(poutine.substitute(self.guide, data=data1), data=data2)).get_trace()
         assert tr.nodes["loc1"]["type"] == "param"
         assert tr.nodes["loc1"]["value"] is data1["loc1"]
         assert tr.nodes["loc2"]["type"] == "param"
@@ -607,48 +561,30 @@ class ConditionHandlerTests(NormalNormalNormalHandlerTestCase):
         data = {"latent2": torch.randn(2)}
         tr2 = poutine.trace(poutine.condition(self.model, data=data)).get_trace()
         assert "latent2" in tr2
-        assert (
-            tr2.nodes["latent2"]["type"] == "sample"
-            and tr2.nodes["latent2"]["is_observed"]
-        )
+        assert tr2.nodes["latent2"]["type"] == "sample" and tr2.nodes["latent2"]["is_observed"]
         assert tr2.nodes["latent2"]["value"] is data["latent2"]
 
     def test_trace_data(self):
-        tr1 = poutine.trace(
-            poutine.block(self.model, expose_types=["sample"])
-        ).get_trace()
+        tr1 = poutine.trace(poutine.block(self.model, expose_types=["sample"])).get_trace()
         tr2 = poutine.trace(poutine.condition(self.model, data=tr1)).get_trace()
-        assert (
-            tr2.nodes["latent2"]["type"] == "sample"
-            and tr2.nodes["latent2"]["is_observed"]
-        )
+        assert tr2.nodes["latent2"]["type"] == "sample" and tr2.nodes["latent2"]["is_observed"]
         assert tr2.nodes["latent2"]["value"] is tr1.nodes["latent2"]["value"]
 
     def test_stack_overwrite_behavior(self):
         data1 = {"latent2": torch.randn(2)}
         data2 = {"latent2": torch.randn(2)}
         with poutine.trace() as tr:
-            cm = poutine.condition(
-                poutine.condition(self.model, data=data1), data=data2
-            )
+            cm = poutine.condition(poutine.condition(self.model, data=data1), data=data2)
             cm()
         assert tr.trace.nodes["latent2"]["value"] is data2["latent2"]
 
     def test_stack_success(self):
         data1 = {"latent1": torch.randn(2)}
         data2 = {"latent2": torch.randn(2)}
-        tr = poutine.trace(
-            poutine.condition(poutine.condition(self.model, data=data1), data=data2)
-        ).get_trace()
-        assert (
-            tr.nodes["latent1"]["type"] == "sample"
-            and tr.nodes["latent1"]["is_observed"]
-        )
+        tr = poutine.trace(poutine.condition(poutine.condition(self.model, data=data1), data=data2)).get_trace()
+        assert tr.nodes["latent1"]["type"] == "sample" and tr.nodes["latent1"]["is_observed"]
         assert tr.nodes["latent1"]["value"] is data1["latent1"]
-        assert (
-            tr.nodes["latent2"]["type"] == "sample"
-            and tr.nodes["latent2"]["is_observed"]
-        )
+        assert tr.nodes["latent2"]["type"] == "sample" and tr.nodes["latent2"]["is_observed"]
         assert tr.nodes["latent2"]["value"] is data2["latent2"]
 
 
@@ -662,9 +598,7 @@ class UnconditionHandlerTests(NormalNormalNormalHandlerTestCase):
 
     def test_undo_uncondition(self):
         unconditioned_model = poutine.uncondition(self.model)
-        reconditioned_model = pyro.condition(
-            unconditioned_model, {"obs": torch.ones(2)}
-        )
+        reconditioned_model = pyro.condition(unconditioned_model, {"obs": torch.ones(2)})
         reconditioned_trace = poutine.trace(reconditioned_model).get_trace()
         assert_equal(reconditioned_trace.nodes["obs"]["value"], torch.ones(2))
 
@@ -697,9 +631,7 @@ class EscapeHandlerTests(TestCase):
 
     def test_all_escape(self):
         try:
-            poutine.escape(
-                self.model, escape_fn=functools.partial(all_escape, poutine.Trace())
-            )()
+            poutine.escape(self.model, escape_fn=functools.partial(all_escape, poutine.Trace()))()
             assert False
         except NonlocalExit as e:
             assert e.site["name"] == "x"
@@ -707,9 +639,7 @@ class EscapeHandlerTests(TestCase):
     def test_trace_compose(self):
         tm = poutine.trace(self.model)
         try:
-            poutine.escape(
-                tm, escape_fn=functools.partial(all_escape, poutine.Trace())
-            )()
+            poutine.escape(tm, escape_fn=functools.partial(all_escape, poutine.Trace()))()
             assert False
         except NonlocalExit:
             assert "x" in tm.trace
@@ -730,9 +660,7 @@ class InferConfigHandlerTests(TestCase):
     def setUp(self):
         def model():
             pyro.param("p", torch.zeros(1, requires_grad=True))
-            pyro.sample(
-                "a", Bernoulli(torch.tensor([0.5])), infer={"enumerate": "parallel"}
-            )
+            pyro.sample("a", Bernoulli(torch.tensor([0.5])), infer={"enumerate": "parallel"})
             pyro.sample("b", Bernoulli(torch.tensor([0.5])))
 
         self.model = model
@@ -763,9 +691,7 @@ def test_enumerate_poutine(depth, first_available_dim):
     def model():
         pyro.sample("x", Bernoulli(0.5))
         for i in range(depth):
-            pyro.sample(
-                "a_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"}
-            )
+            pyro.sample("a_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"})
 
     model = poutine.enum(model, first_available_dim=first_available_dim)
     model = poutine.trace(model)
@@ -797,14 +723,10 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
     def model():
         pyro.sample("x", Bernoulli(0.5))
         for i in range(depth):
-            pyro.sample(
-                "a_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"}
-            )
+            pyro.sample("a_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"})
         pyro.sample("y", y_dist, infer={"enumerate": "parallel"})
         for i in range(depth):
-            pyro.sample(
-                "b_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"}
-            )
+            pyro.sample("b_{}".format(i), Bernoulli(0.5), infer={"enumerate": "parallel"})
 
     model = poutine.enum(model, first_available_dim=first_available_dim)
     model = poutine.replay(model, trace=guide_trace)
@@ -816,9 +738,7 @@ def test_replay_enumerate_poutine(depth, first_available_dim):
         tr.compute_log_prob()
         log_prob = sum(site["log_prob"] for name, site in tr.iter_stochastic_nodes())
         actual_shape = log_prob.shape
-        expected_shape = (
-            (2,) * depth + (3,) + (2,) * depth + (1,) * (-1 - first_available_dim)
-        )
+        expected_shape = (2,) * depth + (3,) + (2,) * depth + (1,) * (-1 - first_available_dim)
         assert actual_shape == expected_shape, "error on iteration {}".format(i)
 
 
@@ -846,9 +766,7 @@ def test_plate_error_on_enter():
     assert len(_DIM_ALLOCATOR._stack) == 0, "stack was not cleaned on error"
 
 
-@pytest.mark.parametrize(
-    "graph_type, expected", [("flat", set()), ("dense", {"x", "y"})]
-)
+@pytest.mark.parametrize("graph_type, expected", [("flat", set()), ("dense", {"x", "y"})])
 def test_trace_plate(graph_type: str, expected: set):
     def model():
         with pyro.plate("plate", 2):
@@ -864,9 +782,7 @@ def test_decorator_interface_primitives():
     @poutine.trace
     def model():
         pyro.param("p", torch.zeros(1, requires_grad=True))
-        pyro.sample(
-            "a", Bernoulli(torch.tensor([0.5])), infer={"enumerate": "parallel"}
-        )
+        pyro.sample("a", Bernoulli(torch.tensor([0.5])), infer={"enumerate": "parallel"})
         pyro.sample("b", Bernoulli(torch.tensor([0.5])))
 
     tr = model.get_trace()
@@ -876,9 +792,7 @@ def test_decorator_interface_primitives():
     @poutine.trace(graph_type="dense")
     def model():
         pyro.param("p", torch.zeros(1, requires_grad=True))
-        pyro.sample(
-            "a", Bernoulli(torch.tensor([0.5])), infer={"enumerate": "parallel"}
-        )
+        pyro.sample("a", Bernoulli(torch.tensor([0.5])), infer={"enumerate": "parallel"})
         pyro.sample("b", Bernoulli(torch.tensor([0.5])))
 
     tr = model.get_trace()
@@ -986,19 +900,14 @@ def test_pickling(wrapper):
     assert tuple(actual_trace) == tuple(expected_trace.nodes)
     assert_close(
         [actual_trace.nodes[site]["value"] for site in actual_trace.stochastic_nodes],
-        [
-            expected_trace.nodes[site]["value"]
-            for site in expected_trace.stochastic_nodes
-        ],
+        [expected_trace.nodes[site]["value"] for site in expected_trace.stochastic_nodes],
     )
 
 
 def test_arg_kwarg_error():
     def model():
         pyro.param("p", torch.zeros(1, requires_grad=True))
-        pyro.sample(
-            "a", Bernoulli(torch.tensor([0.5])), infer={"enumerate": "parallel"}
-        )
+        pyro.sample("a", Bernoulli(torch.tensor([0.5])), infer={"enumerate": "parallel"})
         pyro.sample("b", Bernoulli(torch.tensor([0.5])))
 
     with pytest.raises(ValueError, match="not callable"):

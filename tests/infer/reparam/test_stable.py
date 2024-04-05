@@ -113,9 +113,7 @@ def test_symmetric_stable(shape):
 
 @pytest.mark.parametrize("skew", [-1.0, -0.5, 0.0, 0.5, 1.0])
 @pytest.mark.parametrize("stability", [0.1, 0.4, 0.8, 0.99, 1.0, 1.01, 1.3, 1.7, 2.0])
-@pytest.mark.parametrize(
-    "Reparam", [LatentStableReparam, SymmetricStableReparam, StableReparam]
-)
+@pytest.mark.parametrize("Reparam", [LatentStableReparam, SymmetricStableReparam, StableReparam])
 def test_distribution(stability, skew, Reparam):
     if Reparam is SymmetricStableReparam and (skew != 0 or stability == 2):
         pytest.skip()
@@ -133,9 +131,7 @@ def test_distribution(stability, skew, Reparam):
 
 
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
-@pytest.mark.parametrize(
-    "Reparam", [LatentStableReparam, SymmetricStableReparam, StableReparam]
-)
+@pytest.mark.parametrize("Reparam", [LatentStableReparam, SymmetricStableReparam, StableReparam])
 def test_subsample_smoke(Reparam, subsample):
     def model():
         with poutine.reparam(config={"x": Reparam()}):

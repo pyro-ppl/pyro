@@ -65,9 +65,7 @@ def test_welford_arrowhead(n_samples, dim_size, head_size, regularize):
     for sample in samples:
         adapt_scheme.update(sample)
     top, bottom_diag = adapt_scheme.get_covariance(regularize=regularize)
-    actual = torch.cat(
-        [top, torch.cat([top[:, head_size:].t(), bottom_diag.diag()], -1)]
-    )
+    actual = torch.cat([top, torch.cat([top[:, head_size:].t(), bottom_diag.diag()], -1)])
 
     mask = torch.ones(dim_size, dim_size)
     mask[head_size:, head_size:] = 0.0
@@ -75,8 +73,6 @@ def test_welford_arrowhead(n_samples, dim_size, head_size, regularize):
     expected = np.cov(samples.cpu().numpy(), bias=False, rowvar=False)
     expected = torch.from_numpy(expected).type_as(mask)
     if regularize:
-        expected = (expected * n_samples + 1e-3 * torch.eye(dim_size) * 5) / (
-            n_samples + 5
-        )
+        expected = (expected * n_samples + 1e-3 * torch.eye(dim_size) * 5) / (n_samples + 5)
     expected = expected * mask
     assert_equal(actual, expected)

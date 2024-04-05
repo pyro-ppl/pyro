@@ -64,9 +64,7 @@ class Fixture:
         return len(self.test_data)
 
     def get_samples(self, num_samples, **dist_params):
-        return self.pyro_dist(**dist_params).sample(
-            sample_shape=torch.Size((num_samples,))
-        )
+        return self.pyro_dist(**dist_params).sample(sample_shape=torch.Size((num_samples,)))
 
     def get_test_data(self, idx, wrap_tensor=True):
         if not wrap_tensor:
@@ -96,13 +94,9 @@ class Fixture:
         dist_params = self._convert_logits_to_ps(dist_params)
         args, kwargs = self.scipy_arg_fn(**dist_params)
         if self.is_discrete:
-            log_prob = self.scipy_dist.logpmf(
-                self.get_test_data(idx, wrap_tensor=False), *args, **kwargs
-            )
+            log_prob = self.scipy_dist.logpmf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
         else:
-            log_prob = self.scipy_dist.logpdf(
-                self.get_test_data(idx, wrap_tensor=False), *args, **kwargs
-            )
+            log_prob = self.scipy_dist.logpdf(self.get_test_data(idx, wrap_tensor=False), *args, **kwargs)
         return np.sum(log_prob)
 
     def get_scipy_batch_logpdf(self, idx):
@@ -113,9 +107,7 @@ class Fixture:
         dist_params = self._convert_logits_to_ps(dist_params)
         test_data = self.get_test_data(idx, wrap_tensor=False)
         test_data_wrapped = self.get_test_data(idx)
-        shape = broadcast_shape(
-            self.pyro_dist(**dist_params_wrapped).shape(), test_data_wrapped.size()
-        )
+        shape = broadcast_shape(self.pyro_dist(**dist_params_wrapped).shape(), test_data_wrapped.size())
         log_prob = []
         for i in range(len(test_data)):
             batch_params = {}
@@ -150,9 +142,7 @@ class Fixture:
         try:
             fourth_moment = np.max(self.scipy_dist.moment(4, *args, **kwargs))
             var = np.max(self.scipy_dist.var(*args, **kwargs))
-            min_computed_samples = int(
-                math.ceil((fourth_moment - math.pow(var, 2)) / required_precision)
-            )
+            min_computed_samples = int(math.ceil((fourth_moment - math.pow(var, 2)) / required_precision))
         except (AttributeError, ValueError):
             return min_samples
         return max(min_samples, min_computed_samples)

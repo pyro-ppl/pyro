@@ -68,9 +68,7 @@ def test_bvm_multidim():
 
         bmv = SineBivariateVonMises(locs[0], locs[1], conc[0], conc[1], corr)
         assert_equal(bmv.batch_shape, torch.Size(batch_dim))
-        assert_equal(
-            bmv.sample(sample_dim).shape, torch.Size((*sample_dim, *batch_dim, 2))
-        )
+        assert_equal(bmv.sample(sample_dim).shape, torch.Size((*sample_dim, *batch_dim, 2)))
 
 
 def test_mle_bvm():
@@ -125,8 +123,6 @@ def test_mle_bvm():
         if k in actuals:
             actual = actuals[k]
         else:
-            actual = (
-                actuals["corr_weight"] * actuals["phi_conc"] * actuals["psi_conc"]
-            )  # k == 'corr'
+            actual = actuals["corr_weight"] * actuals["phi_conc"] * actuals["psi_conc"]  # k == 'corr'
 
         assert_equal(expected[k].squeeze(), actual.squeeze(), 9e-2)

@@ -94,8 +94,7 @@ def test_init(dist_type, centered, shape):
 
 @pytest.mark.xfail(
     reason=(
-        "reparam inside plate not compatible with init messenger,"
-        " issue https://github.com/pyro-ppl/pyro/issues/2990"
+        "reparam inside plate not compatible with init messenger," " issue https://github.com/pyro-ppl/pyro/issues/2990"
     )
 )
 def test_init_with_reparam_inside_plate():

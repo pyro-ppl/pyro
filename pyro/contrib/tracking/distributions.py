@@ -50,9 +50,7 @@ class EKFDistribution(TorchDistribution):
         self.dynamic_model = dynamic_model
         self.measurement_cov = measurement_cov
         self.dt = dt
-        assert (
-            not x0.shape[-1] % 2
-        ), "position and velocity vectors must be the same dimension"
+        assert not x0.shape[-1] % 2, "position and velocity vectors must be the same dimension"
         batch_shape = x0.shape[:-1]
         event_shape = (time_steps, x0.shape[-1] // 2)
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
@@ -73,9 +71,7 @@ class EKFDistribution(TorchDistribution):
         for i, measurement_mean in enumerate(value):
             if i:
                 state = state.predict(self.dt)
-            measurement = PositionMeasurement(
-                measurement_mean, self.measurement_cov, time=state.time
-            )
+            measurement = PositionMeasurement(measurement_mean, self.measurement_cov, time=state.time)
             state, (dz, S) = state.update(measurement)
             states.append(state)
         return states
@@ -94,9 +90,7 @@ class EKFDistribution(TorchDistribution):
         for i, measurement_mean in enumerate(value):
             if i:
                 state = state.predict(self.dt)
-            measurement = PositionMeasurement(
-                measurement_mean, self.measurement_cov, time=state.time
-            )
+            measurement = PositionMeasurement(measurement_mean, self.measurement_cov, time=state.time)
             state, (dz, S) = state.update(measurement)
             result = result + dist.MultivariateNormal(dz, S).log_prob(zero)
         return result

@@ -52,16 +52,11 @@ def _check_model_guide_enumeration_constraint(model_enum_sites, guide_trace):
     for name, site in guide_trace.nodes.items():
         if site["type"] == "sample" and site["infer"].get("_enumerate_dim") is not None:
             for f in site["cond_indep_stack"]:
-                if (
-                    f.vectorized
-                    and guide_trace.plate_to_symbol[f.name] not in min_ordinal
-                ):
+                if f.vectorized and guide_trace.plate_to_symbol[f.name] not in min_ordinal:
                     raise ValueError(
                         "Expected model enumeration to be no more global than guide enumeration, "
                         "but found model enumeration sites upstream of guide site '{}' in plate('{}'). "
-                        "Try converting some model enumeration sites to guide enumeration sites.".format(
-                            name, f.name
-                        )
+                        "Try converting some model enumeration sites to guide enumeration sites.".format(name, f.name)
                     )
 
 
@@ -103,9 +98,7 @@ def _check_tmc_elbo_constraint(model_trace, guide_trace):
 
 
 def _find_ordinal(trace, site):
-    return frozenset(
-        trace.plate_to_symbol[f.name] for f in site["cond_indep_stack"] if f.vectorized
-    )
+    return frozenset(trace.plate_to_symbol[f.name] for f in site["cond_indep_stack"] if f.vectorized)
 
 
 # TODO move this logic into a poutine
@@ -128,9 +121,7 @@ def _compute_model_factors(model_trace, guide_trace):
         if site["type"] == "sample":
             if name in guide_trace.nodes:
                 cost_sites.setdefault(ordering[name], []).append(site)
-                non_enum_dims.update(
-                    guide_trace.nodes[name]["packed"]["log_prob"]._pyro_dims
-                )
+                non_enum_dims.update(guide_trace.nodes[name]["packed"]["log_prob"]._pyro_dims)
             elif site["infer"].get("_enumerate_dim") is None:
                 cost_sites.setdefault(ordering[name], []).append(site)
             else:
@@ -141,8 +132,7 @@ def _compute_model_factors(model_trace, guide_trace):
     scale = 1
     if not enum_sites:
         marginal_costs = OrderedDict(
-            (t, [site["packed"]["log_prob"] for site in sites_t])
-            for t, sites_t in cost_sites.items()
+            (t, [site["packed"]["log_prob"] for site in sites_t]) for t, sites_t in cost_sites.items()
         )
         return marginal_costs, log_factors, ordering, enum_dims, scale
     _check_model_guide_enumeration_constraint(enum_sites, guide_trace)
@@ -177,9 +167,7 @@ def _compute_model_factors(model_trace, guide_trace):
 
 def _compute_dice_elbo(model_trace, guide_trace):
     # Accumulate marginal model costs.
-    marginal_costs, log_factors, ordering, sum_dims, scale = _compute_model_factors(
-        model_trace, guide_trace
-    )
+    marginal_costs, log_factors, ordering, sum_dims, scale = _compute_model_factors(model_trace, guide_trace)
     if log_factors:
         dim_to_size = {}
         for terms in log_factors.values():
@@ -228,11 +216,7 @@ def _compute_marginals(model_trace, guide_trace):
     marginal_dists = OrderedDict()
     with shared_intermediates() as cache:
         for name, site in model_trace.nodes.items():
-            if (
-                site["type"] != "sample"
-                or name in guide_trace.nodes
-                or site["infer"].get("_enumerate_dim") is None
-            ):
+            if site["type"] != "sample" or name in guide_trace.nodes or site["infer"].get("_enumerate_dim") is None:
                 continue
 
             enum_dim = site["infer"]["_enumerate_dim"]
@@ -336,9 +320,7 @@ class TraceEnum_ELBO(ELBO):
         Returns a single trace from the guide, and the model that is run
         against it.
         """
-        model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_plate_nesting, model, guide, args, kwargs
-        )
+        model_trace, guide_trace = get_importance_trace("flat", self.max_plate_nesting, model, guide, args, kwargs)
 
         if is_validation_enabled():
             check_traceenum_requirements(model_trace, guide_trace)
@@ -385,9 +367,7 @@ class TraceEnum_ELBO(ELBO):
         model = model_enum(model)
 
         q = queue.LifoQueue()
-        guide = poutine.queue(
-            guide, q, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend
-        )
+        guide = poutine.queue(guide, q, escape_fn=iter_discrete_escape, extend_fn=iter_discrete_extend)
         for i in range(1 if self.vectorize_particles else self.num_particles):
             q.put(poutine.Trace())
             while not q.empty():
@@ -457,9 +437,7 @@ class TraceEnum_ELBO(ELBO):
 
             # collect parameters to train from model and guide
             trainable_params = any(
-                site["type"] == "param"
-                for trace in (model_trace, guide_trace)
-                for site in trace.nodes.values()
+                site["type"] == "param" for trace in (model_trace, guide_trace) for site in trace.nodes.values()
             )
 
             if trainable_params and elbo_particle.requires_grad:
@@ -479,16 +457,14 @@ class TraceEnum_ELBO(ELBO):
         """
         if self.num_particles != 1:
             raise NotImplementedError(
-                "TraceEnum_ELBO.compute_marginals() is not "
-                "compatible with multiple particles."
+                "TraceEnum_ELBO.compute_marginals() is not " "compatible with multiple particles."
             )
         model_trace, guide_trace = next(self._get_traces(model, guide, args, kwargs))
         for site in guide_trace.nodes.values():
             if site["type"] == "sample":
                 if "_enumerate_dim" in site["infer"] or "_enum_total" in site["infer"]:
                     raise NotImplementedError(
-                        "TraceEnum_ELBO.compute_marginals() is not "
-                        "compatible with guide enumeration."
+                        "TraceEnum_ELBO.compute_marginals() is not " "compatible with guide enumeration."
                     )
         return _compute_marginals(model_trace, guide_trace)
 
@@ -497,22 +473,16 @@ class TraceEnum_ELBO(ELBO):
         Sample from the joint posterior distribution of all model-enumerated sites given all observations
         """
         if self.num_particles != 1:
-            raise NotImplementedError(
-                "TraceEnum_ELBO.sample_posterior() is not "
-                "compatible with multiple particles."
-            )
+            raise NotImplementedError("TraceEnum_ELBO.sample_posterior() is not " "compatible with multiple particles.")
         with poutine.block(), warnings.catch_warnings():
             warnings.filterwarnings("ignore", "Found vars in model but not guide")
-            model_trace, guide_trace = next(
-                self._get_traces(model, guide, args, kwargs)
-            )
+            model_trace, guide_trace = next(self._get_traces(model, guide, args, kwargs))
 
         for name, site in guide_trace.nodes.items():
             if site["type"] == "sample":
                 if "_enumerate_dim" in site["infer"] or "_enum_total" in site["infer"]:
                     raise NotImplementedError(
-                        "TraceEnum_ELBO.sample_posterior() is not "
-                        "compatible with guide enumeration."
+                        "TraceEnum_ELBO.sample_posterior() is not " "compatible with guide enumeration."
                     )
 
         # TODO replace BackwardSample with torch_sample backend to ubersum
@@ -542,17 +512,13 @@ class JitTraceEnum_ELBO(TraceEnum_ELBO):
             # build a closure for differentiable_loss
             weakself = weakref.ref(self)
 
-            @pyro.ops.jit.trace(
-                ignore_warnings=self.ignore_jit_warnings, jit_options=self.jit_options
-            )
+            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings, jit_options=self.jit_options)
             def differentiable_loss(*args, **kwargs):
                 kwargs.pop("_model_id")
                 kwargs.pop("_guide_id")
                 self = weakself()
                 elbo = 0.0
-                for model_trace, guide_trace in self._get_traces(
-                    model, guide, args, kwargs
-                ):
+                for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
                     elbo = elbo + _compute_dice_elbo(model_trace, guide_trace)
                 return elbo * (-1.0 / self.num_particles)
 

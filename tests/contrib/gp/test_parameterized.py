@@ -26,16 +26,7 @@ def test_parameterized():
             self.g = PyroSample(dist.Exponential(1))
 
         def forward(self, x):
-            return (
-                self.a * x
-                + self.b
-                + self.c
-                + self.d
-                + self.e
-                + self.f
-                + self.g
-                + self.e
-            )
+            return self.a * x + self.b + self.c + self.d + self.e + self.f + self.g + self.e
 
     linear = Linear()
     linear.autoguide("c", dist.Normal)

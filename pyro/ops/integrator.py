@@ -11,9 +11,7 @@ from torch.autograd import grad
 _EXCEPTION_HANDLERS: Dict[str, Callable[[Exception], bool]] = {}
 
 
-def velocity_verlet(
-    z, r, potential_fn, kinetic_grad, step_size, num_steps=1, z_grads=None
-):
+def velocity_verlet(z, r, potential_fn, kinetic_grad, step_size, num_steps=1, z_grads=None):
     r"""
     Second order symplectic integrator that uses the velocity verlet algorithm.
 
@@ -50,9 +48,7 @@ def _single_step_verlet(z, r, potential_fn, kinetic_grad, step_size, z_grads=Non
     z_grads = potential_grad(potential_fn, z)[0] if z_grads is None else z_grads
 
     for site_name in r:
-        r[site_name] = r[site_name] + 0.5 * step_size * (
-            -z_grads[site_name]
-        )  # r(n+1/2)
+        r[site_name] = r[site_name] + 0.5 * step_size * (-z_grads[site_name])  # r(n+1/2)
 
     r_grads = kinetic_grad(r)
     for site_name in z:
@@ -94,9 +90,7 @@ def potential_grad(potential_fn, z):
     return dict(zip(z_keys, grads)), potential_energy.detach()
 
 
-def register_exception_handler(
-    name: str, handler: Callable[[Exception], bool], warn_on_overwrite: bool = True
-) -> None:
+def register_exception_handler(name: str, handler: Callable[[Exception], bool], warn_on_overwrite: bool = True) -> None:
     """
     Register an exception handler for handling (primarily numerical) errors
     when evaluating the potential function.

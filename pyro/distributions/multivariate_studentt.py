@@ -36,9 +36,7 @@ class MultivariateStudentT(TorchDistribution):
         assert scale_tril.shape[-2:] == (dim, dim)
         if not isinstance(df, torch.Tensor):
             df = loc.new_tensor(df)
-        batch_shape = torch.broadcast_shapes(
-            df.shape, loc.shape[:-1], scale_tril.shape[:-2]
-        )
+        batch_shape = torch.broadcast_shapes(df.shape, loc.shape[:-1], scale_tril.shape[:-2])
         event_shape = torch.Size((dim,))
         self.df = df.expand(batch_shape)
         self.loc = loc.expand(batch_shape + event_shape)
@@ -48,9 +46,7 @@ class MultivariateStudentT(TorchDistribution):
 
     @lazy_property
     def scale_tril(self):
-        return self._unbroadcasted_scale_tril.expand(
-            self._batch_shape + self._event_shape + self._event_shape
-        )
+        return self._unbroadcasted_scale_tril.expand(self._batch_shape + self._event_shape + self._event_shape)
 
     @lazy_property
     def covariance_matrix(self):
@@ -63,9 +59,7 @@ class MultivariateStudentT(TorchDistribution):
 
     @lazy_property
     def precision_matrix(self):
-        identity = torch.eye(
-            self.loc.size(-1), device=self.loc.device, dtype=self.loc.dtype
-        )
+        identity = torch.eye(self.loc.size(-1), device=self.loc.device, dtype=self.loc.dtype)
         return torch.cholesky_solve(identity, self._unbroadcasted_scale_tril).expand(
             self._batch_shape + self._event_shape + self._event_shape
         )
@@ -91,9 +85,7 @@ class MultivariateStudentT(TorchDistribution):
         if "precision_matrix" in self.__dict__:
             new.precision_matrix = self.precision_matrix.expand(scale_shape)
         new._chi2 = self._chi2.expand(batch_shape)
-        super(MultivariateStudentT, new).__init__(
-            batch_shape, self.event_shape, validate_args=False
-        )
+        super(MultivariateStudentT, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
 
@@ -108,9 +100,7 @@ class MultivariateStudentT(TorchDistribution):
         if self._validate_args:
             self._validate_sample(value)
         n = self.loc.size(-1)
-        y = torch.linalg.solve_triangular(
-            self.scale_tril, (value - self.loc).unsqueeze(-1), upper=False
-        ).squeeze(-1)
+        y = torch.linalg.solve_triangular(self.scale_tril, (value - self.loc).unsqueeze(-1), upper=False).squeeze(-1)
         Z = (
             self.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
             + 0.5 * n * self.df.log()

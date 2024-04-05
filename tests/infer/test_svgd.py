@@ -43,9 +43,7 @@ def test_mean_variance(latent_dist, mode, stein_kernel, verbose=True):
     pyro.param("svgd_particles").unconstrained().data += 0.7
 
     for step in range(n_steps):
-        kernel.bandwidth_factor = bandwidth_start + (step / n_steps) * (
-            bandwidth_end - bandwidth_start
-        )
+        kernel.bandwidth_factor = bandwidth_start + (step / n_steps) * (bandwidth_end - bandwidth_start)
         squared_gradients = svgd.step()
         if step % 125 == 0:
             print("[step %03d] " % step, squared_gradients)
@@ -122,9 +120,7 @@ def test_conjugate(mode, stein_kernel, verbose=False):
     n_steps = 451
 
     for step in range(n_steps):
-        kernel.bandwidth_factor = bandwidth_start + (step / n_steps) * (
-            bandwidth_end - bandwidth_start
-        )
+        kernel.bandwidth_factor = bandwidth_start + (step / n_steps) * (bandwidth_end - bandwidth_start)
         squared_gradients = svgd.step()
         if step % 150 == 0:
             print("[step %03d] " % step, squared_gradients)

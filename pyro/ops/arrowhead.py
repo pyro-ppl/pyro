@@ -32,24 +32,17 @@ def sqrt(x):
     num_attempts = 6
     for i in range(num_attempts):
         B_Dsqrt = B / Dsqrt.unsqueeze(-2)  # shape: head_size x N
-        schur_complement = A - B_Dsqrt.matmul(
-            B_Dsqrt.t()
-        )  # complexity: head_size^2 x N
+        schur_complement = A - B_Dsqrt.matmul(B_Dsqrt.t())  # complexity: head_size^2 x N
         # we will decompose schur_complement to U @ U.T (so that the sqrt matrix
         # is upper triangular) using some `flip` operators:
         #   flip(cholesky(flip(schur_complement)))
         try:
-            top_left = torch.flip(
-                torch.linalg.cholesky(torch.flip(schur_complement, (-2, -1))), (-2, -1)
-            )
+            top_left = torch.flip(torch.linalg.cholesky(torch.flip(schur_complement, (-2, -1))), (-2, -1))
             break
         except RuntimeError:
             B = B / 2
             continue
-        raise RuntimeError(
-            "Singular schur complement in computing Cholesky of the input"
-            " arrowhead matrix"
-        )
+        raise RuntimeError("Singular schur complement in computing Cholesky of the input" " arrowhead matrix")
 
     top_right = B_Dsqrt
     top = torch.cat([top_left, top_right], -1)

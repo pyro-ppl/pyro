@@ -47,9 +47,7 @@ def test_transformed_hmm_shape(batch_shape, duration, hidden_dim, obs_dim):
         torch.randn(batch_shape + (duration, obs_dim)),
         torch.rand(batch_shape + (duration, obs_dim)).exp(),
     ).to_event(1)
-    hmm = dist.LinearHMM(
-        init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration
-    )
+    hmm = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration)
 
     def model(data=None):
         with pyro.plate_stack("plates", batch_shape):
@@ -75,9 +73,7 @@ def test_studentt_hmm_shape(batch_shape, duration, hidden_dim, obs_dim):
     trans_dist = random_studentt(batch_shape + (duration, hidden_dim)).to_event(1)
     obs_mat = torch.randn(batch_shape + (duration, hidden_dim, obs_dim))
     obs_dist = random_studentt(batch_shape + (duration, obs_dim)).to_event(1)
-    hmm = dist.LinearHMM(
-        init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration
-    )
+    hmm = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration)
 
     def model(data=None):
         with pyro.plate_stack("plates", batch_shape):
@@ -103,9 +99,7 @@ def test_studentt_hmm_shape(batch_shape, duration, hidden_dim, obs_dim):
 @pytest.mark.parametrize("skew", [0, None], ids=["symmetric", "skewed"])
 def test_stable_hmm_shape(skew, batch_shape, duration, hidden_dim, obs_dim):
     stability = dist.Uniform(0.5, 2).sample(batch_shape)
-    init_dist = random_stable(
-        batch_shape + (hidden_dim,), stability.unsqueeze(-1), skew=skew
-    ).to_event(1)
+    init_dist = random_stable(batch_shape + (hidden_dim,), stability.unsqueeze(-1), skew=skew).to_event(1)
     trans_mat = torch.randn(batch_shape + (duration, hidden_dim, hidden_dim))
     trans_dist = random_stable(
         batch_shape + (duration, hidden_dim),
@@ -118,9 +112,7 @@ def test_stable_hmm_shape(skew, batch_shape, duration, hidden_dim, obs_dim):
         stability.unsqueeze(-1).unsqueeze(-1),
         skew=skew,
     ).to_event(1)
-    hmm = dist.LinearHMM(
-        init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration
-    )
+    hmm = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration)
     assert hmm.batch_shape == batch_shape
     assert hmm.event_shape == (duration, obs_dim)
 
@@ -145,9 +137,7 @@ def test_stable_hmm_shape(skew, batch_shape, duration, hidden_dim, obs_dim):
 def test_independent_hmm_shape(skew, batch_shape, duration, hidden_dim, obs_dim):
     base_batch_shape = batch_shape + (obs_dim,)
     stability = dist.Uniform(0.5, 2).sample(base_batch_shape)
-    init_dist = random_stable(
-        base_batch_shape + (hidden_dim,), stability.unsqueeze(-1), skew=skew
-    ).to_event(1)
+    init_dist = random_stable(base_batch_shape + (hidden_dim,), stability.unsqueeze(-1), skew=skew).to_event(1)
     trans_mat = torch.randn(base_batch_shape + (duration, hidden_dim, hidden_dim))
     trans_dist = random_stable(
         base_batch_shape + (duration, hidden_dim),
@@ -160,9 +150,7 @@ def test_independent_hmm_shape(skew, batch_shape, duration, hidden_dim, obs_dim)
         stability.unsqueeze(-1).unsqueeze(-1),
         skew=skew,
     ).to_event(1)
-    hmm = dist.LinearHMM(
-        init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration
-    )
+    hmm = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration)
     assert hmm.batch_shape == base_batch_shape
     assert hmm.event_shape == (duration, 1)
 
@@ -206,22 +194,16 @@ def test_stable_hmm_distribution(stability, skew, duration, hidden_dim, obs_dim)
     trans_dist = random_stable((duration, hidden_dim), stability, skew=skew).to_event(1)
     obs_mat = torch.randn(duration, hidden_dim, obs_dim)
     obs_dist = random_stable((duration, obs_dim), stability, skew=skew).to_event(1)
-    hmm = dist.LinearHMM(
-        init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration
-    )
+    hmm = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration)
 
     num_samples = 200000
-    expected_samples = hmm.sample([num_samples]).reshape(
-        num_samples, duration * obs_dim
-    )
+    expected_samples = hmm.sample([num_samples]).reshape(num_samples, duration * obs_dim)
     expected_loc, expected_scale, expected_corr = get_hmm_moments(expected_samples)
 
     rep = SymmetricStableReparam() if skew == 0 else StableReparam()
     with pyro.plate("samples", num_samples):
         with poutine.reparam(config={"x": LinearHMMReparam(rep, rep, rep)}):
-            actual_samples = pyro.sample("x", hmm).reshape(
-                num_samples, duration * obs_dim
-            )
+            actual_samples = pyro.sample("x", hmm).reshape(num_samples, duration * obs_dim)
     actual_loc, actual_scale, actual_corr = get_hmm_moments(actual_samples)
 
     assert_close(actual_loc, expected_loc, atol=0.05, rtol=0.05)
@@ -235,17 +217,11 @@ def test_stable_hmm_distribution(stability, skew, duration, hidden_dim, obs_dim)
 @pytest.mark.parametrize("batch_shape", [(), (4,), (2, 3)], ids=str)
 def test_stable_hmm_shape_error(batch_shape, duration, hidden_dim, obs_dim):
     stability = dist.Uniform(0.5, 2).sample(batch_shape)
-    init_dist = random_stable(
-        batch_shape + (hidden_dim,), stability.unsqueeze(-1)
-    ).to_event(1)
+    init_dist = random_stable(batch_shape + (hidden_dim,), stability.unsqueeze(-1)).to_event(1)
     trans_mat = torch.randn(batch_shape + (1, hidden_dim, hidden_dim))
-    trans_dist = random_stable(
-        batch_shape + (1, hidden_dim), stability.unsqueeze(-1).unsqueeze(-1)
-    ).to_event(1)
+    trans_dist = random_stable(batch_shape + (1, hidden_dim), stability.unsqueeze(-1).unsqueeze(-1)).to_event(1)
     obs_mat = torch.randn(batch_shape + (1, hidden_dim, obs_dim))
-    obs_dist = random_stable(
-        batch_shape + (1, obs_dim), stability.unsqueeze(-1).unsqueeze(-1)
-    ).to_event(1)
+    obs_dist = random_stable(batch_shape + (1, obs_dim), stability.unsqueeze(-1).unsqueeze(-1)).to_event(1)
     hmm = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
     assert hmm.batch_shape == batch_shape
     assert hmm.event_shape == (1, obs_dim)
@@ -268,9 +244,7 @@ def test_stable_hmm_shape_error(batch_shape, duration, hidden_dim, obs_dim):
 @pytest.mark.parametrize("skew", [0, None], ids=["symmetric", "skewed"])
 def test_init_shape(skew, batch_shape, duration, hidden_dim, obs_dim):
     stability = dist.Uniform(0.5, 2).sample(batch_shape)
-    init_dist = random_stable(
-        batch_shape + (hidden_dim,), stability.unsqueeze(-1), skew=skew
-    ).to_event(1)
+    init_dist = random_stable(batch_shape + (hidden_dim,), stability.unsqueeze(-1), skew=skew).to_event(1)
     trans_mat = torch.randn(batch_shape + (duration, hidden_dim, hidden_dim))
     trans_dist = random_stable(
         batch_shape + (duration, hidden_dim),
@@ -283,9 +257,7 @@ def test_init_shape(skew, batch_shape, duration, hidden_dim, obs_dim):
         stability.unsqueeze(-1).unsqueeze(-1),
         skew=skew,
     ).to_event(1)
-    hmm = dist.LinearHMM(
-        init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration
-    )
+    hmm = dist.LinearHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration)
     assert hmm.batch_shape == batch_shape
     assert hmm.event_shape == (duration, obs_dim)
 

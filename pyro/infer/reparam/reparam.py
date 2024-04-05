@@ -47,8 +47,7 @@ class Reparam(ABC):
         # This default is provided for backwards compatibility only.
         # New subclasses should define .apply() and omit .__call__().
         warnings.warn(
-            "Reparam.__call__() is deprecated in favor of .apply(); "
-            "new subclasses should implement .apply().",
+            "Reparam.__call__() is deprecated in favor of .apply(); " "new subclasses should implement .apply().",
             DeprecationWarning,
         )
         new_fn, value = self(msg["name"], msg["fn"], msg["value"])

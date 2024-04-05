@@ -62,9 +62,7 @@ def jit_logprob(equation, *operands, **kwargs):
     if key not in _CACHE:
         # This simply wraps einsum for jit compilation.
         def _einsum(*operands):
-            return einsum(
-                equation, *operands, backend="pyro.ops.einsum.torch_log", **kwargs
-            )
+            return einsum(equation, *operands, backend="pyro.ops.einsum.torch_log", **kwargs)
 
         _CACHE[key] = torch.jit.trace(_einsum, operands, check_trace=False)
 
@@ -81,9 +79,7 @@ def jit_gradient(equation, *operands, **kwargs):
     if key not in _CACHE:
         # This wraps einsum for jit compilation, but we will call backward on the result.
         def _einsum(*operands):
-            return einsum(
-                equation, *operands, backend="pyro.ops.einsum.torch_log", **kwargs
-            )
+            return einsum(equation, *operands, backend="pyro.ops.einsum.torch_log", **kwargs)
 
         _CACHE[key] = torch.jit.trace(_einsum, operands, check_trace=False)
 
@@ -96,9 +92,7 @@ def jit_gradient(equation, *operands, **kwargs):
         losses = (losses,)
 
     # Run backward pass.
-    grads = tuple(
-        grad(loss, operands, retain_graph=True, allow_unused=True) for loss in losses
-    )
+    grads = tuple(grad(loss, operands, retain_graph=True, allow_unused=True) for loss in losses)
     return grads
 
 
@@ -142,21 +136,15 @@ def _jit_adjoint(equation, *operands, **kwargs):
 
 
 def jit_map(equation, *operands, **kwargs):
-    return _jit_adjoint(
-        equation, *operands, backend="pyro.ops.einsum.torch_map", **kwargs
-    )
+    return _jit_adjoint(equation, *operands, backend="pyro.ops.einsum.torch_map", **kwargs)
 
 
 def jit_sample(equation, *operands, **kwargs):
-    return _jit_adjoint(
-        equation, *operands, backend="pyro.ops.einsum.torch_sample", **kwargs
-    )
+    return _jit_adjoint(equation, *operands, backend="pyro.ops.einsum.torch_sample", **kwargs)
 
 
 def jit_marginal(equation, *operands, **kwargs):
-    return _jit_adjoint(
-        equation, *operands, backend="pyro.ops.einsum.torch_marginal", **kwargs
-    )
+    return _jit_adjoint(equation, *operands, backend="pyro.ops.einsum.torch_marginal", **kwargs)
 
 
 def time_fn(fn, equation, *operands, **kwargs):
@@ -193,19 +181,11 @@ def main(args):
     for plate_size in range(8, 1 + args.max_plate_size, 8):
         operands = []
         for dims in inputs:
-            shape = torch.Size(
-                [plate_size if d in plates else args.dim_size for d in dims]
-            )
+            shape = torch.Size([plate_size if d in plates else args.dim_size for d in dims])
             operands.append((torch.empty(shape).uniform_() + 0.5).requires_grad_())
 
-        time = time_fn(
-            fn, equation, *operands, plates=plates, modulo_total=True, iters=args.iters
-        )
-        print(
-            "{: <11s} {:0.4g}".format(
-                "{} ** {}".format(plate_size, len(args.plates)), time * 1e3
-            )
-        )
+        time = time_fn(fn, equation, *operands, plates=plates, modulo_total=True, iters=args.iters)
+        print("{: <11s} {:0.4g}".format("{} ** {}".format(plate_size, len(args.plates)), time * 1e3))
 
 
 if __name__ == "__main__":

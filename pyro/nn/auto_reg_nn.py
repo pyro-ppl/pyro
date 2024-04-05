@@ -9,9 +9,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 
-def sample_mask_indices(
-    input_dim: int, hidden_dim: int, simple: bool = True
-) -> torch.Tensor:
+def sample_mask_indices(input_dim: int, hidden_dim: int, simple: bool = True) -> torch.Tensor:
     """
     Samples the indices assigned to hidden units during the construction of MADE masks
 
@@ -73,29 +71,15 @@ def create_mask(
     output_indices = (var_index + 1).repeat(output_dim_multiplier)
 
     # Create mask from input to output for the skips connections
-    mask_skip = (output_indices.unsqueeze(-1) > input_indices.unsqueeze(0)).type_as(
-        var_index
-    )
+    mask_skip = (output_indices.unsqueeze(-1) > input_indices.unsqueeze(0)).type_as(var_index)
 
     # Create mask from input to first hidden layer, and between subsequent hidden layers
-    masks = [
-        (hidden_indices[0].unsqueeze(-1) >= input_indices.unsqueeze(0)).type_as(
-            var_index
-        )
-    ]
+    masks = [(hidden_indices[0].unsqueeze(-1) >= input_indices.unsqueeze(0)).type_as(var_index)]
     for i in range(1, len(hidden_dims)):
-        masks.append(
-            (
-                hidden_indices[i].unsqueeze(-1) >= hidden_indices[i - 1].unsqueeze(0)
-            ).type_as(var_index)
-        )
+        masks.append((hidden_indices[i].unsqueeze(-1) >= hidden_indices[i - 1].unsqueeze(0)).type_as(var_index))
 
     # Create mask from last hidden layer to output layer
-    masks.append(
-        (output_indices.unsqueeze(-1) > hidden_indices[-1].unsqueeze(0)).type_as(
-            var_index
-        )
-    )
+    masks.append((output_indices.unsqueeze(-1) > hidden_indices[-1].unsqueeze(0)).type_as(var_index))
 
     return masks, mask_skip
 
@@ -114,9 +98,7 @@ class MaskedLinear(nn.Linear):
     :type bias: bool
     """
 
-    def __init__(
-        self, in_features: int, out_features: int, mask: torch.Tensor, bias: bool = True
-    ) -> None:
+    def __init__(self, in_features: int, out_features: int, mask: torch.Tensor, bias: bool = True) -> None:
         super().__init__(in_features, out_features, bias)
         self.register_buffer("mask", mask.data)
 
@@ -183,9 +165,7 @@ class ConditionalAutoRegressiveNN(nn.Module):
     ) -> None:
         super().__init__()
         if input_dim == 1:
-            warnings.warn(
-                "ConditionalAutoRegressiveNN input_dim = 1. Consider using an affine transformation instead."
-            )
+            warnings.warn("ConditionalAutoRegressiveNN input_dim = 1. Consider using an affine transformation instead.")
         self.input_dim = input_dim
         self.context_dim = context_dim
         self.hidden_dims = hidden_dims
@@ -203,9 +183,7 @@ class ConditionalAutoRegressiveNN(nn.Module):
         # possible to connect to the outputs correctly
         for h in hidden_dims:
             if h < input_dim:
-                raise ValueError(
-                    "Hidden dimension must not be less than input dimension."
-                )
+                raise ValueError("Hidden dimension must not be less than input dimension.")
 
         if permutation is None:
             # By default set a random permutation of variables, which is important for performance with multiple steps
@@ -228,14 +206,8 @@ class ConditionalAutoRegressiveNN(nn.Module):
         # Create masked layers
         layers = [MaskedLinear(input_dim + context_dim, hidden_dims[0], self.masks[0])]
         for i in range(1, len(hidden_dims)):
-            layers.append(
-                MaskedLinear(hidden_dims[i - 1], hidden_dims[i], self.masks[i])
-            )
-        layers.append(
-            MaskedLinear(
-                hidden_dims[-1], input_dim * self.output_multiplier, self.masks[-1]
-            )
-        )
+            layers.append(MaskedLinear(hidden_dims[i - 1], hidden_dims[i], self.masks[i]))
+        layers.append(MaskedLinear(hidden_dims[-1], input_dim * self.output_multiplier, self.masks[-1]))
         self.layers = nn.ModuleList(layers)
 
         self.skip_layer: Optional[MaskedLinear]
@@ -282,9 +254,7 @@ class ConditionalAutoRegressiveNN(nn.Module):
         if self.output_multiplier == 1:
             return h
         else:
-            h = h.reshape(
-                list(x.size()[:-1]) + [self.output_multiplier, self.input_dim]
-            )
+            h = h.reshape(list(x.size()[:-1]) + [self.output_multiplier, self.input_dim])
 
             # Squeeze dimension if all parameters are one dimensional
             if self.count_params == 1:

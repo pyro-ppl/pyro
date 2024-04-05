@@ -67,9 +67,7 @@ class ConditionalDenseNN(torch.nn.Module):
         # Save the nonlinearity
         self.f = nonlinearity
 
-    def forward(
-        self, x: torch.Tensor, context: torch.Tensor
-    ) -> Union[Sequence[torch.Tensor], torch.Tensor]:
+    def forward(self, x: torch.Tensor, context: torch.Tensor) -> Union[Sequence[torch.Tensor], torch.Tensor]:
         # We must be able to broadcast the size of the context over the input
         context = context.expand(x.size()[:-1] + (context.size(-1),))
 
@@ -132,9 +130,7 @@ class DenseNN(ConditionalDenseNN):
         param_dims: List[int] = [1, 1],
         nonlinearity: torch.nn.Module = torch.nn.ReLU(),
     ) -> None:
-        super(DenseNN, self).__init__(
-            input_dim, 0, hidden_dims, param_dims=param_dims, nonlinearity=nonlinearity
-        )
+        super(DenseNN, self).__init__(input_dim, 0, hidden_dims, param_dims=param_dims, nonlinearity=nonlinearity)
 
     def forward(self, x: torch.Tensor) -> Union[Sequence[torch.Tensor], torch.Tensor]:  # type: ignore[override]
         return self._forward(x)

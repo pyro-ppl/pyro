@@ -148,9 +148,7 @@ class Gaussian:
         result = (value * result).sum(-1)
         return result + self.log_normalizer
 
-    def rsample(
-        self, sample_shape=torch.Size(), noise: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def rsample(self, sample_shape=torch.Size(), noise: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Reparameterized sampler.
         """
@@ -195,11 +193,7 @@ class Gaussian:
 
         info_vec = info_a - matvecmul(P_ab, b)
         precision = P_aa
-        log_normalizer = (
-            self.log_normalizer
-            + -0.5 * matvecmul(P_bb, b).mul(b).sum(-1)
-            + b.mul(info_b).sum(-1)
-        )
+        log_normalizer = self.log_normalizer + -0.5 * matvecmul(P_bb, b).mul(b).sum(-1) + b.mul(info_b).sum(-1)
         return Gaussian(log_normalizer, info_vec, precision)
 
     def left_condition(self, value: torch.Tensor) -> "Gaussian":
@@ -278,9 +272,7 @@ class Gaussian:
         """
         n = self.dim()
         chol_P = safe_cholesky(self.precision)
-        chol_P_u = triangular_solve(
-            self.info_vec.unsqueeze(-1), chol_P, upper=False
-        ).squeeze(-1)
+        chol_P_u = triangular_solve(self.info_vec.unsqueeze(-1), chol_P, upper=False).squeeze(-1)
         u_P_u = chol_P_u.pow(2).sum(-1)
         log_Z: torch.Tensor = (
             self.log_normalizer
@@ -331,9 +323,7 @@ class AffineNormal:
             delta = (value - self.loc) / self.scale
             info_vec = matvecmul(prec_sqrt, delta)
             log_normalizer = (
-                -0.5 * self.loc.size(-1) * math.log(2 * math.pi)
-                - 0.5 * delta.pow(2).sum(-1)
-                - self.scale.log().sum(-1)
+                -0.5 * self.loc.size(-1) * math.log(2 * math.pi) - 0.5 * delta.pow(2).sum(-1) - self.scale.log().sum(-1)
             )
             return Gaussian(log_normalizer, info_vec, precision)
         else:
@@ -353,9 +343,7 @@ class AffineNormal:
         else:
             return self.to_gaussian().left_condition(value)
 
-    def rsample(
-        self, sample_shape=torch.Size(), noise: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def rsample(self, sample_shape=torch.Size(), noise: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Reparameterized sampler.
         """
@@ -371,9 +359,7 @@ class AffineNormal:
 
     def to_gaussian(self):
         if self._gaussian is None:
-            mvn = torch.distributions.Independent(
-                torch.distributions.Normal(self.loc, scale=self.scale), 1
-            )
+            mvn = torch.distributions.Independent(torch.distributions.Normal(self.loc, scale=self.scale), 1)
             y_gaussian = mvn_to_gaussian(mvn)
             self._gaussian = matrix_and_gaussian_to_gaussian(self.matrix, y_gaussian)
         return self._gaussian
@@ -423,8 +409,7 @@ def mvn_to_gaussian(mvn):
     :rtype: ~pyro.ops.gaussian.Gaussian
     """
     assert isinstance(mvn, torch.distributions.MultivariateNormal) or (
-        isinstance(mvn, torch.distributions.Independent)
-        and isinstance(mvn.base_dist, torch.distributions.Normal)
+        isinstance(mvn, torch.distributions.Independent) and isinstance(mvn.base_dist, torch.distributions.Normal)
     )
     if isinstance(mvn, torch.distributions.Independent):
         mvn = mvn.base_dist
@@ -438,17 +423,11 @@ def mvn_to_gaussian(mvn):
         scale_diag = mvn.scale_tril.diagonal(dim1=-2, dim2=-1)
 
     n = mvn.loc.size(-1)
-    log_normalizer = (
-        -0.5 * n * math.log(2 * math.pi)
-        + -0.5 * (info_vec * mvn.loc).sum(-1)
-        - scale_diag.log().sum(-1)
-    )
+    log_normalizer = -0.5 * n * math.log(2 * math.pi) + -0.5 * (info_vec * mvn.loc).sum(-1) - scale_diag.log().sum(-1)
     return Gaussian(log_normalizer, info_vec, precision)
 
 
-def matrix_and_gaussian_to_gaussian(
-    matrix: torch.Tensor, y_gaussian: Gaussian
-) -> Gaussian:
+def matrix_and_gaussian_to_gaussian(matrix: torch.Tensor, y_gaussian: Gaussian) -> Gaussian:
     """
     Constructs a conditional Gaussian for ``p(y|x)`` where
     ``y - x @ matrix ~ y_gaussian``.
@@ -462,9 +441,7 @@ def matrix_and_gaussian_to_gaussian(
     P_xy = -neg_P_xy
     P_yx = P_xy.transpose(-1, -2)
     P_xx = matmul(neg_P_xy, matrix.transpose(-1, -2))
-    precision = torch.cat(
-        [torch.cat([P_xx, P_xy], -1), torch.cat([P_yx, P_yy], -1)], -2
-    )
+    precision = torch.cat([torch.cat([P_xx, P_xy], -1), torch.cat([P_yx, P_yy], -1)], -2)
     info_y = y_gaussian.info_vec
     info_x = -matvecmul(matrix, info_y)
     info_vec = torch.cat([info_x, info_y], -1)
@@ -486,8 +463,7 @@ def matrix_and_mvn_to_gaussian(matrix, mvn):
     :rtype: ~pyro.ops.gaussian.Gaussian
     """
     assert isinstance(mvn, torch.distributions.MultivariateNormal) or (
-        isinstance(mvn, torch.distributions.Independent)
-        and isinstance(mvn.base_dist, torch.distributions.Normal)
+        isinstance(mvn, torch.distributions.Independent) and isinstance(mvn.base_dist, torch.distributions.Normal)
     )
     assert isinstance(matrix, torch.Tensor)
     x_dim, y_dim = matrix.shape[-2:]
@@ -560,11 +536,7 @@ def gaussian_tensordot(x: Gaussian, y: Gaussian, dims: int = 0) -> Gaussian:
         if na + nc > 0:
             info_vec = info_vec - matmul(LinvBt, Linvb).squeeze(-1)
         logdet = torch.diagonal(L, dim1=-2, dim2=-1).log().sum(-1)
-        diff = (
-            0.5 * nb * math.log(2 * math.pi)
-            + 0.5 * Linvb.squeeze(-1).pow(2).sum(-1)
-            - logdet
-        )
+        diff = 0.5 * nb * math.log(2 * math.pi) + 0.5 * Linvb.squeeze(-1).pow(2).sum(-1) - logdet
         log_normalizer = log_normalizer + diff
 
     return Gaussian(log_normalizer, info_vec, precision)

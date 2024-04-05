@@ -32,9 +32,7 @@ class PlateMessenger(SubsampleMessenger):
 
 
 @contextmanager
-def block_plate(
-    name: Optional[str] = None, dim: Optional[int] = None, *, strict: bool = True
-) -> Iterator[None]:
+def block_plate(name: Optional[str] = None, dim: Optional[int] = None, *, strict: bool = True) -> Iterator[None]:
     """
     EXPERIMENTAL Context manager to temporarily block a single enclosing plate.
 

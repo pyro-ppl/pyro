@@ -18,9 +18,7 @@ from pyro.infer.trace_elbo import Trace_ELBO
 
 def vectorize(fn, num_particles, max_plate_nesting):
     def _fn(*args, **kwargs):
-        with pyro.plate(
-            "num_particles_vectorized", num_particles, dim=-max_plate_nesting - 1
-        ):
+        with pyro.plate("num_particles_vectorized", num_particles, dim=-max_plate_nesting - 1):
             return fn(*args, **kwargs)
 
     return _fn
@@ -231,14 +229,10 @@ class SVGD:
         Raghav Singhal, Saad Lahlou, Rajesh Ranganath
     """
 
-    def __init__(
-        self, model, kernel, optim, num_particles, max_plate_nesting, mode="univariate"
-    ):
+    def __init__(self, model, kernel, optim, num_particles, max_plate_nesting, mode="univariate"):
         assert callable(model)
         assert isinstance(kernel, SteinKernel), "Must provide a valid SteinKernel"
-        assert isinstance(
-            optim, pyro.optim.PyroOptim
-        ), "Must provide a valid Pyro optimizer"
+        assert isinstance(optim, pyro.optim.PyroOptim), "Must provide a valid Pyro optimizer"
         assert num_particles > 1, "Must use at least two particles"
         assert max_plate_nesting >= 0
         assert mode in [
@@ -263,9 +257,7 @@ class SVGD:
         """
         return {
             site["name"]: biject_to(site["fn"].support)(unconstrained_value)
-            for site, unconstrained_value in self.guide._unpack_latent(
-                pyro.param("svgd_particles")
-            )
+            for site, unconstrained_value in self.guide._unpack_latent(pyro.param("svgd_particles"))
         }
 
     @torch.no_grad()
@@ -302,27 +294,20 @@ class SVGD:
                 self.num_particles,
                 reshaped_particles.size(-1),
             )
-            attractive_grad = torch.einsum(
-                "nmd,md->nd", kernel, reshaped_particles_grad
-            )
+            attractive_grad = torch.einsum("nmd,md->nd", kernel, reshaped_particles_grad)
             repulsive_grad = torch.einsum("nmd,nmd->nd", kernel, kernel_grad)
 
         # combine the attractive and repulsive terms in the SVGD gradient
         assert attractive_grad.shape == repulsive_grad.shape
-        particles.grad = (attractive_grad + repulsive_grad).reshape(
-            particles.shape
-        ) / self.num_particles
+        particles.grad = (attractive_grad + repulsive_grad).reshape(particles.shape) / self.num_particles
 
         # compute per-parameter mean squared gradients
         squared_gradients = {
-            site["name"]: value.mean().item()
-            for site, value in self.guide._unpack_latent(particles.grad.pow(2.0))
+            site["name"]: value.mean().item() for site, value in self.guide._unpack_latent(particles.grad.pow(2.0))
         }
 
         # torch.optim objects gets instantiated for any params that haven't been seen yet
-        params = set(
-            site["value"].unconstrained() for site in param_capture.trace.nodes.values()
-        )
+        params = set(site["value"].unconstrained() for site in param_capture.trace.nodes.values())
         self.optim(params)
 
         # zero gradients

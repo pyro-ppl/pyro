@@ -42,9 +42,7 @@ class CholeskyTransform(Transform):
         # Ref: http://web.mit.edu/18.325/www/handouts/handout2.pdf page 13
         n = x.shape[-1]
         order = torch.arange(n, 0, -1, dtype=x.dtype, device=x.device)
-        return -n * math.log(2) - (
-            order * torch.diagonal(y, dim1=-2, dim2=-1).log()
-        ).sum(-1)
+        return -n * math.log(2) - (order * torch.diagonal(y, dim1=-2, dim2=-1).log()).sum(-1)
 
 
 class CorrMatrixCholeskyTransform(CholeskyTransform):

@@ -179,9 +179,7 @@ def _sequential_gamma_gaussian_tensordot(gamma_gaussian):
         x, y = x_y[..., 0], x_y[..., 1]
         contracted = gamma_gaussian_tensordot(x, y, state_dim)
         if time > even_time:
-            contracted = GammaGaussian.cat(
-                (contracted, gamma_gaussian[..., -1:]), dim=-1
-            )
+            contracted = GammaGaussian.cat((contracted, gamma_gaussian[..., -1:]), dim=-1)
         gamma_gaussian = contracted
     return gamma_gaussian[..., 0]
 
@@ -204,11 +202,7 @@ class HiddenMarkovModel(TorchDistribution):
                 duration = event_shape[0]
         elif duration != event_shape[0]:
             if event_shape[0] != 1:
-                raise ValueError(
-                    "duration, event_shape mismatch: {} vs {}".format(
-                        duration, event_shape
-                    )
-                )
+                raise ValueError("duration, event_shape mismatch: {} vs {}".format(duration, event_shape))
             # Infer event_shape from duration.
             event_shape = torch.Size((duration,) + event_shape[1:])
         self._duration = duration
@@ -300,18 +294,19 @@ class DiscreteHMM(HiddenMarkovModel):
     ):
         if initial_logits.dim() < 1:
             raise ValueError(
-                "expected initial_logits to have at least one dim, "
-                "actual shape = {}".format(initial_logits.shape)
+                "expected initial_logits to have at least one dim, " "actual shape = {}".format(initial_logits.shape)
             )
         if transition_logits.dim() < 2:
             raise ValueError(
-                "expected transition_logits to have at least two dims, "
-                "actual shape = {}".format(transition_logits.shape)
+                "expected transition_logits to have at least two dims, " "actual shape = {}".format(
+                    transition_logits.shape
+                )
             )
         if len(observation_dist.batch_shape) < 1:
             raise ValueError(
-                "expected observation_dist to have at least one batch dim, "
-                "actual .batch_shape = {}".format(observation_dist.batch_shape)
+                "expected observation_dist to have at least one batch dim, " "actual .batch_shape = {}".format(
+                    observation_dist.batch_shape
+                )
             )
         shape = broadcast_shape(
             initial_logits.shape[:-1] + (1,),
@@ -321,13 +316,9 @@ class DiscreteHMM(HiddenMarkovModel):
         batch_shape, time_shape = shape[:-1], shape[-1:]
         event_shape = time_shape + observation_dist.event_shape
         self.initial_logits = initial_logits - initial_logits.logsumexp(-1, True)
-        self.transition_logits = transition_logits - transition_logits.logsumexp(
-            -1, True
-        )
+        self.transition_logits = transition_logits - transition_logits.logsumexp(-1, True)
         self.observation_dist = observation_dist
-        super().__init__(
-            duration, batch_shape, event_shape, validate_args=validate_args
-        )
+        super().__init__(duration, batch_shape, event_shape, validate_args=validate_args)
 
     @constraints.dependent_property(event_dim=2)
     def support(self):
@@ -343,9 +334,7 @@ class DiscreteHMM(HiddenMarkovModel):
         new.initial_logits = self.initial_logits.expand(batch_shape + (-1,))
         new.transition_logits = self.transition_logits
         new.observation_dist = self.observation_dist
-        super(DiscreteHMM, new).__init__(
-            self.duration, batch_shape, self.event_shape, validate_args=False
-        )
+        super(DiscreteHMM, new).__init__(self.duration, batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get("_validate_args")
         return new
 
@@ -407,9 +396,7 @@ class DiscreteHMM(HiddenMarkovModel):
         x = Categorical(logits=init_logits).sample()
 
         # Sample hidden states over time.
-        trans_shape = (
-            torch.Size(sample_shape) + self.batch_shape + (self.duration, S, S)
-        )
+        trans_shape = torch.Size(sample_shape) + self.batch_shape + (self.duration, S, S)
         trans_logits = self.transition_logits.expand(trans_shape)
         xs = Categorical(logits=trans_logits).sample()
         xs = _sequential_index(xs)
@@ -533,9 +520,7 @@ class GaussianHMM(HiddenMarkovModel):
         )
         batch_shape, time_shape = shape[:-1], shape[-1:]
         event_shape = time_shape + (obs_dim,)
-        super().__init__(
-            duration, batch_shape, event_shape, validate_args=validate_args
-        )
+        super().__init__(duration, batch_shape, event_shape, validate_args=validate_args)
 
         self.hidden_dim = hidden_dim
         self.obs_dim = obs_dim
@@ -556,9 +541,7 @@ class GaussianHMM(HiddenMarkovModel):
         batch_shape = torch.Size(broadcast_shape(self.batch_shape, batch_shape))
         new._init = self._init.expand(batch_shape)
 
-        super(GaussianHMM, new).__init__(
-            self.duration, batch_shape, self.event_shape, validate_args=False
-        )
+        super(GaussianHMM, new).__init__(self.duration, batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get("_validate_args")
         return new
 
@@ -567,9 +550,7 @@ class GaussianHMM(HiddenMarkovModel):
             self._validate_sample(value)
 
         # Combine observation and transition factors.
-        result = self._trans + self._obs.condition(value).event_pad(
-            left=self.hidden_dim
-        )
+        result = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
 
         # Eliminate time dimension.
         result = sequential_gaussian_tensordot(result.expand(result.batch_shape))
@@ -584,9 +565,7 @@ class GaussianHMM(HiddenMarkovModel):
     def rsample(self, sample_shape=torch.Size()):
         assert self.duration is not None
         sample_shape = torch.Size(sample_shape)
-        trans = self._trans + self._obs.marginalize(right=self.obs_dim).event_pad(
-            left=self.hidden_dim
-        )
+        trans = self._trans + self._obs.marginalize(right=self.obs_dim).event_pad(left=self.hidden_dim)
         trans = trans.expand(trans.batch_shape[:-1] + (self.duration,))
         z = sequential_gaussian_filter_sample(self._init, trans, sample_shape)
         z = z[..., 1:, :]  # drop the initial hidden state
@@ -628,12 +607,8 @@ class GaussianHMM(HiddenMarkovModel):
 
         # Convert to a distribution
         precision = logp.precision
-        loc = cholesky_solve(
-            logp.info_vec.unsqueeze(-1), safe_cholesky(precision)
-        ).squeeze(-1)
-        return MultivariateNormal(
-            loc, precision_matrix=precision, validate_args=self._validate_args
-        )
+        loc = cholesky_solve(logp.info_vec.unsqueeze(-1), safe_cholesky(precision)).squeeze(-1)
+        return MultivariateNormal(loc, precision_matrix=precision, validate_args=self._validate_args)
 
     def conjugate_update(self, other):
         """
@@ -666,24 +641,18 @@ class GaussianHMM(HiddenMarkovModel):
         new.obs_dim = self.obs_dim
         new._init = self._init
         new._trans = self._trans
-        new._obs = self._obs + mvn_to_gaussian(other.to_event(-1)).event_pad(
-            left=self.hidden_dim
-        )
+        new._obs = self._obs + mvn_to_gaussian(other.to_event(-1)).event_pad(left=self.hidden_dim)
 
         # Normalize.
         # TODO cache this computation for the forward pass of .rsample().
-        logp = new._trans + new._obs.marginalize(right=new.obs_dim).event_pad(
-            left=new.hidden_dim
-        )
+        logp = new._trans + new._obs.marginalize(right=new.obs_dim).event_pad(left=new.hidden_dim)
         logp = sequential_gaussian_tensordot(logp.expand(logp.batch_shape))
         logp = gaussian_tensordot(new._init, logp, dims=new.hidden_dim)
         log_normalizer = logp.event_logsumexp()
         new._init = new._init - log_normalizer
 
         batch_shape = log_normalizer.shape
-        super(GaussianHMM, new).__init__(
-            duration, batch_shape, event_shape, validate_args=False
-        )
+        super(GaussianHMM, new).__init__(duration, batch_shape, event_shape, validate_args=False)
         new._validate_args = self.__dict__.get("_validate_args")
         return new, log_normalizer
 
@@ -720,24 +689,18 @@ class GaussianHMM(HiddenMarkovModel):
             left._obs = self._obs[..., :t]
             right._obs = self._obs[..., t:]
 
-        if (
-            self._trans.batch_shape == () or self._trans.batch_shape[-1] == 1
-        ):  # homogeneous
+        if self._trans.batch_shape == () or self._trans.batch_shape[-1] == 1:  # homogeneous
             left._trans = self._trans
             right._trans = self._trans
         else:  # heterogeneous
             left._trans = self._trans[..., :t]
             right._trans = self._trans[..., t:]
 
-        super(GaussianHMM, left).__init__(
-            t, self.batch_shape, (t, self.obs_dim), validate_args=self._validate_args
-        )
+        super(GaussianHMM, left).__init__(t, self.batch_shape, (t, self.obs_dim), validate_args=self._validate_args)
         initial_dist = left.filter(data)
         right._init = mvn_to_gaussian(initial_dist)
         batch_shape = broadcast_shape(right._init.batch_shape, self.batch_shape)
-        super(GaussianHMM, right).__init__(
-            f, batch_shape, (f, self.obs_dim), validate_args=self._validate_args
-        )
+        super(GaussianHMM, right).__init__(f, batch_shape, (f, self.obs_dim), validate_args=self._validate_args)
         return right
 
 
@@ -846,18 +809,12 @@ class GammaGaussianHMM(HiddenMarkovModel):
         )
         batch_shape, time_shape = shape[:-1], shape[-1:]
         event_shape = time_shape + (obs_dim,)
-        super().__init__(
-            duration, batch_shape, event_shape, validate_args=validate_args
-        )
+        super().__init__(duration, batch_shape, event_shape, validate_args=validate_args)
         self.hidden_dim = hidden_dim
         self.obs_dim = obs_dim
         self._init = gamma_and_mvn_to_gamma_gaussian(scale_dist, initial_dist)
-        self._trans = matrix_and_mvn_to_gamma_gaussian(
-            transition_matrix, transition_dist
-        )
-        self._obs = matrix_and_mvn_to_gamma_gaussian(
-            observation_matrix, observation_dist
-        )
+        self._trans = matrix_and_mvn_to_gamma_gaussian(transition_matrix, transition_dist)
+        self._obs = matrix_and_mvn_to_gamma_gaussian(observation_matrix, observation_dist)
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(GammaGaussianHMM, _instance)
@@ -870,9 +827,7 @@ class GammaGaussianHMM(HiddenMarkovModel):
         new._init = self._init.expand(batch_shape)
         new._trans = self._trans
         new._obs = self._obs
-        super(GammaGaussianHMM, new).__init__(
-            self.duration, batch_shape, self.event_shape, validate_args=False
-        )
+        super(GammaGaussianHMM, new).__init__(self.duration, batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get("_validate_args")
         return new
 
@@ -881,9 +836,7 @@ class GammaGaussianHMM(HiddenMarkovModel):
             self._validate_sample(value)
 
         # Combine observation and transition factors.
-        result = self._trans + self._obs.condition(value).event_pad(
-            left=self.hidden_dim
-        )
+        result = self._trans + self._obs.condition(value).event_pad(left=self.hidden_dim)
 
         # Eliminate time dimension.
         result = _sequential_gamma_gaussian_tensordot(result.expand(result.batch_shape))
@@ -924,15 +877,11 @@ class GammaGaussianHMM(HiddenMarkovModel):
 
         # Posterior of the scale
         gamma_dist = logp.event_logsumexp()
-        scale_post = Gamma(
-            gamma_dist.concentration, gamma_dist.rate, validate_args=self._validate_args
-        )
+        scale_post = Gamma(gamma_dist.concentration, gamma_dist.rate, validate_args=self._validate_args)
         # Conditional of last state on unit scale
         scale_tril = safe_cholesky(logp.precision)
         loc = cholesky_solve(logp.info_vec.unsqueeze(-1), scale_tril).squeeze(-1)
-        mvn = MultivariateNormal(
-            loc, scale_tril=scale_tril, validate_args=self._validate_args
-        )
+        mvn = MultivariateNormal(loc, scale_tril=scale_tril, validate_args=self._validate_args)
         return scale_post, mvn
 
 
@@ -1020,15 +969,10 @@ class LinearHMM(HiddenMarkovModel):
     ):
         assert initial_dist.has_rsample
         assert initial_dist.event_dim == 1
-        assert (
-            isinstance(transition_matrix, torch.Tensor) and transition_matrix.dim() >= 2
-        )
+        assert isinstance(transition_matrix, torch.Tensor) and transition_matrix.dim() >= 2
         assert transition_dist.has_rsample
         assert transition_dist.event_dim == 1
-        assert (
-            isinstance(observation_matrix, torch.Tensor)
-            and observation_matrix.dim() >= 2
-        )
+        assert isinstance(observation_matrix, torch.Tensor) and observation_matrix.dim() >= 2
         assert observation_dist.has_rsample
         assert observation_dist.event_dim == 1
 
@@ -1046,23 +990,17 @@ class LinearHMM(HiddenMarkovModel):
         )
         batch_shape, time_shape = shape[:-1], shape[-1:]
         event_shape = time_shape + (obs_dim,)
-        super().__init__(
-            duration, batch_shape, event_shape, validate_args=validate_args
-        )
+        super().__init__(duration, batch_shape, event_shape, validate_args=validate_args)
 
         # Expand eagerly.
         if initial_dist.batch_shape != batch_shape:
             initial_dist = initial_dist.expand(batch_shape)
         if transition_matrix.shape[:-2] != batch_shape + time_shape:
-            transition_matrix = transition_matrix.expand(
-                batch_shape + time_shape + (hidden_dim, hidden_dim)
-            )
+            transition_matrix = transition_matrix.expand(batch_shape + time_shape + (hidden_dim, hidden_dim))
         if transition_dist.batch_shape != batch_shape + time_shape:
             transition_dist = transition_dist.expand(batch_shape + time_shape)
         if observation_matrix.shape[:-2] != batch_shape + time_shape:
-            observation_matrix = observation_matrix.expand(
-                batch_shape + time_shape + (hidden_dim, obs_dim)
-            )
+            observation_matrix = observation_matrix.expand(batch_shape + time_shape + (hidden_dim, obs_dim))
         if observation_dist.batch_shape != batch_shape + time_shape:
             observation_dist = observation_dist.expand(batch_shape + time_shape)
 
@@ -1071,9 +1009,7 @@ class LinearHMM(HiddenMarkovModel):
         while True:
             if isinstance(observation_dist, torch.distributions.Independent):
                 observation_dist = observation_dist.base_dist
-            elif isinstance(
-                observation_dist, torch.distributions.TransformedDistribution
-            ):
+            elif isinstance(observation_dist, torch.distributions.TransformedDistribution):
                 transforms = observation_dist.transforms + transforms
                 observation_dist = observation_dist.base_dist
             else:
@@ -1110,9 +1046,7 @@ class LinearHMM(HiddenMarkovModel):
         )
         new.observation_dist = self.observation_dist.expand(batch_shape + time_shape)
         new.transforms = self.transforms
-        super(LinearHMM, new).__init__(
-            self.duration, batch_shape, self.event_shape, validate_args=False
-        )
+        super(LinearHMM, new).__init__(self.duration, batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get("_validate_args")
         return new
 
@@ -1122,15 +1056,9 @@ class LinearHMM(HiddenMarkovModel):
     def rsample(self, sample_shape=torch.Size()):
         assert self.duration is not None
         init = self.initial_dist.rsample(sample_shape)
-        trans = self.transition_dist.expand(
-            self.batch_shape + (self.duration,)
-        ).rsample(sample_shape)
-        obs = self.observation_dist.expand(self.batch_shape + (self.duration,)).rsample(
-            sample_shape
-        )
-        trans_matrix = self.transition_matrix.expand(
-            self.batch_shape + (self.duration, -1, -1)
-        )
+        trans = self.transition_dist.expand(self.batch_shape + (self.duration,)).rsample(sample_shape)
+        obs = self.observation_dist.expand(self.batch_shape + (self.duration,)).rsample(sample_shape)
+        trans_matrix = self.transition_matrix.expand(self.batch_shape + (self.duration, -1, -1))
         z = _linear_integrate(init, trans_matrix, trans)
         x = (z.unsqueeze(-2) @ self.observation_matrix).squeeze(-2) + obs
         for t in self.transforms:
@@ -1180,12 +1108,8 @@ class IndependentHMM(TorchDistribution):
     def expand(self, batch_shape, _instance=None):
         batch_shape = torch.Size(batch_shape)
         new = self._get_checked_instance(IndependentHMM, _instance)
-        new.base_dist = self.base_dist.expand(
-            batch_shape + self.base_dist.batch_shape[-1:]
-        )
-        super(IndependentHMM, new).__init__(
-            batch_shape, self.event_shape, validate_args=False
-        )
+        new.base_dist = self.base_dist.expand(batch_shape + self.base_dist.batch_shape[-1:])
+        super(IndependentHMM, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get("_validate_args")
         return new
 
@@ -1241,9 +1165,7 @@ class GaussianMRF(TorchDistribution):
 
     arg_constraints = {}
 
-    def __init__(
-        self, initial_dist, transition_dist, observation_dist, validate_args=None
-    ):
+    def __init__(self, initial_dist, transition_dist, observation_dist, validate_args=None):
         assert isinstance(initial_dist, torch.distributions.MultivariateNormal)
         assert isinstance(transition_dist, torch.distributions.MultivariateNormal)
         assert isinstance(observation_dist, torch.distributions.MultivariateNormal)
@@ -1282,9 +1204,7 @@ class GaussianMRF(TorchDistribution):
         new._trans = self._trans
         new._obs = self._obs
         new._support = self._support
-        super(GaussianMRF, new).__init__(
-            batch_shape, self.event_shape, validate_args=False
-        )
+        super(GaussianMRF, new).__init__(batch_shape, self.event_shape, validate_args=False)
         new._validate_args = self.__dict__.get("_validate_args")
         return new
 
@@ -1295,15 +1215,11 @@ class GaussianMRF(TorchDistribution):
 
         # Combine observation and transition factors.
         logp_oh += self._obs.condition(value).event_pad(left=self.hidden_dim)
-        logp_h += self._obs.marginalize(right=self.obs_dim).event_pad(
-            left=self.hidden_dim
-        )
+        logp_h += self._obs.marginalize(right=self.obs_dim).event_pad(left=self.hidden_dim)
 
         # Concatenate p(obs,hidden) and p(hidden) into a single Gaussian.
         batch_dim = 1 + max(len(self._init.batch_shape) + 1, len(logp_oh.batch_shape))
-        batch_shape = (1,) * (
-            batch_dim - len(logp_oh.batch_shape)
-        ) + logp_oh.batch_shape
+        batch_shape = (1,) * (batch_dim - len(logp_oh.batch_shape)) + logp_oh.batch_shape
         logp = Gaussian.cat([logp_oh.expand(batch_shape), logp_h.expand(batch_shape)])
 
         # Eliminate time dimension.

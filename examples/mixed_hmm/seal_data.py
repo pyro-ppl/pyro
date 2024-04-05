@@ -29,9 +29,7 @@ def prepare_seal(filename, random_effects):
     for g, (group, group_df) in enumerate(seal_df.groupby("sex")):
         for i, (ind, ind_df) in enumerate(group_df.groupby("ID")):
             for o, obs_key in enumerate(obs_keys):
-                observations[i, g, 0 : len(ind_df), o] = torch.tensor(
-                    ind_df[obs_key].values
-                )
+                observations[i, g, 0 : len(ind_df), o] = torch.tensor(ind_df[obs_key].values)
 
     observations[torch.isnan(observations)] = float("-inf")
 

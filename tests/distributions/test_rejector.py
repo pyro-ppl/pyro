@@ -123,9 +123,7 @@ def test_gamma_elbo(alpha, beta):
         prec=0.01,
         msg="bad grad for alpha",
     )
-    assert_equal(
-        actual[1] / scale[1], expected[1] / scale[1], prec=0.01, msg="bad grad for beta"
-    )
+    assert_equal(actual[1] / scale[1], expected[1] / scale[1], prec=0.01, msg="bad grad for beta")
 
 
 @pytest.mark.parametrize("alpha", [0.2, 0.5, 1.0, 2.0, 5.0])
@@ -152,9 +150,7 @@ def test_shape_augmented_gamma_elbo(alpha, beta):
         prec=0.05,
         msg="bad grad for alpha",
     )
-    assert_equal(
-        actual[1] / scale[1], expected[1] / scale[1], prec=0.05, msg="bad grad for beta"
-    )
+    assert_equal(actual[1] / scale[1], expected[1] / scale[1], prec=0.05, msg="bad grad for beta")
 
 
 @pytest.mark.parametrize("alpha", [0.5, 1.0, 4.0])
@@ -171,7 +167,5 @@ def test_shape_augmented_beta(alpha, beta):
     mean_beta_grad = betas.grad.mean().item()
     expected_alpha_grad = beta / (alpha + beta) ** 2
     expected_beta_grad = -alpha / (alpha + beta) ** 2
-    assert_equal(
-        mean_alpha_grad, expected_alpha_grad, prec=0.02, msg="bad grad for alpha"
-    )
+    assert_equal(mean_alpha_grad, expected_alpha_grad, prec=0.02, msg="bad grad for alpha")
     assert_equal(mean_beta_grad, expected_beta_grad, prec=0.02, msg="bad grad for beta")

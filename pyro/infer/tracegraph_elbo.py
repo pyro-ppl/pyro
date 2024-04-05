@@ -39,9 +39,7 @@ def _get_baseline_options(site):
         options_dict.pop("baseline_value", None),
     )
     if options_dict:
-        raise ValueError(
-            "Unrecognized baseline options: {}".format(options_dict.keys())
-        )
+        raise ValueError("Unrecognized baseline options: {}".format(options_dict.keys()))
     return options_tuple
 
 
@@ -64,19 +62,13 @@ def _construct_baseline(node, guide_site, downstream_cost):
 
     use_baseline = use_nn_baseline or use_decaying_avg_baseline or use_baseline_value
 
-    assert not (
-        use_nn_baseline and use_baseline_value
-    ), "cannot use baseline_value and nn_baseline simultaneously"
+    assert not (use_nn_baseline and use_baseline_value), "cannot use baseline_value and nn_baseline simultaneously"
     if use_decaying_avg_baseline:
         dc_shape = downstream_cost.shape
         param_name = "__baseline_avg_downstream_cost_" + node
         with torch.no_grad():
-            avg_downstream_cost_old = pyro.param(
-                param_name, torch.zeros(dc_shape, device=guide_site["value"].device)
-            )
-            avg_downstream_cost_new = (
-                1 - baseline_beta
-            ) * downstream_cost + baseline_beta * avg_downstream_cost_old
+            avg_downstream_cost_old = pyro.param(param_name, torch.zeros(dc_shape, device=guide_site["value"].device))
+            avg_downstream_cost_new = (1 - baseline_beta) * downstream_cost + baseline_beta * avg_downstream_cost_old
         pyro.get_param_store()[param_name] = avg_downstream_cost_new
         baseline += avg_downstream_cost_old
     if use_nn_baseline:
@@ -107,9 +99,7 @@ def _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes):  #
     # 2. model observe sites (as well as terms that arise from the model and guide having different
     # dependency structures) are taken care of via 'children_in_model' below
     topo_sort_guide_nodes = guide_trace.topological_sort(reverse=True)
-    topo_sort_guide_nodes = [
-        x for x in topo_sort_guide_nodes if guide_trace.nodes[x]["type"] == "sample"
-    ]
+    topo_sort_guide_nodes = [x for x in topo_sort_guide_nodes if guide_trace.nodes[x]["type"] == "sample"]
     ordered_guide_nodes_dict = {n: i for i, n in enumerate(topo_sort_guide_nodes)}
 
     downstream_guide_cost_nodes = {}
@@ -120,16 +110,13 @@ def _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes):  #
         downstream_costs[node] = MultiFrameTensor(
             (
                 stacks[node],
-                model_trace.nodes[node]["log_prob"]
-                - guide_trace.nodes[node]["log_prob"],
+                model_trace.nodes[node]["log_prob"] - guide_trace.nodes[node]["log_prob"],
             )
         )
         nodes_included_in_sum = set([node])
         downstream_guide_cost_nodes[node] = set([node])
         # make more efficient by ordering children appropriately (higher children first)
-        children = [
-            (k, -ordered_guide_nodes_dict[k]) for k in guide_trace.successors(node)
-        ]
+        children = [(k, -ordered_guide_nodes_dict[k]) for k in guide_trace.successors(node)]
         sorted_children = sorted(children, key=itemgetter(1))
         for child, _ in sorted_children:
             child_cost_nodes = downstream_guide_cost_nodes[child]
@@ -139,16 +126,13 @@ def _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes):  #
                 # XXX nodes_included_in_sum logic could be more fine-grained, possibly leading
                 # to speed-ups in case there are many duplicates
                 nodes_included_in_sum.update(child_cost_nodes)
-        missing_downstream_costs = (
-            downstream_guide_cost_nodes[node] - nodes_included_in_sum
-        )
+        missing_downstream_costs = downstream_guide_cost_nodes[node] - nodes_included_in_sum
         # include terms we missed because we had to avoid duplicates
         for missing_node in missing_downstream_costs:
             downstream_costs[node].add(
                 (
                     stacks[missing_node],
-                    model_trace.nodes[missing_node]["log_prob"]
-                    - guide_trace.nodes[missing_node]["log_prob"],
+                    model_trace.nodes[missing_node]["log_prob"] - guide_trace.nodes[missing_node]["log_prob"],
                 )
             )
 
@@ -162,15 +146,11 @@ def _compute_downstream_costs(model_trace, guide_trace, non_reparam_nodes):  #
         children_in_model.difference_update(downstream_guide_cost_nodes[site])
         for child in children_in_model:
             assert model_trace.nodes[child]["type"] == "sample"
-            downstream_costs[site].add(
-                (stacks[child], model_trace.nodes[child]["log_prob"])
-            )
+            downstream_costs[site].add((stacks[child], model_trace.nodes[child]["log_prob"]))
             downstream_guide_cost_nodes[site].update([child])
 
     for k in non_reparam_nodes:
-        downstream_costs[k] = downstream_costs[k].sum_to(
-            guide_trace.nodes[k]["cond_indep_stack"]
-        )
+        downstream_costs[k] = downstream_costs[k].sum_to(guide_trace.nodes[k]["cond_indep_stack"])
 
     return downstream_costs, downstream_guide_cost_nodes
 
@@ -222,9 +202,7 @@ def _compute_elbo(model_trace, guide_trace):
         downstream_cost = downstream_cost.sum_to(guide_site["cond_indep_stack"])
         score_function = guide_site["score_parts"].score_function
 
-        use_baseline, baseline_loss_term, baseline = _construct_baseline(
-            node, guide_site, downstream_cost
-        )
+        use_baseline, baseline_loss_term, baseline = _construct_baseline(node, guide_site, downstream_cost)
 
         if use_baseline:
             downstream_cost = downstream_cost - baseline
@@ -316,9 +294,7 @@ class TraceGraph_ELBO(ELBO):
         against it.
         """
         with TrackNonReparam():
-            model_trace, guide_trace = get_importance_trace(
-                "dense", self.max_plate_nesting, model, guide, args, kwargs
-            )
+            model_trace, guide_trace = get_importance_trace("dense", self.max_plate_nesting, model, guide, args, kwargs)
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
         return model_trace, guide_trace
@@ -332,9 +308,7 @@ class TraceGraph_ELBO(ELBO):
         """
         elbo = 0.0
         for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
-            elbo_particle = torch_item(model_trace.log_prob_sum()) - torch_item(
-                guide_trace.log_prob_sum()
-            )
+            elbo_particle = torch_item(model_trace.log_prob_sum()) - torch_item(guide_trace.log_prob_sum())
             elbo += elbo_particle / float(self.num_particles)
 
         loss = -elbo
@@ -401,9 +375,7 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
             # build a closure for loss_and_surrogate_loss
             weakself = weakref.ref(self)
 
-            @pyro.ops.jit.trace(
-                ignore_warnings=self.ignore_jit_warnings, jit_options=self.jit_options
-            )
+            @pyro.ops.jit.trace(ignore_warnings=self.ignore_jit_warnings, jit_options=self.jit_options)
             def jit_loss_and_surrogate_loss(*args, **kwargs):
                 kwargs.pop("_pyro_model_id")
                 kwargs.pop("_pyro_guide_id")
@@ -414,9 +386,7 @@ class JitTraceGraph_ELBO(TraceGraph_ELBO):
 
         elbo, surrogate_loss = self._jit_loss_and_surrogate_loss(*args, **kwargs)
 
-        surrogate_loss.backward(
-            retain_graph=self.retain_graph
-        )  # triggers jit compilation
+        surrogate_loss.backward(retain_graph=self.retain_graph)  # triggers jit compilation
 
         loss = -elbo.item()
         warn_if_nan(loss, "loss")

@@ -35,17 +35,11 @@ def Model(args, data):
     elif args.incubation_time > 0:
         assert args.incubation_time > 1
         if args.concentration < math.inf:
-            return SuperspreadingSEIRModel(
-                args.population, args.incubation_time, args.recovery_time, data
-            )
+            return SuperspreadingSEIRModel(args.population, args.incubation_time, args.recovery_time, data)
         elif args.overdispersion > 0:
-            return OverdispersedSEIRModel(
-                args.population, args.incubation_time, args.recovery_time, data
-            )
+            return OverdispersedSEIRModel(args.population, args.incubation_time, args.recovery_time, data)
         else:
-            return SimpleSEIRModel(
-                args.population, args.incubation_time, args.recovery_time, data
-            )
+            return SimpleSEIRModel(args.population, args.incubation_time, args.recovery_time, data)
     else:
         if args.concentration < math.inf:
             return SuperspreadingSIRModel(args.population, args.recovery_time, data)
@@ -78,23 +72,19 @@ def generate_data(args):
         max_obs = int(math.floor(args.max_obs_portion * args.population))
         if min_obs <= obs_sum <= max_obs:
             logging.info(
-                "Observed {:d}/{:d} infections:\n{}".format(
-                    obs_sum, new_I_sum, " ".join(str(int(x)) for x in obs)
-                )
+                "Observed {:d}/{:d} infections:\n{}".format(obs_sum, new_I_sum, " ".join(str(int(x)) for x in obs))
             )
             return {"new_I": new_I, "obs": obs}
 
     if obs_sum < min_obs:
         raise ValueError(
-            "Failed to generate >={} observations. "
-            "Try decreasing --min-obs-portion (currently {}).".format(
+            "Failed to generate >={} observations. " "Try decreasing --min-obs-portion (currently {}).".format(
                 min_obs, args.min_obs_portion
             )
         )
     else:
         raise ValueError(
-            "Failed to generate <={} observations. "
-            "Try increasing --max-obs-portion (currently {}).".format(
+            "Failed to generate <={} observations. " "Try increasing --max-obs-portion (currently {}).".format(
                 max_obs, args.max_obs_portion
             )
         )
@@ -177,9 +167,7 @@ def evaluate(args, model, samples):
         mean = samples[key].mean().item()
         std = samples[key].std().item()
         logging.info(
-            "{}: truth = {:0.3g}, estimate = {:0.3g} \u00B1 {:0.3g}".format(
-                key, getattr(args, name), mean, std
-            )
+            "{}: truth = {:0.3g}, estimate = {:0.3g} \u00b1 {:0.3g}".format(key, getattr(args, name), mean, std)
         )
 
     # Optionally plot histograms and pairwise correlations.
@@ -233,9 +221,7 @@ def evaluate(args, model, samples):
 
         covariates = [("R1", unconstrain(constraints.positive, samples["R0"]))]
         if not args.heterogeneous:
-            covariates.append(
-                ("rho", unconstrain(constraints.unit_interval, samples["rho"]))
-            )
+            covariates.append(("rho", unconstrain(constraints.unit_interval, samples["rho"])))
         if "k" in samples:
             covariates.append(("k", unconstrain(constraints.positive, samples["k"])))
         constraint = constraints.interval(-0.5, model.population + 0.5)
@@ -266,9 +252,7 @@ def predict(args, model, truth):
     new_I = samples.get("S2I", samples.get("E2I"))
     median = new_I.median(dim=0).values
     logging.info(
-        "Median prediction of new infections (starting on day 0):\n{}".format(
-            " ".join(map(str, map(int, median)))
-        )
+        "Median prediction of new infections (starting on day 0):\n{}".format(" ".join(map(str, map(int, median))))
     )
 
     # Optionally plot the latent and forecasted series of new infections.
@@ -335,9 +319,7 @@ def main(args):
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith("1.9.0")
-    parser = argparse.ArgumentParser(
-        description="Compartmental epidemiology modeling using HMC"
-    )
+    parser = argparse.ArgumentParser(description="Compartmental epidemiology modeling using HMC")
     parser.add_argument("-p", "--population", default=1000, type=float)
     parser.add_argument("-m", "--min-obs-portion", default=0.01, type=float)
     parser.add_argument("-M", "--max-obs-portion", default=0.99, type=float)

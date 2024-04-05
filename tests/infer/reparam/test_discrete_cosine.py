@@ -97,9 +97,7 @@ def test_uniform(shape, dim, smooth):
     value = poutine.trace(model).get_trace().nodes["x"]["value"]
     expected_probe = get_moments(value)
 
-    reparam_model = poutine.reparam(
-        model, {"x": DiscreteCosineReparam(dim=dim, smooth=smooth)}
-    )
+    reparam_model = poutine.reparam(model, {"x": DiscreteCosineReparam(dim=dim, smooth=smooth)})
     trace = poutine.trace(reparam_model).get_trace()
     assert isinstance(trace.nodes["x_dct"]["fn"], dist.TransformedDistribution)
     assert isinstance(trace.nodes["x"]["fn"], dist.Delta)

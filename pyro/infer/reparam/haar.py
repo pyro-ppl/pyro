@@ -31,6 +31,4 @@ class HaarReparam(UnitJacobianReparam):
 
     def __init__(self, dim=-1, flip=False, *, experimental_allow_batch=False):
         transform = HaarTransform(dim=dim, flip=flip, cache_size=1)
-        super().__init__(
-            transform, suffix="haar", experimental_allow_batch=experimental_allow_batch
-        )
+        super().__init__(transform, suffix="haar", experimental_allow_batch=experimental_allow_batch)

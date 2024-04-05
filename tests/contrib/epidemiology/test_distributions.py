@@ -46,9 +46,7 @@ def test_binomial_vs_poisson(R0, I):
     I = torch.tensor(I)
 
     d1 = infection_dist(individual_rate=R0, num_infectious=I)
-    d2 = infection_dist(
-        individual_rate=R0, num_infectious=I, num_susceptible=1000.0, population=1000.0
-    )
+    d2 = infection_dist(individual_rate=R0, num_infectious=I, num_susceptible=1000.0, population=1000.0)
 
     assert isinstance(d1, dist.Poisson)
     assert isinstance(d2, dist.Binomial)
@@ -103,9 +101,7 @@ def test_beta_binomial_vs_binomial(R0, I):
     R0 = torch.tensor(R0)
     I = torch.tensor(I)
 
-    d1 = infection_dist(
-        individual_rate=R0, num_infectious=I, num_susceptible=20.0, population=30.0
-    )
+    d1 = infection_dist(individual_rate=R0, num_infectious=I, num_susceptible=20.0, population=30.0)
     d2 = infection_dist(
         individual_rate=R0,
         num_infectious=I,
@@ -161,9 +157,7 @@ def test_overdispersed_asymptote(probs, overdispersion):
 
     # Check binomial_dist converges in distribution to LogitNormal.
     d1 = binomial_dist(total_count, probs)
-    d2 = dist.TransformedDistribution(
-        dist.Normal(math.log(probs / (1 - probs)), overdispersion), SigmoidTransform()
-    )
+    d2 = dist.TransformedDistribution(dist.Normal(math.log(probs / (1 - probs)), overdispersion), SigmoidTransform())
 
     # CRPS is equivalent to the Cramer-von Mises test.
     # https://en.wikipedia.org/wiki/Cram%C3%A9r%E2%80%93von_Mises_criterion
@@ -180,9 +174,7 @@ def test_overdispersed_asymptote(probs, overdispersion):
 def test_beta_binomial(concentration1, concentration0, total_count):
     # For small overdispersion, beta_binomial_dist is close to BetaBinomial.
     d1 = dist.BetaBinomial(concentration1, concentration0, total_count)
-    d2 = beta_binomial_dist(
-        concentration1, concentration0, total_count, overdispersion=0.01
-    )
+    d2 = beta_binomial_dist(concentration1, concentration0, total_count, overdispersion=0.01)
 
     # CRPS is equivalent to the Cramer-von Mises test.
     # https://en.wikipedia.org/wiki/Cram%C3%A9r%E2%80%93von_Mises_criterion
@@ -202,9 +194,7 @@ def test_overdispersed_beta_binomial(probs, total_count, overdispersion):
     concentration1 = concentration * probs
     concentration0 = concentration * (1 - probs)
     d1 = binomial_dist(total_count, probs, overdispersion=overdispersion)
-    d2 = beta_binomial_dist(
-        concentration1, concentration0, total_count, overdispersion=overdispersion
-    )
+    d2 = beta_binomial_dist(concentration1, concentration0, total_count, overdispersion=overdispersion)
 
     # CRPS is equivalent to the Cramer-von Mises test.
     # https://en.wikipedia.org/wiki/Cram%C3%A9r%E2%80%93von_Mises_criterion
@@ -265,15 +255,11 @@ def test_relaxed_overdispersed_beta_binomial(overdispersion):
     concentration1 = torch.logspace(-1, 2, 8).unsqueeze(-1)
     concentration0 = concentration1.unsqueeze(-1)
 
-    d1 = beta_binomial_dist(
-        concentration1, concentration0, total_count, overdispersion=overdispersion
-    )
+    d1 = beta_binomial_dist(concentration1, concentration0, total_count, overdispersion=overdispersion)
     assert isinstance(d1, dist.ExtendedBetaBinomial)
 
     with set_relaxed_distributions():
-        d2 = beta_binomial_dist(
-            concentration1, concentration0, total_count, overdispersion=overdispersion
-        )
+        d2 = beta_binomial_dist(concentration1, concentration0, total_count, overdispersion=overdispersion)
     assert isinstance(d2, dist.Normal)
     assert_close(d2.mean, d1.mean)
     assert_close(d2.variance, d1.variance.clamp(min=_RELAX_MIN_VARIANCE))

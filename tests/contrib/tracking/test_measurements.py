@@ -23,7 +23,5 @@ def test_PositionMeasurement():
     assert measurement.cov.shape == (dimension, dimension)
     assert measurement.time == time
     assert measurement.frame_num == frame_num
-    assert measurement.geodesic_difference(
-        torch.rand(dimension), torch.rand(dimension)
-    ).shape == (dimension,)
+    assert measurement.geodesic_difference(torch.rand(dimension), torch.rand(dimension)).shape == (dimension,)
     assert measurement.jacobian().shape == (dimension, 2 * dimension)

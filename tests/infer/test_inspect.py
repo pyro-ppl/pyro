@@ -145,9 +145,7 @@ def test_discrete_obs():
     def model():
         a = pyro.sample("a", dist.Normal(0, 1))
         b = pyro.sample("b", dist.Normal(a[..., None], torch.ones(3)).to_event(1))
-        c = pyro.sample(
-            "c", dist.MultivariateNormal(torch.zeros(3) + a[..., None], torch.eye(3))
-        )
+        c = pyro.sample("c", dist.MultivariateNormal(torch.zeros(3) + a[..., None], torch.eye(3)))
         with pyro.plate("i", 2):
             d = pyro.sample("d", dist.Dirichlet((b + c).exp()))
             pyro.sample("e", dist.Categorical(logits=d), obs=torch.tensor([0, 0]))

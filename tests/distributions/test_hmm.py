@@ -76,18 +76,13 @@ def test_sequential_logmatmulexp(batch_shape, state_dim, num_steps):
     batch_symbols = "".join(next(symbol) for _ in batch_shape)
     state_symbols = [next(symbol) for _ in range(num_steps + 1)]
     equation = (
-        ",".join(
-            batch_symbols + state_symbols[t] + state_symbols[t + 1]
-            for t in range(num_steps)
-        )
+        ",".join(batch_symbols + state_symbols[t] + state_symbols[t + 1] for t in range(num_steps))
         + "->"
         + batch_symbols
         + state_symbols[0]
         + state_symbols[-1]
     )
-    expected = opt_einsum.contract(
-        equation, *operands, backend="pyro.ops.einsum.torch_log"
-    )
+    expected = opt_einsum.contract(equation, *operands, backend="pyro.ops.einsum.torch_log")
     assert_close(actual, expected)
 
 
@@ -135,9 +130,7 @@ def test_sequential_gamma_gaussian_tensordot(batch_shape, state_dim, num_steps):
     ],
     ids=str,
 )
-def test_discrete_hmm_shape(
-    ok, init_shape, trans_shape, obs_shape, event_shape, state_dim
-):
+def test_discrete_hmm_shape(ok, init_shape, trans_shape, obs_shape, event_shape, state_dim):
     init_logits = torch.randn(init_shape + (state_dim,))
     trans_logits = torch.randn(trans_shape + (state_dim, state_dim))
     obs_logits = torch.randn(obs_shape + (state_dim,) + event_shape)
@@ -186,9 +179,7 @@ def test_discrete_hmm_shape(
     ],
     ids=str,
 )
-def test_discrete_hmm_homogeneous_trick(
-    init_shape, trans_shape, obs_shape, event_shape, state_dim, num_steps
-):
+def test_discrete_hmm_homogeneous_trick(init_shape, trans_shape, obs_shape, event_shape, state_dim, num_steps):
     batch_shape = broadcast_shape(init_shape, trans_shape[:-1], obs_shape[:-1])
     init_logits = torch.randn(init_shape + (state_dim,))
     trans_logits = torch.randn(trans_shape + (state_dim, state_dim))
@@ -271,9 +262,7 @@ def test_discrete_hmm_diag_normal(num_steps):
             )
             pyro.sample(
                 "obs_{}".format(t),
-                dist.Normal(
-                    Vindex(loc)[..., t, x, :], Vindex(scale)[..., t, x, :]
-                ).to_event(1),
+                dist.Normal(Vindex(loc)[..., t, x, :], Vindex(scale)[..., t, x, :]).to_event(1),
                 obs=data[..., t, :],
             )
 
@@ -339,9 +328,7 @@ def test_gaussian_hmm_shape(
     if diag:
         scale = obs_dist.scale_tril.diagonal(dim1=-2, dim2=-1)
         obs_dist = dist.Normal(obs_dist.loc, scale).to_event(1)
-    d = dist.GaussianHMM(
-        init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=6
-    )
+    d = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=6)
 
     shape = broadcast_shape(
         init_shape + (6,),
@@ -408,9 +395,7 @@ def test_gaussian_hmm_high_obs_dim():
     loc = torch.randn((duration, obs_dim))
     scale = torch.randn((duration, obs_dim)).exp()
     obs_dist = dist.Normal(loc, scale).to_event(1)
-    d = dist.GaussianHMM(
-        init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration
-    )
+    d = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration)
     x = d.rsample(sample_shape)
     assert x.shape == sample_shape + (duration, obs_dim)
 
@@ -421,9 +406,7 @@ def test_gaussian_hmm_high_obs_dim():
 @pytest.mark.parametrize("hidden_dim", [1, 2])
 @pytest.mark.parametrize("num_steps", [1, 2, 3, 4])
 @pytest.mark.parametrize("diag", [False, True], ids=["full", "diag"])
-def test_gaussian_hmm_distribution(
-    diag, sample_shape, batch_shape, num_steps, hidden_dim, obs_dim
-):
+def test_gaussian_hmm_distribution(diag, sample_shape, batch_shape, num_steps, hidden_dim, obs_dim):
     init_dist = random_mvn(batch_shape, hidden_dim)
     trans_mat = torch.randn(batch_shape + (num_steps, hidden_dim, hidden_dim))
     trans_dist = random_mvn(batch_shape + (num_steps,), hidden_dim)
@@ -432,13 +415,9 @@ def test_gaussian_hmm_distribution(
     if diag:
         scale = obs_dist.scale_tril.diagonal(dim1=-2, dim2=-1)
         obs_dist = dist.Normal(obs_dist.loc, scale).to_event(1)
-    d = dist.GaussianHMM(
-        init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=num_steps
-    )
+    d = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=num_steps)
     if diag:
-        obs_mvn = dist.MultivariateNormal(
-            obs_dist.base_dist.loc, scale_tril=obs_dist.base_dist.scale.diag_embed()
-        )
+        obs_mvn = dist.MultivariateNormal(obs_dist.base_dist.loc, scale_tril=obs_dist.base_dist.scale.diag_embed())
     else:
         obs_mvn = obs_dist
     data = obs_dist.sample(sample_shape)
@@ -463,24 +442,15 @@ def test_gaussian_hmm_distribution(
 
     unrolled_trans = reduce(
         operator.add,
-        [
-            trans[..., t].event_pad(left=t * hidden_dim, right=(T - t - 1) * hidden_dim)
-            for t in range(T)
-        ],
+        [trans[..., t].event_pad(left=t * hidden_dim, right=(T - t - 1) * hidden_dim) for t in range(T)],
     )
     unrolled_obs = reduce(
         operator.add,
-        [
-            obs[..., t].event_pad(left=t * obs.dim(), right=(T - t - 1) * obs.dim())
-            for t in range(T)
-        ],
+        [obs[..., t].event_pad(left=t * obs.dim(), right=(T - t - 1) * obs.dim()) for t in range(T)],
     )
     unrolled_like = reduce(
         operator.add,
-        [
-            like[..., t].event_pad(left=t * obs_dim, right=(T - t - 1) * obs_dim)
-            for t in range(T)
-        ],
+        [like[..., t].event_pad(left=t * obs_dim, right=(T - t - 1) * obs_dim) for t in range(T)],
     )
     # Permute obs from HOHOHO to HHHOOO.
     perm = torch.cat(
@@ -519,16 +489,12 @@ def test_gaussian_hmm_distribution(
             delta = samples - actual_mean
             actual_cov = (delta.unsqueeze(-1) * delta.unsqueeze(-2)).mean(0)
             actual_std = actual_cov.diagonal(dim1=-2, dim2=-1).sqrt()
-            actual_corr = actual_cov / (
-                actual_std.unsqueeze(-1) * actual_std.unsqueeze(-2)
-            )
+            actual_corr = actual_cov / (actual_std.unsqueeze(-1) * actual_std.unsqueeze(-2))
 
             expected_cov = torch.linalg.cholesky(g.precision).cholesky_inverse()
             expected_mean = expected_cov.matmul(g.info_vec.unsqueeze(-1)).squeeze(-1)
             expected_std = expected_cov.diagonal(dim1=-2, dim2=-1).sqrt()
-            expected_corr = expected_cov / (
-                expected_std.unsqueeze(-1) * expected_std.unsqueeze(-2)
-            )
+            expected_corr = expected_cov / (expected_std.unsqueeze(-1) * expected_std.unsqueeze(-2))
 
             assert_close(actual_mean, expected_mean, atol=0.05, rtol=0.02)
             assert_close(actual_std, expected_std, atol=0.05, rtol=0.02)
@@ -580,9 +546,7 @@ def test_gaussian_mrf_shape(init_shape, trans_shape, obs_shape, hidden_dim, obs_
 @pytest.mark.parametrize("obs_dim", [1, 2])
 @pytest.mark.parametrize("hidden_dim", [1, 2])
 @pytest.mark.parametrize("num_steps", [1, 2, 3, 4])
-def test_gaussian_mrf_log_prob(
-    sample_shape, batch_shape, num_steps, hidden_dim, obs_dim
-):
+def test_gaussian_mrf_log_prob(sample_shape, batch_shape, num_steps, hidden_dim, obs_dim):
     init_dist = random_mvn(batch_shape, hidden_dim)
     trans_dist = random_mvn(batch_shape + (num_steps,), hidden_dim + hidden_dim)
     obs_dist = random_mvn(batch_shape + (num_steps,), hidden_dim + obs_dim)
@@ -606,17 +570,11 @@ def test_gaussian_mrf_log_prob(
 
     unrolled_trans = reduce(
         operator.add,
-        [
-            trans[..., t].event_pad(left=t * hidden_dim, right=(T - t - 1) * hidden_dim)
-            for t in range(T)
-        ],
+        [trans[..., t].event_pad(left=t * hidden_dim, right=(T - t - 1) * hidden_dim) for t in range(T)],
     )
     unrolled_obs = reduce(
         operator.add,
-        [
-            obs[..., t].event_pad(left=t * obs.dim(), right=(T - t - 1) * obs.dim())
-            for t in range(T)
-        ],
+        [obs[..., t].event_pad(left=t * obs.dim(), right=(T - t - 1) * obs.dim()) for t in range(T)],
     )
     # Permute obs from HOHOHO to HHHOOO.
     perm = torch.cat(
@@ -641,9 +599,7 @@ def test_gaussian_mrf_log_prob(
 @pytest.mark.parametrize("obs_dim", [1, 2])
 @pytest.mark.parametrize("hidden_dim", [1, 2])
 @pytest.mark.parametrize("num_steps", [1, 2, 3, 4])
-def test_gaussian_mrf_log_prob_block_diag(
-    sample_shape, batch_shape, num_steps, hidden_dim, obs_dim
-):
+def test_gaussian_mrf_log_prob_block_diag(sample_shape, batch_shape, num_steps, hidden_dim, obs_dim):
     # Construct a block-diagonal obs dist, so observations are independent of hidden state.
     obs_dist = random_mvn(batch_shape + (num_steps,), hidden_dim + obs_dim)
     precision = obs_dist.precision_matrix
@@ -704,9 +660,7 @@ def test_gamma_gaussian_hmm_shape(
     obs_mat = torch.randn(obs_mat_shape + (hidden_dim, obs_dim))
     obs_dist = random_mvn(obs_mvn_shape, obs_dim)
     scale_dist = random_gamma(scale_shape)
-    d = dist.GammaGaussianHMM(
-        scale_dist, init_dist, trans_mat, trans_dist, obs_mat, obs_dist
-    )
+    d = dist.GammaGaussianHMM(scale_dist, init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
 
     shape = broadcast_shape(
         scale_shape + (1,),
@@ -742,18 +696,14 @@ def test_gamma_gaussian_hmm_shape(
 @pytest.mark.parametrize("obs_dim", [1, 2])
 @pytest.mark.parametrize("hidden_dim", [1, 2])
 @pytest.mark.parametrize("num_steps", [1, 2, 3, 4])
-def test_gamma_gaussian_hmm_log_prob(
-    sample_shape, batch_shape, num_steps, hidden_dim, obs_dim
-):
+def test_gamma_gaussian_hmm_log_prob(sample_shape, batch_shape, num_steps, hidden_dim, obs_dim):
     init_dist = random_mvn(batch_shape, hidden_dim)
     trans_mat = torch.randn(batch_shape + (num_steps, hidden_dim, hidden_dim))
     trans_dist = random_mvn(batch_shape + (num_steps,), hidden_dim)
     obs_mat = torch.randn(batch_shape + (num_steps, hidden_dim, obs_dim))
     obs_dist = random_mvn(batch_shape + (num_steps,), obs_dim)
     scale_dist = random_gamma(batch_shape)
-    d = dist.GammaGaussianHMM(
-        scale_dist, init_dist, trans_mat, trans_dist, obs_mat, obs_dist
-    )
+    d = dist.GammaGaussianHMM(scale_dist, init_dist, trans_mat, trans_dist, obs_mat, obs_dist)
     obs_mvn = obs_dist
     data = obs_dist.sample(sample_shape)
     assert data.shape == sample_shape + d.shape()
@@ -774,17 +724,11 @@ def test_gamma_gaussian_hmm_log_prob(
 
     unrolled_trans = reduce(
         operator.add,
-        [
-            trans[..., t].event_pad(left=t * hidden_dim, right=(T - t - 1) * hidden_dim)
-            for t in range(T)
-        ],
+        [trans[..., t].event_pad(left=t * hidden_dim, right=(T - t - 1) * hidden_dim) for t in range(T)],
     )
     unrolled_obs = reduce(
         operator.add,
-        [
-            obs[..., t].event_pad(left=t * obs.dim(), right=(T - t - 1) * obs.dim())
-            for t in range(T)
-        ],
+        [obs[..., t].event_pad(left=t * obs.dim(), right=(T - t - 1) * obs.dim()) for t in range(T)],
     )
     # Permute obs from HOHOHO to HHHOOO.
     perm = torch.cat(
@@ -993,9 +937,7 @@ def test_independent_hmm_shape(
     trans_dist = random_mvn(base_trans_mvn_shape, hidden_dim)
     obs_mat = torch.randn(base_obs_mat_shape + (hidden_dim, 1))
     obs_dist = random_mvn(base_obs_mvn_shape, 1)
-    d = dist.GaussianHMM(
-        init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=6
-    )
+    d = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=6)
     d = dist.IndependentHMM(d)
 
     shape = broadcast_shape(

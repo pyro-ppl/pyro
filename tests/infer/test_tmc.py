@@ -54,9 +54,7 @@ def test_tmc_categoricals(depth, max_plate_nesting, num_samples, tmc_strategy):
                 pyro.sample("y", dist.Bernoulli(pyro.param("qy")[..., x]), obs=data)
 
     elbo = TraceEnum_ELBO(max_plate_nesting=max_plate_nesting)
-    enum_model = config_enumerate(
-        model, default="parallel", expand=False, num_samples=None, tmc=tmc_strategy
-    )
+    enum_model = config_enumerate(model, default="parallel", expand=False, num_samples=None, tmc=tmc_strategy)
     expected_loss = (-elbo.differentiable_loss(enum_model, lambda: None)).exp()
     expected_grads = grad(expected_loss, qs)
 
@@ -157,9 +155,7 @@ def test_tmc_normals_chain_iwae(
         num_samples=flat_num_samples,
     )
     assert vectorized_log_weights.shape == (flat_num_samples,)
-    expected_loss = (
-        vectorized_log_weights.logsumexp(dim=-1) - math.log(float(flat_num_samples))
-    ).exp()
+    expected_loss = (vectorized_log_weights.logsumexp(dim=-1) - math.log(float(flat_num_samples))).exp()
     expected_grads = grad(expected_loss, qs)
 
     tmc = TraceTMC_ELBO(max_plate_nesting=max_plate_nesting)
@@ -177,9 +173,7 @@ def test_tmc_normals_chain_iwae(
         num_samples=num_samples,
         tmc=tmc_strategy,
     )
-    actual_loss = (
-        -tmc.differentiable_loss(tmc_model, tmc_guide, reparameterized)
-    ).exp()
+    actual_loss = (-tmc.differentiable_loss(tmc_model, tmc_guide, reparameterized)).exp()
     actual_grads = grad(actual_loss, qs)
 
     assert_equal(
@@ -258,9 +252,7 @@ def test_tmc_normals_chain_gradient(
     guide = (
         factorized_guide
         if guide_type == "factorized"
-        else (
-            nonfactorized_guide if guide_type == "nonfactorized" else lambda *args: None
-        )
+        else (nonfactorized_guide if guide_type == "nonfactorized" else lambda *args: None)
     )
     tmc_guide = config_enumerate(
         guide,
@@ -271,14 +263,10 @@ def test_tmc_normals_chain_gradient(
     )
 
     # gold values from Funsor
-    expected_grads = (
-        torch.tensor({1: 0.0999, 2: 0.0860, 3: 0.0802, 4: 0.0771}[depth]),
-    )
+    expected_grads = (torch.tensor({1: 0.0999, 2: 0.0860, 3: 0.0802, 4: 0.0771}[depth]),)
 
     # convert to linear space for unbiasedness
-    actual_loss = (
-        -tmc.differentiable_loss(tmc_model, tmc_guide, reparameterized)
-    ).exp()
+    actual_loss = (-tmc.differentiable_loss(tmc_model, tmc_guide, reparameterized)).exp()
     actual_grads = grad(actual_loss, qs)
 
     grad_prec = 0.05 if reparameterized else 0.1

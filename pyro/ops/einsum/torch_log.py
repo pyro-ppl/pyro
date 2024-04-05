@@ -41,9 +41,7 @@ def einsum(equation, *operands):
         exp_operands.append((operand - shift).exp())
 
         # permute shift to match output
-        shift = shift.reshape(
-            torch.Size(size for size, dim in zip(operand.shape, dims) if dim in output)
-        )
+        shift = shift.reshape(torch.Size(size for size, dim in zip(operand.shape, dims) if dim in output))
         if shift.dim():
             shift = shift.reshape((1,) * (len(output) - shift.dim()) + shift.shape)
             dims = [dim for dim in dims if dim in output]

@@ -72,9 +72,7 @@ def process_data(base_path, dataset, min_note=21, note_range=88):
     for split, data_split in data.items():
         processed_dataset[split] = {}
         n_seqs = len(data_split)
-        processed_dataset[split]["sequence_lengths"] = torch.zeros(
-            n_seqs, dtype=torch.long
-        )
+        processed_dataset[split]["sequence_lengths"] = torch.zeros(n_seqs, dtype=torch.long)
         processed_dataset[split]["sequences"] = []
         for seq in range(n_seqs):
             seq_length = len(data_split[seq])
@@ -105,12 +103,8 @@ def load_data(dataset):
         dset = pickle.load(f)
         for k, v in dset.items():
             sequences = v["sequences"]
-            dset[k]["sequences"] = pad_sequence(sequences, batch_first=True).type(
-                torch.Tensor
-            )
-            dset[k]["sequence_lengths"] = v["sequence_lengths"].to(
-                device=torch.Tensor().device
-            )
+            dset[k]["sequences"] = pad_sequence(sequences, batch_first=True).type(torch.Tensor)
+            dset[k]["sequence_lengths"] = v["sequence_lengths"].to(device=torch.Tensor().device)
     return dset
 
 
@@ -173,8 +167,6 @@ def get_mini_batch(mini_batch_indices, sequences, seq_lengths, cuda=False):
         mini_batch_reversed = mini_batch_reversed.cuda()
 
     # do sequence packing
-    mini_batch_reversed = nn.utils.rnn.pack_padded_sequence(
-        mini_batch_reversed, sorted_seq_lengths, batch_first=True
-    )
+    mini_batch_reversed = nn.utils.rnn.pack_padded_sequence(mini_batch_reversed, sorted_seq_lengths, batch_first=True)
 
     return mini_batch, mini_batch_reversed, mini_batch_mask, sorted_seq_lengths

@@ -124,32 +124,20 @@ def test_tmc_normals_chain_gradient(
     tmc_strategy,
 ):
     def model(reparameterized):
-        Normal = (
-            dist.Normal
-            if reparameterized
-            else dist.testing.fakes.NonreparameterizedNormal
-        )
+        Normal = dist.Normal if reparameterized else dist.testing.fakes.NonreparameterizedNormal
         x = pyro.sample("x0", Normal(pyro.param("q2"), math.sqrt(1.0 / depth)))
         for i in range(1, depth):
             x = pyro.sample("x{}".format(i), Normal(x, math.sqrt(1.0 / depth)))
         pyro.sample("y", Normal(x, 1.0), obs=torch.tensor(float(1)))
 
     def factorized_guide(reparameterized):
-        Normal = (
-            dist.Normal
-            if reparameterized
-            else dist.testing.fakes.NonreparameterizedNormal
-        )
+        Normal = dist.Normal if reparameterized else dist.testing.fakes.NonreparameterizedNormal
         pyro.sample("x0", Normal(pyro.param("q2"), math.sqrt(1.0 / depth)))
         for i in range(1, depth):
             pyro.sample("x{}".format(i), Normal(0.0, math.sqrt(float(i + 1) / depth)))
 
     def nonfactorized_guide(reparameterized):
-        Normal = (
-            dist.Normal
-            if reparameterized
-            else dist.testing.fakes.NonreparameterizedNormal
-        )
+        Normal = dist.Normal if reparameterized else dist.testing.fakes.NonreparameterizedNormal
         x = pyro.sample("x0", Normal(pyro.param("q2"), math.sqrt(1.0 / depth)))
         for i in range(1, depth):
             x = pyro.sample("x{}".format(i), Normal(x, math.sqrt(1.0 / depth)))
@@ -170,11 +158,7 @@ def test_tmc_normals_chain_gradient(
         guide = (
             factorized_guide
             if guide_type == "factorized"
-            else (
-                nonfactorized_guide
-                if guide_type == "nonfactorized"
-                else lambda *args: None
-            )
+            else (nonfactorized_guide if guide_type == "nonfactorized" else lambda *args: None)
         )
         tmc_guide = infer.config_enumerate(
             guide,
@@ -185,15 +169,11 @@ def test_tmc_normals_chain_gradient(
         )
 
         # convert to linear space for unbiasedness
-        actual_loss = (
-            -tmc.differentiable_loss(tmc_model, tmc_guide, reparameterized)
-        ).exp()
+        actual_loss = (-tmc.differentiable_loss(tmc_model, tmc_guide, reparameterized)).exp()
         actual_grads = grad(actual_loss, qs)
 
     # gold values from Funsor
-    expected_grads = (
-        torch.tensor({1: 0.0999, 2: 0.0860, 3: 0.0802, 4: 0.0771}[depth]),
-    )
+    expected_grads = (torch.tensor({1: 0.0999, 2: 0.0860, 3: 0.0802, 4: 0.0771}[depth]),)
 
     grad_prec = 0.05 if reparameterized else 0.1
 

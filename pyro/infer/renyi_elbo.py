@@ -67,8 +67,7 @@ class RenyiELBO(ELBO):
 
         if alpha == 1:
             raise ValueError(
-                "The order alpha should not be equal to 1. Please use Trace_ELBO class"
-                "for the case alpha = 1."
+                "The order alpha should not be equal to 1. Please use Trace_ELBO class" "for the case alpha = 1."
             )
         self.alpha = alpha
         super().__init__(
@@ -83,9 +82,7 @@ class RenyiELBO(ELBO):
         Returns a single trace from the guide, and the model that is run
         against it.
         """
-        model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_plate_nesting, model, guide, args, kwargs
-        )
+        model_trace, guide_trace = get_importance_trace("flat", self.max_plate_nesting, model, guide, args, kwargs)
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
         return model_trace, guide_trace
@@ -126,9 +123,7 @@ class RenyiELBO(ELBO):
             elbo_particles = torch.stack(elbo_particles)
 
         log_weights = (1.0 - self.alpha) * elbo_particles
-        log_mean_weight = torch.logsumexp(log_weights, dim=0) - math.log(
-            self.num_particles
-        )
+        log_mean_weight = torch.logsumexp(log_weights, dim=0) - math.log(self.num_particles)
         elbo = log_mean_weight.sum().item() / (1.0 - self.alpha)
 
         loss = -elbo
@@ -177,8 +172,7 @@ class RenyiELBO(ELBO):
 
                     if not is_identically_zero(score_function_term):
                         surrogate_elbo_particle = (
-                            surrogate_elbo_particle
-                            + (self.alpha / (1.0 - self.alpha)) * log_prob_sum
+                            surrogate_elbo_particle + (self.alpha / (1.0 - self.alpha)) * log_prob_sum
                         )
 
             if is_identically_zero(elbo_particle):
@@ -207,25 +201,17 @@ class RenyiELBO(ELBO):
             surrogate_elbo_particles = torch.stack(surrogate_elbo_particles)
 
         log_weights = (1.0 - self.alpha) * elbo_particles
-        log_mean_weight = torch.logsumexp(log_weights, dim=0, keepdim=True) - math.log(
-            self.num_particles
-        )
+        log_mean_weight = torch.logsumexp(log_weights, dim=0, keepdim=True) - math.log(self.num_particles)
         elbo = log_mean_weight.sum().item() / (1.0 - self.alpha)
 
         # collect parameters to train from model and guide
         trainable_params = any(
-            site["type"] == "param"
-            for trace in (model_trace, guide_trace)
-            for site in trace.nodes.values()
+            site["type"] == "param" for trace in (model_trace, guide_trace) for site in trace.nodes.values()
         )
 
-        if trainable_params and getattr(
-            surrogate_elbo_particles, "requires_grad", False
-        ):
+        if trainable_params and getattr(surrogate_elbo_particles, "requires_grad", False):
             normalized_weights = (log_weights - log_mean_weight).exp()
-            surrogate_elbo = (
-                normalized_weights * surrogate_elbo_particles
-            ).sum() / self.num_particles
+            surrogate_elbo = (normalized_weights * surrogate_elbo_particles).sum() / self.num_particles
             surrogate_loss = -surrogate_elbo
             surrogate_loss.backward()
         loss = -elbo

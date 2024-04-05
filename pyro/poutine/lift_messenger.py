@@ -72,8 +72,7 @@ class LiftMessenger(Messenger):
             extra = set(self.prior) - self._param_hits
             if extra:
                 warnings.warn(
-                    "pyro.module prior did not find params ['{}']. "
-                    "Did you instead mean one of ['{}']?".format(
+                    "pyro.module prior did not find params ['{}']. " "Did you instead mean one of ['{}']?".format(
                         "', '".join(extra), "', '".join(self._param_misses)
                     )
                 )

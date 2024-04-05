@@ -131,9 +131,7 @@ class NeuralAutoregressive(TransformModule):
 
         log_dydD = self._cached_log_df_inv_dx
         log_dDdx = torch.logsumexp(
-            torch.log(A + self.eps)
-            + self.logsoftmax(W_pre)
-            + T.log_abs_det_jacobian(C, T_C),
+            torch.log(A + self.eps) + self.logsoftmax(W_pre) + T.log_abs_det_jacobian(C, T_C),
             dim=-2,
         )
         log_det = log_dydD + log_dDdx
@@ -236,9 +234,7 @@ def neural_autoregressive(input_dim, hidden_dims=None, activation="sigmoid", wid
     return NeuralAutoregressive(arn, hidden_units=width, activation=activation)
 
 
-def conditional_neural_autoregressive(
-    input_dim, context_dim, hidden_dims=None, activation="sigmoid", width=16
-):
+def conditional_neural_autoregressive(input_dim, context_dim, hidden_dims=None, activation="sigmoid", width=16):
     """
     A helper function to create a
     :class:`~pyro.distributions.transforms.ConditionalNeuralAutoregressive` object
@@ -263,9 +259,5 @@ def conditional_neural_autoregressive(
 
     if hidden_dims is None:
         hidden_dims = [3 * input_dim + 1]
-    arn = ConditionalAutoRegressiveNN(
-        input_dim, context_dim, hidden_dims, param_dims=[width] * 3
-    )
-    return ConditionalNeuralAutoregressive(
-        arn, hidden_units=width, activation=activation
-    )
+    arn = ConditionalAutoRegressiveNN(input_dim, context_dim, hidden_dims, param_dims=[width] * 3)
+    return ConditionalNeuralAutoregressive(arn, hidden_units=width, activation=activation)

@@ -60,9 +60,7 @@ def assert_ok(model, guide=None, max_plate_nesting=None, **kwargs):
                         extend_fn=iter_discrete_extend,
                     )
                 ).get_trace(**kwargs)
-                tr_pyro = handlers.trace(
-                    handlers.replay(model, trace=guide_tr_pyro)
-                ).get_trace(**kwargs)
+                tr_pyro = handlers.trace(handlers.replay(model, trace=guide_tr_pyro)).get_trace(**kwargs)
 
         with pyro_backend("contrib.funsor"):
             with handlers.enum(first_available_dim=-max_plate_nesting - 1):
@@ -74,16 +72,11 @@ def assert_ok(model, guide=None, max_plate_nesting=None, **kwargs):
                         extend_fn=iter_discrete_extend,
                     )
                 ).get_trace(**kwargs)
-                tr_funsor = handlers.trace(
-                    handlers.replay(model, trace=guide_tr_funsor)
-                ).get_trace(**kwargs)
+                tr_funsor = handlers.trace(handlers.replay(model, trace=guide_tr_funsor)).get_trace(**kwargs)
 
         # make sure all dimensions were cleaned up
         assert _DIM_STACK.local_frame is _DIM_STACK.global_frame
-        assert (
-            not _DIM_STACK.global_frame.name_to_dim
-            and not _DIM_STACK.global_frame.dim_to_name
-        )
+        assert not _DIM_STACK.global_frame.name_to_dim and not _DIM_STACK.global_frame.dim_to_name
         assert _DIM_STACK.outermost is None
 
         tr_pyro = prune_subsample_sites(tr_pyro.copy())
@@ -100,13 +93,9 @@ def _check_traces(tr_pyro, tr_funsor):
     symbol_to_name = {
         node["infer"]["_enumerate_symbol"]: name
         for name, node in tr_pyro.nodes.items()
-        if node["type"] == "sample"
-        and not node["is_observed"]
-        and node["infer"].get("enumerate") == "parallel"
+        if node["type"] == "sample" and not node["is_observed"] and node["infer"].get("enumerate") == "parallel"
     }
-    symbol_to_name.update(
-        {symbol: name for name, symbol in tr_pyro.plate_to_symbol.items()}
-    )
+    symbol_to_name.update({symbol: name for name, symbol in tr_pyro.plate_to_symbol.items()})
 
     if _NAMED_TEST_STRENGTH >= 1:
         # coarser check: enumeration requirements satisfied
@@ -118,17 +107,9 @@ def _check_traces(tr_pyro, tr_funsor):
                 if pyro_node["type"] != "sample":
                     continue
                 funsor_node = tr_funsor.nodes[name]
-                assert (
-                    pyro_node["packed"]["log_prob"].numel()
-                    == funsor_node["log_prob"].numel()
-                )
-                assert (
-                    pyro_node["packed"]["log_prob"].shape
-                    == funsor_node["log_prob"].squeeze().shape
-                )
-                assert frozenset(
-                    f for f in pyro_node["cond_indep_stack"] if f.vectorized
-                ) == frozenset(
+                assert pyro_node["packed"]["log_prob"].numel() == funsor_node["log_prob"].numel()
+                assert pyro_node["packed"]["log_prob"].shape == funsor_node["log_prob"].squeeze().shape
+                assert frozenset(f for f in pyro_node["cond_indep_stack"] if f.vectorized) == frozenset(
                     f for f in funsor_node["cond_indep_stack"] if f.vectorized
                 )
         except AssertionError:
@@ -144,9 +125,7 @@ def _check_traces(tr_pyro, tr_funsor):
                     err_str = name
                 print(
                     err_str,
-                    "Pyro: {} vs Funsor: {}".format(
-                        pyro_packed_shape, funsor_packed_shape
-                    ),
+                    "Pyro: {} vs Funsor: {}".format(pyro_packed_shape, funsor_packed_shape),
                 )
             raise
 
@@ -157,23 +136,15 @@ def _check_traces(tr_pyro, tr_funsor):
                 if pyro_node["type"] != "sample":
                     continue
                 funsor_node = tr_funsor.nodes[name]
-                pyro_names = frozenset(
-                    symbol_to_name[d]
-                    for d in pyro_node["packed"]["log_prob"]._pyro_dims
-                )
+                pyro_names = frozenset(symbol_to_name[d] for d in pyro_node["packed"]["log_prob"]._pyro_dims)
                 funsor_names = frozenset(funsor_node["funsor"]["log_prob"].inputs)
-                assert pyro_names == frozenset(
-                    name.replace("__PARTICLES", "") for name in funsor_names
-                )
+                assert pyro_names == frozenset(name.replace("__PARTICLES", "") for name in funsor_names)
         except AssertionError:
             for name, pyro_node in tr_pyro.nodes.items():
                 if pyro_node["type"] != "sample":
                     continue
                 funsor_node = tr_funsor.nodes[name]
-                pyro_names = frozenset(
-                    symbol_to_name[d]
-                    for d in pyro_node["packed"]["log_prob"]._pyro_dims
-                )
+                pyro_names = frozenset(symbol_to_name[d] for d in pyro_node["packed"]["log_prob"]._pyro_dims)
                 funsor_names = frozenset(funsor_node["funsor"]["log_prob"].inputs)
                 if pyro_names != funsor_names:
                     err_str = "==> (packed mismatch) {}".format(name)
@@ -181,9 +152,7 @@ def _check_traces(tr_pyro, tr_funsor):
                     err_str = name
                 print(
                     err_str,
-                    "Pyro: {} vs Funsor: {}".format(
-                        sorted(tuple(pyro_names)), sorted(tuple(funsor_names))
-                    ),
+                    "Pyro: {} vs Funsor: {}".format(sorted(tuple(pyro_names)), sorted(tuple(funsor_names))),
                 )
             raise
 
@@ -207,9 +176,7 @@ def _check_traces(tr_pyro, tr_funsor):
                     err_str = "==> (unpacked mismatch) {}".format(name)
                 else:
                     err_str = name
-                print(
-                    err_str, "Pyro: {} vs Funsor: {}".format(pyro_shape, funsor_shape)
-                )
+                print(err_str, "Pyro: {} vs Funsor: {}".format(pyro_shape, funsor_shape))
             raise
 
 
@@ -306,9 +273,7 @@ def test_enum_recycling_dbn(markov, use_vindex):
             else:
                 z_ind = torch.arange(4, dtype=torch.long)
                 probs = r[x.unsqueeze(-1), y.unsqueeze(-1), z_ind]
-            pyro.sample(
-                "z_{}".format(t), dist.Categorical(probs), obs=torch.tensor(0.0)
-            )
+            pyro.sample("z_{}".format(t), dist.Categorical(probs), obs=torch.tensor(0.0))
 
     assert_ok(model, max_plate_nesting=0)
 
@@ -496,8 +461,6 @@ def test_markov_history(max_plate_nesting, history):
                 x_curr,
                 pyro.sample("x_{}".format(t), dist.Bernoulli(probs)).long(),
             )
-            pyro.sample(
-                "y_{}".format(t), dist.Bernoulli(q[x_curr]), obs=torch.tensor(0.0)
-            )
+            pyro.sample("y_{}".format(t), dist.Bernoulli(q[x_curr]), obs=torch.tensor(0.0))
 
     assert_ok(model, max_plate_nesting=max_plate_nesting)

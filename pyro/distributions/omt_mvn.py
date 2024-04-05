@@ -35,9 +35,7 @@ class OMTMultivariateNormal(MultivariateNormal):
         super().__init__(loc, scale_tril=scale_tril)
 
     def rsample(self, sample_shape=torch.Size()):
-        return _OMTMVNSample.apply(
-            self.loc, self.scale_tril, sample_shape + self.loc.shape
-        )
+        return _OMTMVNSample.apply(self.loc, self.scale_tril, sample_shape + self.loc.shape)
 
 
 class _OMTMVNSample(Function):
@@ -75,15 +73,11 @@ class _OMTMVNSample(Function):
         z_tilde = identity * torch.matmul(z, V).unsqueeze(-1).expand(*expand_tuple)
         g_tilde = identity * torch.matmul(g, V).unsqueeze(-1).expand(*expand_tuple)
 
-        Y = sum_leftmost(
-            torch.matmul(z_tilde, torch.matmul(1.0 / D_outer, g_tilde)), -2
-        )
+        Y = sum_leftmost(torch.matmul(z_tilde, torch.matmul(1.0 / D_outer, g_tilde)), -2)
         Y = torch.mm(V, torch.mm(Y, V.t()))
         Y = Y + Y.t()
 
-        Tr_xi_Y = torch.mm(torch.mm(Sigma_inv, Y), R_inv) - torch.mm(
-            Y, torch.mm(Sigma_inv, R_inv)
-        )
+        Tr_xi_Y = torch.mm(torch.mm(Sigma_inv, Y), R_inv) - torch.mm(Y, torch.mm(Sigma_inv, R_inv))
         diff_L_ab += 0.5 * Tr_xi_Y
         L_grad = torch.tril(diff_L_ab)
 

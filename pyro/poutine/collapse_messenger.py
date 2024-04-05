@@ -147,9 +147,7 @@ class CollapseMessenger(TraceMessenger):
         msg["value"] = value
 
     def __enter__(self) -> Self:
-        self.preserved_plates = {
-            h.dim: h.name for h in _PYRO_STACK if isinstance(h, pyro.plate)
-        }
+        self.preserved_plates = {h.dim: h.name for h in _PYRO_STACK if isinstance(h, pyro.plate)}
         COERCIONS.append(self._coerce)
         return super().__enter__()
 
@@ -172,9 +170,7 @@ class CollapseMessenger(TraceMessenger):
             if not site["is_observed"]:
                 reduced_vars_list.append(name)
             log_prob_terms.append(site["fn"](value=site["value"]))
-            plates |= frozenset(
-                f.name for f in site["cond_indep_stack"] if f.vectorized
-            )
+            plates |= frozenset(f.name for f in site["cond_indep_stack"] if f.vectorized)
         name = reduced_vars_list[0]
         reduced_vars = frozenset(reduced_vars_list)
         assert log_prob_terms, "nothing to collapse"

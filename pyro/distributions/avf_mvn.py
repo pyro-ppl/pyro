@@ -50,11 +50,7 @@ class AVFMultivariateNormal(MultivariateNormal):
             raise ValueError("AVFMultivariateNormal loc must be 1-dimensional")
         if scale_tril.dim() != 2:
             raise ValueError("AVFMultivariateNormal scale_tril must be 2-dimensional")
-        if (
-            control_var.dim() != 3
-            or control_var.size(0) != 2
-            or control_var.size(2) != loc.size(0)
-        ):
+        if control_var.dim() != 3 or control_var.size(0) != 2 or control_var.size(2) != loc.size(0):
             raise ValueError(
                 "control_var should be of size 2 x L x D, where D is the dimension of the location parameter loc"
             )  # noqa: E501
@@ -62,9 +58,7 @@ class AVFMultivariateNormal(MultivariateNormal):
         super().__init__(loc, scale_tril=scale_tril)
 
     def rsample(self, sample_shape=torch.Size()):
-        return _AVFMVNSample.apply(
-            self.loc, self.scale_tril, self.control_var, sample_shape + self.loc.shape
-        )
+        return _AVFMVNSample.apply(self.loc, self.scale_tril, self.control_var, sample_shape + self.loc.shape)
 
 
 class _AVFMVNSample(Function):
@@ -98,9 +92,7 @@ class _AVFMVNSample(Function):
 
         # compute control_var grads
         diff_B = (L_grad.unsqueeze(0) * C.unsqueeze(-2) * xi_ab.unsqueeze(0)).sum(2)
-        diff_C = (
-            L_grad.t().unsqueeze(0) * B.unsqueeze(-2) * xi_ab.t().unsqueeze(0)
-        ).sum(2)
+        diff_C = (L_grad.t().unsqueeze(0) * B.unsqueeze(-2) * xi_ab.t().unsqueeze(0)).sum(2)
         diff_CV = torch.stack([diff_B, diff_C])
 
         return loc_grad, L_grad, diff_CV, None

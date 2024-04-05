@@ -45,17 +45,13 @@ def register_model(**poutine_kwargs):
     return register_fn
 
 
-@register_model(
-    replay={"trace": poutine.Trace()}, block={}, condition={"data": {}}, do={"data": {}}
-)
+@register_model(replay={"trace": poutine.Trace()}, block={}, condition={"data": {}}, do={"data": {}})
 def trivial_model():
     return []
 
 
 tr_normal = poutine.Trace()
-tr_normal.add_node(
-    "normal_0", type="sample", is_observed=False, value=torch.zeros(1), infer={}
-)
+tr_normal.add_node("normal_0", type="sample", is_observed=False, value=torch.zeros(1), infer={})
 
 
 @register_model(
@@ -70,9 +66,7 @@ def normal_model():
 
 
 tr_normal_normal = poutine.Trace()
-tr_normal_normal.add_node(
-    "normal_0", type="sample", is_observed=False, value=torch.zeros(1), infer={}
-)
+tr_normal_normal.add_node("normal_0", type="sample", is_observed=False, value=torch.zeros(1), infer={})
 
 
 @register_model(
@@ -89,9 +83,7 @@ def normal_normal_model():
 
 
 tr_bernoulli_normal = poutine.Trace()
-tr_bernoulli_normal.add_node(
-    "bern_0", type="sample", is_observed=False, value=torch.ones(1), infer={}
-)
+tr_bernoulli_normal.add_node("bern_0", type="sample", is_observed=False, value=torch.ones(1), infer={})
 
 
 @register_model(

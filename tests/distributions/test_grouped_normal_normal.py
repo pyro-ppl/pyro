@@ -12,9 +12,7 @@ from tests.common import assert_close
 def test_grouped_normal_normal(num_groups=3, num_samples=10**5):
     prior_scale = torch.rand(num_groups)
     prior_loc = torch.randn(num_groups)
-    group_idx = torch.cat(
-        [torch.arange(num_groups), torch.arange(num_groups), torch.zeros(2).long()]
-    )
+    group_idx = torch.cat([torch.arange(num_groups), torch.arange(num_groups), torch.zeros(2).long()])
     values = torch.randn(group_idx.shape)
     obs_scale = torch.rand(group_idx.shape)
 

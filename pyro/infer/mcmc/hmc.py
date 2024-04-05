@@ -205,10 +205,7 @@ class HMC(MCMCKernel):
         direction_new = direction
         # keep scale step_size until accept_prob crosses its target
         t = 0
-        while (
-            direction_new == direction
-            and self._min_stepsize < step_size < self._max_stepsize
-        ):
+        while direction_new == direction and self._min_stepsize < step_size < self._max_stepsize:
             t += 1
             step_size = step_size_scale * step_size
             r, r_unscaled = self._sample_r(name="r_presample_{}".format(t))
@@ -239,9 +236,7 @@ class HMC(MCMCKernel):
             # `rsample` method because the former is a bit faster
             r_unscaled[site_names] = pyro.sample(
                 "{}_{}".format(name, site_names),
-                NonreparameterizedNormal(
-                    torch.zeros(size, **options), torch.ones(size, **options)
-                ),
+                NonreparameterizedNormal(torch.zeros(size, **options), torch.ones(size, **options)),
             )
 
         r = self.mass_matrix_adapter.scale(r_unscaled, r_prototype=self.initial_params)
@@ -307,11 +302,7 @@ class HMC(MCMCKernel):
                 for name in dense_sites:
                     assert isinstance(name, str) and name in self.initial_params, msg
         dense_sites_set = set().union(*dense_sites_list)
-        diag_sites = tuple(
-            sorted(
-                [name for name in self.initial_params if name not in dense_sites_set]
-            )
-        )
+        diag_sites = tuple(sorted([name for name in self.initial_params if name not in dense_sites_set]))
         assert len(diag_sites) + sum([len(sites) for sites in dense_sites_list]) == len(
             self.initial_params
         ), "Site names specified in full_mass are duplicated."
@@ -399,17 +390,11 @@ class HMC(MCMCKernel):
             )
             # apply Metropolis correction.
             r_new_unscaled = self.mass_matrix_adapter.unscale(r_new)
-            energy_proposal = (
-                self._kinetic_energy(r_new_unscaled) + potential_energy_new
-            )
+            energy_proposal = self._kinetic_energy(r_new_unscaled) + potential_energy_new
         delta_energy = energy_proposal - energy_current
         # handle the NaN case which may be the case for a diverging trajectory
         # when using a large step size.
-        delta_energy = (
-            scalar_like(delta_energy, float("inf"))
-            if torch_isnan(delta_energy)
-            else delta_energy
-        )
+        delta_energy = scalar_like(delta_energy, float("inf")) if torch_isnan(delta_energy) else delta_energy
         if delta_energy > self._max_sliced_energy and self._t >= self._warmup_steps:
             self._divergences.append(self._t - self._warmup_steps)
 

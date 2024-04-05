@@ -37,11 +37,7 @@ class HaarTransform(Transform):
         return hash((type(self), self.event_dim, self.flip))
 
     def __eq__(self, other):
-        return (
-            type(self) == type(other)
-            and self.dim == other.dim
-            and self.flip == other.flip
-        )
+        return type(self) == type(other) and self.dim == other.dim and self.flip == other.flip
 
     @constraints.dependent_property(is_discrete=False)
     def domain(self):

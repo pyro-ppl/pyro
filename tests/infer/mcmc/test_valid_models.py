@@ -58,9 +58,7 @@ def test_model_error_stray_batch_dims(kernel, kwargs):
     def gmm():
         data = torch.tensor([0.0, 0.0, 3.0, 3.0, 3.0, 5.0, 5.0])
         mix_proportions = pyro.sample("phi", dist.Dirichlet(torch.ones(3)))
-        cluster_means = pyro.sample(
-            "cluster_means", dist.Normal(torch.arange(3.0), 1.0)
-        )
+        cluster_means = pyro.sample("cluster_means", dist.Normal(torch.arange(3.0), 1.0))
         with pyro.plate("data", data.shape[0]):
             assignments = pyro.sample("assignments", dist.Categorical(mix_proportions))
             pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.0), obs=data)
@@ -86,9 +84,7 @@ def test_model_error_enum_dim_clash(kernel, kwargs):
         data = torch.tensor([0.0, 0.0, 3.0, 3.0, 3.0, 5.0, 5.0])
         with pyro.plate("num_clusters", 3):
             mix_proportions = pyro.sample("phi", dist.Dirichlet(torch.tensor(1.0)))
-            cluster_means = pyro.sample(
-                "cluster_means", dist.Normal(torch.arange(3.0), 1.0)
-            )
+            cluster_means = pyro.sample("cluster_means", dist.Normal(torch.arange(3.0), 1.0))
         with pyro.plate("data", data.shape[0]):
             assignments = pyro.sample("assignments", dist.Categorical(mix_proportions))
             pyro.sample("obs", dist.Normal(cluster_means[assignments], 1.0), obs=data)
@@ -119,9 +115,7 @@ def test_log_prob_eval_iterates_in_correct_order():
             r = 0.4 + 0.1 * v
             with inner1, inner3:
                 z1 = pyro.sample("z1", dist.Bernoulli(r))
-                pyro.sample(
-                    "obs1", dist.Normal(2 * z1 - 1, 1.0), obs=torch.ones(6, 4, 1, 3)
-                )
+                pyro.sample("obs1", dist.Normal(2 * z1 - 1, 1.0), obs=torch.ones(6, 4, 1, 3))
             with inner2:
                 z2 = pyro.sample("z2", dist.Bernoulli(r))
                 pyro.sample("obs2", dist.Normal(2 * z2 - 1, 1.0), obs=torch.ones(5, 3))
@@ -130,15 +124,11 @@ def test_log_prob_eval_iterates_in_correct_order():
     trace_prob_evaluator = TraceTreeEvaluator(model_trace, True, 4)
     trace_prob_evaluator.log_prob(model_trace)
     plate_dims, enum_dims = [], []
-    for key in reversed(
-        sorted(trace_prob_evaluator._log_probs.keys(), key=lambda x: (len(x), x))
-    ):
+    for key in reversed(sorted(trace_prob_evaluator._log_probs.keys(), key=lambda x: (len(x), x))):
         plate_dims.append(trace_prob_evaluator._plate_dims[key])
         enum_dims.append(trace_prob_evaluator._enum_dims[key])
     # The reduction operation returns a singleton with dimensions preserved.
-    assert not any(
-        i != 1 for i in trace_prob_evaluator._aggregate_log_probs(frozenset()).shape
-    )
+    assert not any(i != 1 for i in trace_prob_evaluator._aggregate_log_probs(frozenset()).shape)
     assert plate_dims == [[-4, -3], [-2], [-1], []]
     assert enum_dims, [[-8], [-9, -6], [-7], [-5]]
 
@@ -211,9 +201,7 @@ def test_enumeration_in_tree(Eval):
     print_debug_info(model_trace)
     trace_prob_evaluator = Eval(model_trace, True, 4)
     # p_n(0.) * p_n(2.)^2 * p_n(1.)^6
-    assert_equal(
-        trace_prob_evaluator.log_prob(model_trace), torch.tensor(-15.2704), prec=1e-4
-    )
+    assert_equal(trace_prob_evaluator.log_prob(model_trace), torch.tensor(-15.2704), prec=1e-4)
 
 
 @pytest.mark.xfail(reason="Enumeration currently does not work for general DAGs")
@@ -241,9 +229,7 @@ def test_enumeration_in_dag(Eval):
     model_trace = poutine.trace(model).get_trace()
     print_debug_info(model_trace)
     trace_prob_evaluator = Eval(model_trace, True, 2)
-    assert_equal(
-        trace_prob_evaluator.log_prob(model_trace), torch.tensor(0.16196)
-    )  # p_beta(0.3)^3
+    assert_equal(trace_prob_evaluator.log_prob(model_trace), torch.tensor(0.16196))  # p_beta(0.3)^3
 
 
 @pytest.mark.parametrize(
@@ -271,9 +257,7 @@ def test_enum_log_prob_continuous_observed(data, expected_log_prob, Eval):
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
     trace_prob_evaluator = Eval(model_trace, True, 1)
-    assert_equal(
-        trace_prob_evaluator.log_prob(model_trace), expected_log_prob, prec=1e-3
-    )
+    assert_equal(trace_prob_evaluator.log_prob(model_trace), expected_log_prob, prec=1e-3)
 
 
 @pytest.mark.parametrize(
@@ -289,9 +273,7 @@ def test_enum_log_prob_continuous_observed(data, expected_log_prob, Eval):
 def test_enum_log_prob_continuous_sampled(data, expected_log_prob, Eval):
     @poutine.enum(first_available_dim=-2)
     @config_enumerate
-    @poutine.condition(
-        data={"p": torch.tensor(0.4), "n": torch.tensor([[1.0], [-1.0]])}
-    )
+    @poutine.condition(data={"p": torch.tensor(0.4), "n": torch.tensor([[1.0], [-1.0]])})
     def model(data):
         p = pyro.sample("p", dist.Uniform(0.0, 1.0))
         y = pyro.sample("y", dist.Bernoulli(p))
@@ -303,9 +285,7 @@ def test_enum_log_prob_continuous_sampled(data, expected_log_prob, Eval):
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
     trace_prob_evaluator = Eval(model_trace, True, 1)
-    assert_equal(
-        trace_prob_evaluator.log_prob(model_trace), expected_log_prob, prec=1e-3
-    )
+    assert_equal(trace_prob_evaluator.log_prob(model_trace), expected_log_prob, prec=1e-3)
 
 
 @pytest.mark.parametrize(
@@ -331,9 +311,7 @@ def test_enum_log_prob_discrete_observed(data, expected_log_prob, Eval):
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
     trace_prob_evaluator = Eval(model_trace, True, 1)
-    assert_equal(
-        trace_prob_evaluator.log_prob(model_trace), expected_log_prob, prec=1e-3
-    )
+    assert_equal(trace_prob_evaluator.log_prob(model_trace), expected_log_prob, prec=1e-3)
 
 
 @pytest.mark.parametrize(
@@ -362,9 +340,7 @@ def test_enum_log_prob_multiple_plate(data, expected_log_prob, Eval):
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
     trace_prob_evaluator = Eval(model_trace, True, 1)
-    assert_equal(
-        trace_prob_evaluator.log_prob(model_trace), expected_log_prob, prec=1e-3
-    )
+    assert_equal(trace_prob_evaluator.log_prob(model_trace), expected_log_prob, prec=1e-3)
 
 
 @pytest.mark.parametrize(
@@ -394,9 +370,7 @@ def test_enum_log_prob_nested_plate(data, expected_log_prob, Eval):
     model_trace = poutine.trace(model).get_trace(data)
     print_debug_info(model_trace)
     trace_prob_evaluator = Eval(model_trace, True, 2)
-    assert_equal(
-        trace_prob_evaluator.log_prob(model_trace), expected_log_prob, prec=1e-3
-    )
+    assert_equal(trace_prob_evaluator.log_prob(model_trace), expected_log_prob, prec=1e-3)
 
 
 def _beta_bernoulli(data):
@@ -410,12 +384,8 @@ def _beta_bernoulli(data):
 
 @pytest.mark.parametrize("jit", [False, True])
 def test_potential_fn_pickling(jit):
-    data = dist.Bernoulli(torch.tensor([0.8, 0.2])).sample(
-        sample_shape=(torch.Size((1000,)))
-    )
-    _, potential_fn, _, _ = initialize_model(
-        _beta_bernoulli, (data,), jit_compile=jit, skip_jit_warnings=True
-    )
+    data = dist.Bernoulli(torch.tensor([0.8, 0.2])).sample(sample_shape=(torch.Size((1000,))))
+    _, potential_fn, _, _ = initialize_model(_beta_bernoulli, (data,), jit_compile=jit, skip_jit_warnings=True)
     test_data = {"p_latent": torch.tensor([0.2, 0.6])}
     buffer = io.BytesIO()
     torch.save(potential_fn, buffer)
@@ -446,9 +416,7 @@ def test_reparam_stable(kernel, kwargs):
 # Regression test for https://github.com/pyro-ppl/pyro/issues/2627
 @pytest.mark.parametrize("Kernel", [HMC, NUTS])
 def test_potential_fn_initial_params(Kernel):
-    target = torch.distributions.Normal(
-        loc=torch.tensor([10.0, 0.0]), scale=torch.tensor([1.0, 1.0])
-    )
+    target = torch.distributions.Normal(loc=torch.tensor([10.0, 0.0]), scale=torch.tensor([1.0, 1.0]))
 
     def potential_fn(z):
         z = z["points"]
@@ -456,9 +424,7 @@ def test_potential_fn_initial_params(Kernel):
 
     initial_params = {"points": torch.tensor([[0.0, 0.0]])}
     kernel = Kernel(potential_fn=potential_fn)
-    mcmc = MCMC(
-        kernel=kernel, warmup_steps=20, initial_params=initial_params, num_samples=10
-    )
+    mcmc = MCMC(kernel=kernel, warmup_steps=20, initial_params=initial_params, num_samples=10)
 
     mcmc.run()
     mcmc.get_samples()["points"]

@@ -39,11 +39,7 @@ class _Subsample(Distribution):
         self.use_cuda = use_cuda
         if self.use_cuda is not None:
             if self.use_cuda ^ (device != "cpu"):
-                raise ValueError(
-                    "Incompatible arg values use_cuda={}, device={}.".format(
-                        use_cuda, device
-                    )
-                )
+                raise ValueError("Incompatible arg values use_cuda={}, device={}.".format(use_cuda, device))
         with ignore_jit_warnings(["torch.Tensor results are registered as constants"]):
             self.device = device or torch.Tensor().device
 
@@ -59,9 +55,7 @@ class _Subsample(Distribution):
         if subsample_size is None or subsample_size >= self.size:
             result = torch.arange(self.size, device=self.device)
         else:
-            result = torch.randperm(self.size, device=self.device)[
-                :subsample_size
-            ].clone()
+            result = torch.randperm(self.size, device=self.device)[:subsample_size].clone()
         return result.cuda() if self.use_cuda else result
 
     def log_prob(self, x: torch.Tensor) -> torch.Tensor:
@@ -137,16 +131,10 @@ class SubsampleMessenger(IndepMessenger):
         with ignore_jit_warnings():
             if subsample_size is None:
                 assert subsample is not None
-                subsample_size = (
-                    subsample.size(0)
-                    if isinstance(subsample, torch.Tensor)
-                    else len(subsample)
-                )
+                subsample_size = subsample.size(0) if isinstance(subsample, torch.Tensor) else len(subsample)
             elif subsample is not None and subsample_size != len(subsample):
                 raise ValueError(
-                    "subsample_size does not match len(subsample), {} vs {}.".format(
-                        subsample_size, len(subsample)
-                    )
+                    "subsample_size does not match len(subsample), {} vs {}.".format(subsample_size, len(subsample))
                     + " Did you accidentally use different subsample_size in the model and guide?"
                 )
 
@@ -166,7 +154,8 @@ class SubsampleMessenger(IndepMessenger):
         )
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
         if isinstance(self.size, torch.Tensor) or isinstance(  # type: ignore[unreachable]
-            self.subsample_size, torch.Tensor  # type: ignore[unreachable]
+            self.subsample_size,  # type: ignore[unreachable]
+            torch.Tensor,
         ):
             if not isinstance(msg["scale"], torch.Tensor):  # type: ignore[unreachable]
                 with ignore_jit_warnings():
@@ -184,13 +173,9 @@ class SubsampleMessenger(IndepMessenger):
                 if len(shape) >= -dim and shape[dim] != 1:
                     if is_validation_enabled() and shape[dim] != self.size:
                         if msg["type"] == "param":
-                            statement = "pyro.param({}, ..., event_dim={})".format(
-                                msg["name"], event_dim
-                            )
+                            statement = "pyro.param({}, ..., event_dim={})".format(msg["name"], event_dim)
                         else:
-                            statement = "pyro.subsample(..., event_dim={})".format(
-                                event_dim
-                            )
+                            statement = "pyro.subsample(..., event_dim={})".format(event_dim)
                         raise ValueError(
                             "Inside pyro.plate({}, {}, dim={}) invalid shape of {}: {}".format(
                                 self.name, self.size, self.dim, statement, shape
@@ -200,9 +185,7 @@ class SubsampleMessenger(IndepMessenger):
                     if self.subsample_size < self.size:
                         value = msg["value"]
                         assert self._indices is not None
-                        new_value = value.index_select(
-                            dim, self._indices.to(value.device)
-                        )
+                        new_value = value.index_select(dim, self._indices.to(value.device))
                         if msg["type"] == "param":
                             if hasattr(value, "_pyro_unconstrained_param"):
                                 param = value._pyro_unconstrained_param  # type: ignore[attr-defined]

@@ -56,25 +56,19 @@ def suppress_warnings(fn):
     return wrapper
 
 
-requires_cuda = pytest.mark.skipif(
-    not torch.cuda.is_available(), reason="cuda is not available"
-)
+requires_cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda is not available")
 
 try:
     import horovod
 except ImportError:
     horovod = None
-requires_horovod = pytest.mark.skipif(
-    horovod is None, reason="horovod is not available"
-)
+requires_horovod = pytest.mark.skipif(horovod is None, reason="horovod is not available")
 
 try:
     import lightning
 except ImportError:
     lightning = None
-requires_lightning = pytest.mark.skipif(
-    lightning is None, reason="pytorch lightning is not available"
-)
+requires_lightning = pytest.mark.skipif(lightning is None, reason="pytorch lightning is not available")
 
 try:
     import funsor
@@ -203,9 +197,7 @@ def assert_close(actual, expected, atol=1e-7, rtol=0, msg=""):
     # Placing this as a second check allows for coercing of numeric types above;
     # this can be moved up to harden type checks.
     elif type(actual) != type(expected):
-        raise AssertionError(
-            "cannot compare {} and {}".format(type(actual), type(expected))
-        )
+        raise AssertionError("cannot compare {} and {}".format(type(actual), type(expected)))
     elif torch.is_tensor(actual) and torch.is_tensor(expected):
         prec = atol + rtol * abs(expected) if rtol > 0 else atol
         assert actual.is_sparse == expected.is_sparse, msg
@@ -217,9 +209,7 @@ def assert_close(actual, expected, atol=1e-7, rtol=0, msg=""):
         else:
             assert_tensors_equal(actual, expected, prec, msg)
     elif type(actual) == np.ndarray and type(expected) == np.ndarray:
-        assert_allclose(
-            actual, expected, atol=atol, rtol=rtol, equal_nan=True, err_msg=msg
-        )
+        assert_allclose(actual, expected, atol=atol, rtol=rtol, equal_nan=True, err_msg=msg)
     elif isinstance(actual, numbers.Number) and isinstance(y, numbers.Number):
         assert actual == approx(expected, abs=atol, rel=rtol), msg
     elif isinstance(actual, dict):
@@ -253,9 +243,7 @@ def assert_equal(actual, expected, prec=1e-5, msg=""):
     # Placing this as a second check allows for coercing of numeric types above;
     # this can be moved up to harden type checks.
     elif type(actual) != type(expected):
-        raise AssertionError(
-            "cannot compare {} and {}".format(type(actual), type(expected))
-        )
+        raise AssertionError("cannot compare {} and {}".format(type(actual), type(expected)))
     elif torch.is_tensor(actual) and torch.is_tensor(expected):
         assert actual.is_sparse == expected.is_sparse, msg
         if actual.is_sparse:
@@ -291,6 +279,4 @@ def assert_not_equal(x, y, prec=1e-5, msg=""):
         assert_equal(x, y, prec)
     except AssertionError:
         return
-    raise AssertionError(
-        "{} \nValues are equal: x={}, y={}, prec={}".format(msg, x, y, prec)
-    )
+    raise AssertionError("{} \nValues are equal: x={}, y={}, prec={}".format(msg, x, y, prec))

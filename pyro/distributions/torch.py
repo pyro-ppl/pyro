@@ -20,6 +20,10 @@ def _clamp_by_zero(x):
     return (x.clamp(min=0) + x - x.clamp(max=0)) / 2
 
 
+class Bernoulli(torch.distributions.Bernoulli, TorchDistributionMixin):
+    pass
+
+
 class Beta(torch.distributions.Beta, TorchDistributionMixin):
     def conjugate_update(self, other):
         """
@@ -35,9 +39,7 @@ class Beta(torch.distributions.Beta, TorchDistributionMixin):
             y = d.concentration0
             return (x + y).lgamma() - x.lgamma() - y.lgamma()
 
-        log_normalizer = (
-            _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
-        )
+        log_normalizer = _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
         return updated, log_normalizer
 
 
@@ -70,12 +72,10 @@ class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
                     sample = torch.where(p < q, result, self.total_count - result)
                 # Draw exact samples for remaining items.
                 if exact.any():
-                    total_count = torch.where(
-                        exact, self.total_count, torch.zeros_like(self.total_count)
+                    total_count = torch.where(exact, self.total_count, torch.zeros_like(self.total_count))
+                    exact_sample = torch.distributions.Binomial(total_count, self.probs, validate_args=False).sample(
+                        sample_shape
                     )
-                    exact_sample = torch.distributions.Binomial(
-                        total_count, self.probs, validate_args=False
-                    ).sample(sample_shape)
                     sample = torch.where(exact, exact_sample, sample)
                 return sample
         return super().sample(sample_shape)
@@ -91,27 +91,17 @@ class Binomial(torch.distributions.Binomial, TorchDistributionMixin):
         #     (case logit > 0)              = k * logit - n * (log(p) - log(1 - p)) + n * log(p)
         #                                   = k * logit - n * logit - n * log1p(e^-logit)
         #     (merge two cases)             = k * logit - n * max(logit, 0) - n * log1p(e^-|logit|)
-        normalize_term = n * (
-            _clamp_by_zero(self.logits) + self.logits.abs().neg().exp().log1p()
-        )
-        return (
-            k * self.logits
-            - normalize_term
-            + log_binomial(n, k, tol=self.approx_log_prob_tol)
-        )
+        normalize_term = n * (_clamp_by_zero(self.logits) + self.logits.abs().neg().exp().log1p())
+        return k * self.logits - normalize_term + log_binomial(n, k, tol=self.approx_log_prob_tol)
 
 
-@settings.register(
-    "binomial_approx_sample_thresh", __name__, "Binomial.approx_sample_thresh"
-)
+@settings.register("binomial_approx_sample_thresh", __name__, "Binomial.approx_sample_thresh")
 def _validate_thresh(thresh):
     assert isinstance(thresh, float)
     assert 0 < thresh
 
 
-@settings.register(
-    "binomial_approx_log_prob_tol", __name__, "Binomial.approx_log_prob_tol"
-)
+@settings.register("binomial_approx_log_prob_tol", __name__, "Binomial.approx_log_prob_tol")
 def _validate_tol(tol):
     assert isinstance(tol, float)
     assert 0 <= tol
@@ -134,9 +124,7 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
                 assert value.size(0) == self.logits.size(-1)
             logits = self.logits
             if logits.dim() <= value.dim():
-                logits = logits.reshape(
-                    (1,) * (1 + value.dim() - logits.dim()) + logits.shape
-                )
+                logits = logits.reshape((1,) * (1 + value.dim() - logits.dim()) + logits.shape)
             if not torch._C._get_tracing_state():
                 assert logits.size(-1 - value.dim()) == 1
             return logits.transpose(-1 - value.dim(), -1).squeeze(-1)
@@ -147,6 +135,18 @@ class Categorical(torch.distributions.Categorical, TorchDistributionMixin):
         if not expand:
             result._pyro_categorical_support = id(self)
         return result
+
+
+class Cauchy(torch.distributions.Cauchy, TorchDistributionMixin):
+    pass
+
+
+class Chi2(torch.distributions.Chi2, TorchDistributionMixin):
+    pass
+
+
+class ContinuousBernoulli(torch.distributions.ContinuousBernoulli, TorchDistributionMixin):
+    pass
 
 
 class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
@@ -168,10 +168,20 @@ class Dirichlet(torch.distributions.Dirichlet, TorchDistributionMixin):
             c = d.concentration
             return c.sum(-1).lgamma() - c.lgamma().sum(-1)
 
-        log_normalizer = (
-            _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
-        )
+        log_normalizer = _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
         return updated, log_normalizer
+
+
+class ExponentialFamily(torch.distributions.ExponentialFamily, TorchDistributionMixin):
+    pass
+
+
+class Exponential(torch.distributions.Exponential, TorchDistributionMixin):
+    pass
+
+
+class FisherSnedecor(torch.distributions.FisherSnedecor, TorchDistributionMixin):
+    pass
 
 
 class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
@@ -188,9 +198,7 @@ class Gamma(torch.distributions.Gamma, TorchDistributionMixin):
             c = d.concentration
             return d.rate.log() * c - c.lgamma()
 
-        log_normalizer = (
-            _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
-        )
+        log_normalizer = _log_normalizer(self) + _log_normalizer(other) - _log_normalizer(updated)
         return updated, log_normalizer
 
 
@@ -200,6 +208,18 @@ class Geometric(torch.distributions.Geometric, TorchDistributionMixin):
         if self._validate_args:
             self._validate_sample(value)
         return (-value - 1) * torch.nn.functional.softplus(self.logits) + self.logits
+
+
+class Gumbel(torch.distributions.Gumbel, TorchDistributionMixin):
+    pass
+
+
+class HalfCauchy(torch.distributions.HalfCauchy, TorchDistributionMixin):
+    pass
+
+
+class HalfNormal(torch.distributions.HalfNormal, TorchDistributionMixin):
+    pass
 
 
 class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
@@ -215,14 +235,10 @@ class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(LogNormal, _instance)
-        return super(torch.distributions.LogNormal, self).expand(
-            batch_shape, _instance=new
-        )
+        return super(torch.distributions.LogNormal, self).expand(batch_shape, _instance=new)
 
 
-class LowRankMultivariateNormal(
-    torch.distributions.LowRankMultivariateNormal, TorchDistributionMixin
-):
+class LowRankMultivariateNormal(torch.distributions.LowRankMultivariateNormal, TorchDistributionMixin):
     @staticmethod
     def infer_shapes(loc, cov_factor, cov_diag):
         event_shape = loc[-1:]
@@ -230,13 +246,9 @@ class LowRankMultivariateNormal(
         return batch_shape, event_shape
 
 
-class MultivariateNormal(
-    torch.distributions.MultivariateNormal, TorchDistributionMixin
-):
+class MultivariateNormal(torch.distributions.MultivariateNormal, TorchDistributionMixin):
     @staticmethod
-    def infer_shapes(
-        loc, covariance_matrix=None, precision_matrix=None, scale_tril=None
-    ):
+    def infer_shapes(loc, covariance_matrix=None, precision_matrix=None, scale_tril=None):
         batch_shape, event_shape = loc[:-1], loc[-1:]
         for matrix in [covariance_matrix, precision_matrix, scale_tril]:
             if matrix is not None:
@@ -318,6 +330,54 @@ class Independent(torch.distributions.Independent, TorchDistributionMixin):
         return updated, log_normalizer
 
 
+class Kumaraswamy(torch.distributions.Kumaraswamy, TorchDistributionMixin):
+    pass
+
+
+class Laplace(torch.distributions.Laplace, TorchDistributionMixin):
+    pass
+
+
+class LKJCholesky(torch.distributions.LKJCholesky, TorchDistributionMixin):
+    pass
+
+
+class LogisticNormal(torch.distributions.LogisticNormal, TorchDistributionMixin):
+    pass
+
+
+class MixtureSameFamily(torch.distributions.MixtureSameFamily, TorchDistributionMixin):
+    pass
+
+
+class NegativeBinomial(torch.distributions.NegativeBinomial, TorchDistributionMixin):
+    pass
+
+
+class OneHotCategoricalStraightThrough(torch.distributions.OneHotCategoricalStraightThrough, TorchDistributionMixin):
+    pass
+
+
+class Pareto(torch.distributions.Pareto, TorchDistributionMixin):
+    pass
+
+
+class RelaxedBernoulli(torch.distributions.RelaxedBernoulli, TorchDistributionMixin):
+    pass
+
+
+class RelaxedOneHotCategorical(torch.distributions.RelaxedOneHotCategorical, TorchDistributionMixin):
+    pass
+
+
+class StudentT(torch.distributions.StudentT, TorchDistributionMixin):
+    pass
+
+
+class TransformedDistribution(torch.distributions.TransformedDistribution, TorchDistributionMixin):
+    pass
+
+
 class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
     def __init__(self, low, high, validate_args=None):
         self._unbroadcasted_low = low
@@ -336,13 +396,23 @@ class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
         return constraints.interval(self._unbroadcasted_low, self._unbroadcasted_high)
 
 
+class VonMises(torch.distributions.VonMises, TorchDistributionMixin):
+    pass
+
+
+class Weibull(torch.distributions.Weibull, TorchDistributionMixin):
+    pass
+
+
+class Wishart(torch.distributions.Wishart, TorchDistributionMixin):
+    pass
+
+
 def _cat_docstrings(*docstrings):
     result = "\n".join(textwrap.dedent(s.lstrip("\n")) for s in docstrings)
     result = re.sub("\n\n+", "\n\n", result)
     # Drop torch-specific lines.
-    result = "".join(
-        line for line in result.splitlines(keepends=True) if "xdoctest" not in line
-    )
+    result = "".join(line for line in result.splitlines(keepends=True) if "xdoctest" not in line)
     return result
 
 
@@ -390,34 +460,6 @@ __all__ = [  # noqa: F822
     "Wishart",
 ]
 
-# Programmatically load all distributions from PyTorch,
-# updating __all__ to include any new distributions.
-for _name, _Dist in torch.distributions.__dict__.items():
-    if not isinstance(_Dist, type):
-        continue
-    if not issubclass(_Dist, torch.distributions.Distribution):
-        continue
-    if _Dist is torch.distributions.Distribution:
-        continue
-
-    try:
-        _PyroDist = locals()[_name]
-    except KeyError:
-        _PyroDist = type(_name, (_Dist, TorchDistributionMixin), {})
-        _PyroDist.__module__ = __name__
-        locals()[_name] = _PyroDist
-
-    _PyroDist.__doc__ = """
-    Wraps :class:`{}.{}` with
-    :class:`~pyro.distributions.torch_distribution.TorchDistributionMixin`.
-
-    """.format(
-        _Dist.__module__, _Dist.__name__
-    )
-    _PyroDist.__doc__ = _cat_docstrings(_PyroDist.__doc__, _Dist.__doc__)
-    __all__.append(_name)
-__all__ = sorted(set(__all__))
-
 
 # Create sphinx documentation.
 __doc__ = "\n\n".join(
@@ -426,9 +468,7 @@ __doc__ = "\n\n".join(
     {0}
     ----------------------------------------------------------------
     .. autoclass:: pyro.distributions.{0}
-    """.format(
-            _name
-        )
+    """.format(_name)
         for _name in sorted(__all__)
         # Work around sphinx autodoc error in case two InverseGamma's are defined:
         # "duplicate object description of pyro.distributions.InverseGamma"

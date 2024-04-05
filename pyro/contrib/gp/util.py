@@ -173,11 +173,7 @@ def train(gpmodule, optimizer=None, loss_fn=None, retain_graph=None, num_steps=1
     :returns: a list of losses during the training procedure
     :rtype: list
     """
-    optimizer = (
-        torch.optim.Adam(gpmodule.parameters(), lr=0.01)
-        if optimizer is None
-        else optimizer
-    )
+    optimizer = torch.optim.Adam(gpmodule.parameters(), lr=0.01) if optimizer is None else optimizer
     # TODO: add support for JIT loss
     loss_fn = TraceMeanField_ELBO().differentiable_loss if loss_fn is None else loss_fn
 

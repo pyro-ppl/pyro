@@ -116,9 +116,7 @@ def test_grad():
         return torch.autograd.grad(loss, [x, y], allow_unused=True)
 
     logger.debug("Compiling f")
-    f = torch.jit.trace(
-        f, (torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True))
-    )
+    f = torch.jit.trace(f, (torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True)))
     logger.debug("Invoking f")
     f(torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True))
     logger.debug("Invoking f")
@@ -133,9 +131,7 @@ def test_grad_expand():
         return torch.autograd.grad(loss, [x, y], allow_unused=True)
 
     logger.debug("Compiling f")
-    f = torch.jit.trace(
-        f, (torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True))
-    )
+    f = torch.jit.trace(f, (torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True)))
     logger.debug("Invoking f")
     f(torch.zeros(2, requires_grad=True), torch.ones(1, requires_grad=True))
     logger.debug("Invoking f")
@@ -320,9 +316,7 @@ def test_svi(Elbo, num_particles):
     def model(data):
         loc = pyro.param("loc", constant(0.0))
         scale = pyro.param("scale", constant(1.0), constraint=constraints.positive)
-        pyro.sample(
-            "x", dist.Normal(loc, scale).expand_by(data.shape).to_event(1), obs=data
-        )
+        pyro.sample("x", dist.Normal(loc, scale).expand_by(data.shape).to_event(1), obs=data)
 
     def guide(data):
         pass
@@ -351,9 +345,7 @@ def test_svi_enum(plate_dim, enumerate1, enumerate2):
         q = pyro.param("q")
         pyro.sample("x", dist.Bernoulli(q), infer={"enumerate": enumerate1})
         for i in pyro.plate("plate", plate_dim):
-            pyro.sample(
-                "y_{}".format(i), dist.Bernoulli(q), infer={"enumerate": enumerate2}
-            )
+            pyro.sample("y_{}".format(i), dist.Bernoulli(q), infer={"enumerate": enumerate2})
 
     kl = (1 + plate_dim) * kl_divergence(dist.Bernoulli(q), dist.Bernoulli(p))
     expected_loss = kl.item()
@@ -367,10 +359,7 @@ def test_svi_enum(plate_dim, enumerate1, enumerate2):
         num_particles=inner_particles,
         ignore_jit_warnings=True,
     )
-    actual_loss = (
-        sum(elbo.loss_and_grads(model, guide) for i in range(outer_particles))
-        / outer_particles
-    )
+    actual_loss = sum(elbo.loss_and_grads(model, guide) for i in range(outer_particles)) / outer_particles
     actual_grad = q.unconstrained().grad / outer_particles
 
     assert_equal(
@@ -414,9 +403,7 @@ def test_beta_bernoulli(Elbo, vectorized):
         alpha0 = constant(10.0)
         beta0 = constant(10.0)
         f = pyro.sample("latent_fairness", dist.Beta(alpha0, beta0))
-        pyro.sample(
-            "obs", dist.Bernoulli(f).expand_by(data.shape).to_event(1), obs=data
-        )
+        pyro.sample("obs", dist.Bernoulli(f).expand_by(data.shape).to_event(1), obs=data)
 
     model = model2 if vectorized else model1
 
@@ -425,9 +412,7 @@ def test_beta_bernoulli(Elbo, vectorized):
         beta_q = pyro.param("beta_q", constant(15.0), constraint=constraints.positive)
         pyro.sample("latent_fairness", dist.Beta(alpha_q, beta_q))
 
-    elbo = Elbo(
-        num_particles=7, strict_enumeration_warning=False, ignore_jit_warnings=True
-    )
+    elbo = Elbo(num_particles=7, strict_enumeration_warning=False, ignore_jit_warnings=True)
     optim = Adam({"lr": 0.0005, "betas": (0.90, 0.999)})
     svi = SVI(model, guide, optim, elbo)
     for step in range(40):
@@ -482,21 +467,15 @@ def test_dirichlet_bernoulli(Elbo, vectorized):
     def model2(data):
         concentration0 = constant([10.0, 10.0])
         f = pyro.sample("latent_fairness", dist.Dirichlet(concentration0))[1]
-        pyro.sample(
-            "obs", dist.Bernoulli(f).expand_by(data.shape).to_event(1), obs=data
-        )
+        pyro.sample("obs", dist.Bernoulli(f).expand_by(data.shape).to_event(1), obs=data)
 
     model = model2 if vectorized else model1
 
     def guide(data):
-        concentration_q = pyro.param(
-            "concentration_q", constant([15.0, 15.0]), constraint=constraints.positive
-        )
+        concentration_q = pyro.param("concentration_q", constant([15.0, 15.0]), constraint=constraints.positive)
         pyro.sample("latent_fairness", dist.Dirichlet(concentration_q))
 
-    elbo = Elbo(
-        num_particles=7, strict_enumeration_warning=False, ignore_jit_warnings=True
-    )
+    elbo = Elbo(num_particles=7, strict_enumeration_warning=False, ignore_jit_warnings=True)
     optim = Adam({"lr": 0.0005, "betas": (0.90, 0.999)})
     svi = SVI(model, guide, optim, elbo)
     for step in range(40):
@@ -527,20 +506,14 @@ def test_traceenum_elbo(length):
                     infer={"enumerate": "parallel"},
                 )
             )
-            pyro.sample(
-                "obs_{}".format(t), dist.Normal(means[states[-1]], 1.0), obs=data[t]
-            )
+            pyro.sample("obs_{}".format(t), dist.Normal(means[states[-1]], 1.0), obs=data[t])
         return tuple(states)
 
     def guide(data):
         pass
 
-    expected_loss = TraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(
-        model, guide, data
-    )
-    actual_loss = JitTraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(
-        model, guide, data
-    )
+    expected_loss = TraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(model, guide, data)
+    actual_loss = JitTraceEnum_ELBO(max_plate_nesting=0).differentiable_loss(model, guide, data)
     assert_equal(expected_loss, actual_loss)
 
     expected_grads = grad(expected_loss, [transition, means], allow_unused=True)
@@ -563,9 +536,7 @@ def test_infer_discrete(temperature, length):
                     infer={"enumerate": "parallel"},
                 )
             )
-            pyro.sample(
-                "obs_{}".format(t), dist.Normal(means[states[-1]], 1.0), obs=data[t]
-            )
+            pyro.sample("obs_{}".format(t), dist.Normal(means[states[-1]], 1.0), obs=data[t])
         return tuple(states)
 
     hidden_dim = 10

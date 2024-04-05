@@ -89,9 +89,7 @@ def test_log_prob(batch_shape, dim):
     actual_log_prob = MultivariateStudentT(df, loc, scale_tril).log_prob(x)
 
     if dim == 1:
-        expected_log_prob = (
-            StudentT(df.unsqueeze(-1), loc, scale_tril[..., 0]).log_prob(x).sum(-1)
-        )
+        expected_log_prob = StudentT(df.unsqueeze(-1), loc, scale_tril[..., 0]).log_prob(x).sum(-1)
         assert_equal(actual_log_prob, expected_log_prob)
 
     # test the fact MVT(df, loc, scale)(x) = int MVN(loc, scale / m)(x) Gamma(df/2,df/2)(m) dm
@@ -127,9 +125,7 @@ def test_rsample(dim, df, num_samples=200 * 1000):
 
 @pytest.mark.parametrize("dim", [1, 2])
 def test_log_prob_normalization(dim, df=6.1, grid_size=2000, domain_width=5.0):
-    scale_tril = (0.2 * torch.randn(dim) - 1.5).exp().diag() + 0.1 * torch.randn(
-        dim, dim
-    )
+    scale_tril = (0.2 * torch.randn(dim) - 1.5).exp().diag() + 0.1 * torch.randn(dim, dim)
     scale_tril = 0.1 * scale_tril.tril(0)
 
     volume_factor = domain_width
@@ -139,9 +135,7 @@ def test_log_prob_normalization(dim, df=6.1, grid_size=2000, domain_width=5.0):
         prec = 0.05
 
     sample_shape = (grid_size * grid_size, dim)
-    z = torch.distributions.Uniform(-0.5 * domain_width, 0.5 * domain_width).sample(
-        sample_shape
-    )
+    z = torch.distributions.Uniform(-0.5 * domain_width, 0.5 * domain_width).sample(sample_shape)
 
     d = MultivariateStudentT(torch.tensor(df), torch.zeros(dim), scale_tril)
     normalizer = d.log_prob(z).exp().mean().item() * volume_factor

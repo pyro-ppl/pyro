@@ -76,17 +76,13 @@ class EnergyDistance:
         by running the (model,guide) pair once.
     """
 
-    def __init__(
-        self, beta=1.0, prior_scale=0.0, num_particles=2, max_plate_nesting=float("inf")
-    ):
+    def __init__(self, beta=1.0, prior_scale=0.0, num_particles=2, max_plate_nesting=float("inf")):
         if not (isinstance(beta, (float, int)) and 0 < beta and beta < 2):
             raise ValueError("Expected beta in (0,2), actual {}".format(beta))
         if not (isinstance(prior_scale, (float, int)) and prior_scale >= 0):
             raise ValueError("Expected prior_scale >= 0, actual {}".format(prior_scale))
         if not (isinstance(num_particles, int) and num_particles >= 2):
-            raise ValueError(
-                "Expected num_particles >= 2, actual {}".format(num_particles)
-            )
+            raise ValueError("Expected num_particles >= 2, actual {}".format(num_particles))
         self.beta = beta
         self.prior_scale = prior_scale
         self.num_particles = num_particles
@@ -103,9 +99,7 @@ class EnergyDistance:
             with validation_enabled(False):  # Avoid calling .log_prob() when undefined.
                 # TODO factor this out as a stand-alone helper.
                 ELBO._guess_max_plate_nesting(self, model, guide, args, kwargs)
-        vectorize = pyro.plate(
-            "num_particles_vectorized", self.num_particles, dim=-self.max_plate_nesting
-        )
+        vectorize = pyro.plate("num_particles_vectorized", self.num_particles, dim=-self.max_plate_nesting)
 
         # Trace the guide as in ELBO.
         with poutine.trace() as tr, vectorize:
@@ -130,22 +124,16 @@ class EnergyDistance:
                 if site["type"] == "sample":
                     warn_if_nan(site["value"], site["name"])
                     if not getattr(site["fn"], "has_rsample", False):
-                        raise ValueError(
-                            "EnergyDistance requires fully reparametrized guides"
-                        )
+                        raise ValueError("EnergyDistance requires fully reparametrized guides")
             for trace in model_trace.nodes.values():
                 if site["type"] == "sample":
                     if site["is_observed"]:
                         warn_if_nan(site["value"], site["name"])
                         if not getattr(site["fn"], "has_rsample", False):
-                            raise ValueError(
-                                "EnergyDistance requires reparametrized likelihoods"
-                            )
+                            raise ValueError("EnergyDistance requires reparametrized likelihoods")
 
         if self.prior_scale > 0:
-            model_trace.compute_log_prob(
-                site_filter=lambda name, site: not site["is_observed"]
-            )
+            model_trace.compute_log_prob(site_filter=lambda name, site: not site["is_observed"])
             if is_validation_enabled():
                 for site in model_trace.nodes.values():
                     if site["type"] == "sample":
@@ -176,11 +164,7 @@ class EnergyDistance:
         squared_error = []  # E[ (X - x)^2 ]
         squared_entropy = []  # E[ (X - X')^2 ]
         prototype = next(iter(data.values()))
-        pairs = (
-            prototype.new_ones(self.num_particles, self.num_particles)
-            .tril(-1)
-            .nonzero(as_tuple=False)
-        )
+        pairs = prototype.new_ones(self.num_particles, self.num_particles).tril(-1).nonzero(as_tuple=False)
         for name, obs in data.items():
             sample = samples[name]
             scale = model_trace.nodes[name]["scale"]
@@ -195,14 +179,10 @@ class EnergyDistance:
             if getattr(mask, "shape", ()):
                 mask = mask.expand(batch_shape).reshape(-1)
             obs = obs.reshape(batch_shape.numel(), event_shape.numel())
-            sample = sample.reshape(
-                self.num_particles, batch_shape.numel(), event_shape.numel()
-            )
+            sample = sample.reshape(self.num_particles, batch_shape.numel(), event_shape.numel())
 
             squared_error.append(_squared_error(sample, obs, scale, mask))
-            squared_entropy.append(
-                _squared_error(*sample[pairs].unbind(1), scale, mask)
-            )
+            squared_entropy.append(_squared_error(*sample[pairs].unbind(1), scale, mask))
 
         squared_error = reduce(operator.add, squared_error)
         squared_entropy = reduce(operator.add, squared_entropy)

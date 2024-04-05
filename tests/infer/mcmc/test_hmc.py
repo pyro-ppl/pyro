@@ -20,9 +20,7 @@ logger = logging.getLogger(__name__)
 
 def mark_jit(*args, **kwargs):
     jit_markers = kwargs.pop("marks", [])
-    jit_markers += [
-        pytest.mark.skipif("CI" in os.environ, reason="to reduce running time on CI")
-    ]
+    jit_markers += [pytest.mark.skipif("CI" in os.environ, reason="to reduce running time on CI")]
     kwargs["marks"] = jit_markers
     return pytest.param(*args, **kwargs)
 
@@ -43,9 +41,7 @@ class GaussianChain:
         loc = self.loc_0
         lambda_prec = self.lambda_prec
         for i in range(1, self.chain_len + 1):
-            loc = pyro.sample(
-                "loc_{}".format(i), dist.Normal(loc=loc, scale=lambda_prec)
-            )
+            loc = pyro.sample("loc_{}".format(i), dist.Normal(loc=loc, scale=lambda_prec))
         pyro.sample("obs", dist.Normal(loc, lambda_prec), obs=data)
 
     @property
@@ -53,9 +49,7 @@ class GaussianChain:
         return torch.ones(self.num_obs, self.dim)
 
     def id_fn(self):
-        return "dim={}_chain-len={}_num_obs={}".format(
-            self.dim, self.chain_len, self.num_obs
-        )
+        return "dim={}_chain-len={}_num_obs={}".format(self.dim, self.chain_len, self.num_obs)
 
 
 def rmse(t1, t2):
@@ -119,10 +113,7 @@ TEST_CASES = [
     ),
 ]
 
-TEST_IDS = [
-    t[0].id_fn() if type(t).__name__ == "TestExample" else t[0][0].id_fn()
-    for t in TEST_CASES
-]
+TEST_IDS = [t[0].id_fn() if type(t).__name__ == "TestExample" else t[0][0].id_fn() for t in TEST_CASES]
 
 
 @pytest.mark.parametrize(
@@ -222,9 +213,7 @@ def test_dirichlet_categorical(jit):
 
     true_probs = torch.tensor([0.1, 0.6, 0.3])
     data = dist.Categorical(true_probs).sample(sample_shape=(torch.Size((2000,))))
-    hmc_kernel = HMC(
-        model, trajectory_length=1, jit_compile=jit, ignore_jit_warnings=True
-    )
+    hmc_kernel = HMC(model, trajectory_length=1, jit_compile=jit, ignore_jit_warnings=True)
     mcmc = MCMC(hmc_kernel, num_samples=200, warmup_steps=100)
     mcmc.run(data)
     samples = mcmc.get_samples()
@@ -303,9 +292,7 @@ def test_bernoulli_latent_model(jit):
 
 @pytest.mark.parametrize("kernel", [HMC, NUTS])
 @pytest.mark.parametrize("jit", [False, mark_jit(True)], ids=jit_idfn)
-@pytest.mark.skipif(
-    "CUDA_TEST" in os.environ, reason="https://github.com/pytorch/pytorch/issues/22811"
-)
+@pytest.mark.skipif("CUDA_TEST" in os.environ, reason="https://github.com/pytorch/pytorch/issues/22811")
 def test_unnormalized_normal(kernel, jit):
     true_mean, true_std = torch.tensor(5.0), torch.tensor(1.0)
     init_params = {"z": torch.tensor(0.0)}
@@ -313,9 +300,7 @@ def test_unnormalized_normal(kernel, jit):
     def potential_energy(params):
         return 0.5 * torch.sum(((params["z"] - true_mean) / true_std) ** 2)
 
-    potential_fn = (
-        potential_energy if not jit else torch.jit.trace(potential_energy, init_params)
-    )
+    potential_fn = potential_energy if not jit else torch.jit.trace(potential_energy, init_params)
     hmc_kernel = kernel(model=None, potential_fn=potential_fn)
 
     samples = init_params
@@ -344,18 +329,12 @@ def test_singular_matrix_catch(jit, op):
         return op(z["cov"]).sum()
 
     init_params = {"cov": torch.eye(3)}
-    potential_fn = (
-        potential_energy if not jit else torch.jit.trace(potential_energy, init_params)
-    )
-    hmc_kernel = HMC(
-        potential_fn=potential_fn, adapt_step_size=False, num_steps=10, step_size=1e-20
-    )
+    potential_fn = potential_energy if not jit else torch.jit.trace(potential_energy, init_params)
+    hmc_kernel = HMC(potential_fn=potential_fn, adapt_step_size=False, num_steps=10, step_size=1e-20)
     hmc_kernel.initial_params = init_params
     hmc_kernel.setup(warmup_steps=0)
     # setup an invalid cache to trigger singular error for torch.inverse
-    hmc_kernel._cache(
-        {"cov": torch.ones(3, 3)}, torch.tensor(0.0), {"cov": torch.zeros(3, 3)}
-    )
+    hmc_kernel._cache({"cov": torch.ones(3, 3)}, torch.tensor(0.0), {"cov": torch.zeros(3, 3)})
 
     samples = init_params
     for i in range(10):

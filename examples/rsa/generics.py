@@ -53,17 +53,13 @@ def discretize_beta_pdf(bins, gamma, delta):
 
 @Marginal
 def structured_prior_model(params):
-    propertyIsPresent = (
-        pyro.sample("propertyIsPresent", dist.Bernoulli(params.theta)).item() == 1
-    )
+    propertyIsPresent = pyro.sample("propertyIsPresent", dist.Bernoulli(params.theta)).item() == 1
     if propertyIsPresent:
         # approximately integrate over a beta by enumerating over bins
         beta_bins = [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99]
         ix = pyro.sample(
             "bin",
-            dist.Categorical(
-                probs=discretize_beta_pdf(beta_bins, params.gamma, params.delta)
-            ),
+            dist.Categorical(probs=discretize_beta_pdf(beta_bins, params.gamma, params.delta)),
         )
         return beta_bins[ix]
     else:
@@ -72,9 +68,7 @@ def structured_prior_model(params):
 
 def threshold_prior():
     threshold_bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-    ix = pyro.sample(
-        "threshold", dist.Categorical(logits=torch.zeros(len(threshold_bins)))
-    )
+    ix = pyro.sample("threshold", dist.Categorical(logits=torch.zeros(len(threshold_bins))))
     return threshold_bins[ix]
 
 

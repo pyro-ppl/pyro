@@ -24,9 +24,7 @@ def test_utilities(head_size):
     mask[head_size:, head_size:] = 0.0
     mask.view(-1)[:: size + 1][head_size:] = 1.0
     arrowhead_full = mask * cov
-    expected = torch.flip(
-        torch.linalg.cholesky(torch.flip(arrowhead_full, (-2, -1))), (-2, -1)
-    )
+    expected = torch.flip(torch.linalg.cholesky(torch.flip(arrowhead_full, (-2, -1))), (-2, -1))
     # test if those flip ops give expected upper triangular values
     assert_close(expected.triu(), expected)
     assert_close(expected.matmul(expected.t()), arrowhead_full)
@@ -50,9 +48,5 @@ def test_utilities(head_size):
 
     # test triu_gram
     actual = triu_gram(actual)
-    expected = (
-        arrowhead_full.inverse()
-        if head_size > 0
-        else arrowhead_full.diag().reciprocal()
-    )
+    expected = arrowhead_full.inverse() if head_size > 0 else arrowhead_full.diag().reciprocal()
     assert_close(actual, expected)

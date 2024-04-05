@@ -39,19 +39,11 @@ class GenericLGSSM(TimeSeriesModel):
 
         super().__init__()
 
-        self.obs_noise_scale = PyroParam(
-            obs_noise_scale_init, constraint=constraints.positive
-        )
-        self.trans_noise_scale_sq = PyroParam(
-            torch.ones(state_dim), constraint=constraints.positive
-        )
-        self.trans_matrix = nn.Parameter(
-            torch.eye(state_dim) + 0.03 * torch.randn(state_dim, state_dim)
-        )
+        self.obs_noise_scale = PyroParam(obs_noise_scale_init, constraint=constraints.positive)
+        self.trans_noise_scale_sq = PyroParam(torch.ones(state_dim), constraint=constraints.positive)
+        self.trans_matrix = nn.Parameter(torch.eye(state_dim) + 0.03 * torch.randn(state_dim, state_dim))
         self.obs_matrix = nn.Parameter(0.3 * torch.randn(state_dim, obs_dim))
-        self.init_noise_scale_sq = PyroParam(
-            torch.ones(state_dim), constraint=constraints.positive
-        )
+        self.init_noise_scale_sq = PyroParam(torch.ones(state_dim), constraint=constraints.positive)
 
         if learnable_observation_loc:
             self.obs_loc = nn.Parameter(torch.zeros(obs_dim))
@@ -132,9 +124,7 @@ class GenericLGSSM(TimeSeriesModel):
         predicted_covar = predicted_covar1 + torch.cumsum(predicted_covar2, dim=0)
 
         if include_observation_noise:
-            predicted_covar = (
-                predicted_covar + self.obs_noise_scale.pow(2.0).diag_embed()
-            )
+            predicted_covar = predicted_covar + self.obs_noise_scale.pow(2.0).diag_embed()
 
         return predicted_mean, predicted_covar
 

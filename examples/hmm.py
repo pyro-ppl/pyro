@@ -35,6 +35,7 @@ References
 Fritz Obermeyer, Eli Bingham, Martin Jankowiak, Justin Chiu,
 Neeraj Pradhan, Alexander Rush, Noah Goodman. https://arxiv.org/abs/1902.03210
 """
+
 import argparse
 import logging
 import sys
@@ -320,12 +321,8 @@ def model_3(sequences, lengths, args, batch_size=None, include_prior=True):
         assert lengths.max() <= max_length
     hidden_dim = int(args.hidden_dim**0.5)  # split between w and x
     with poutine.mask(mask=include_prior):
-        probs_w = pyro.sample(
-            "probs_w", dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1).to_event(1)
-        )
-        probs_x = pyro.sample(
-            "probs_x", dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1).to_event(1)
-        )
+        probs_w = pyro.sample("probs_w", dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1).to_event(1))
+        probs_x = pyro.sample("probs_x", dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1).to_event(1))
         probs_y = pyro.sample(
             "probs_y",
             dist.Beta(0.1, 0.9).expand([hidden_dim, hidden_dim, data_dim]).to_event(3),
@@ -375,14 +372,10 @@ def model_4(sequences, lengths, args, batch_size=None, include_prior=True):
         assert lengths.max() <= max_length
     hidden_dim = int(args.hidden_dim**0.5)  # split between w and x
     with poutine.mask(mask=include_prior):
-        probs_w = pyro.sample(
-            "probs_w", dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1).to_event(1)
-        )
+        probs_w = pyro.sample("probs_w", dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1).to_event(1))
         probs_x = pyro.sample(
             "probs_x",
-            dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1)
-            .expand_by([hidden_dim])
-            .to_event(2),
+            dist.Dirichlet(0.9 * torch.eye(hidden_dim) + 0.1).expand_by([hidden_dim]).to_event(2),
         )
         probs_y = pyro.sample(
             "probs_y",
@@ -439,12 +432,8 @@ class TonesGenerator(nn.Module):
         # a bernoulli variable y. Whereas x will typically be enumerated, y will be observed.
         # We apply x_to_hidden independently from y_to_hidden, then broadcast the non-enumerated
         # y part up to the enumerated x part in the + operation.
-        x_onehot = y.new_zeros(x.shape[:-1] + (self.args.hidden_dim,)).scatter_(
-            -1, x, 1
-        )
-        y_conv = self.relu(self.conv(y.reshape(-1, 1, self.data_dim))).reshape(
-            y.shape[:-1] + (-1,)
-        )
+        x_onehot = y.new_zeros(x.shape[:-1] + (self.args.hidden_dim,)).scatter_(-1, x, 1)
+        y_conv = self.relu(self.conv(y.reshape(-1, 1, self.data_dim))).reshape(y.shape[:-1] + (-1,))
         h = self.relu(self.x_to_hidden(x_onehot) + self.y_to_hidden(y_conv))
         return self.hidden_to_logits(h)
 
@@ -538,9 +527,7 @@ def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
             torch.rand(hidden_dim, hidden_dim),
             constraint=constraints.simplex,
         )
-        mix_lambda = pyro.param(
-            "mix_lambda", torch.tensor(0.5), constraint=constraints.unit_interval
-        )
+        mix_lambda = pyro.param("mix_lambda", torch.tensor(0.5), constraint=constraints.unit_interval)
         # we use broadcasting to combine two tensors of shape (hidden_dim, hidden_dim) and
         # (hidden_dim, 1, hidden_dim) to obtain a tensor of shape (hidden_dim, hidden_dim, hidden_dim)
         probs_x = mix_lambda * probs_x1 + (1.0 - mix_lambda) * probs_x2.unsqueeze(-2)
@@ -559,10 +546,13 @@ def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
         for t in pyro.markov(range(lengths.max()), history=2):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
                 probs_x_t = Vindex(probs_x)[x_prev, x_curr]
-                x_prev, x_curr = x_curr, pyro.sample(
-                    "x_{}".format(t),
-                    dist.Categorical(probs_x_t),
-                    infer={"enumerate": "parallel"},
+                x_prev, x_curr = (
+                    x_curr,
+                    pyro.sample(
+                        "x_{}".format(t),
+                        dist.Categorical(probs_x_t),
+                        infer={"enumerate": "parallel"},
+                    ),
                 )
                 with tones_plate:
                     probs_y_t = probs_y[x_curr.squeeze(-1)]
@@ -603,19 +593,13 @@ def model_7(sequences, lengths, args, batch_size=None, include_prior=True):
         init_logits[0] = 0
         trans_logits = probs_x.log()
         with ignore_jit_warnings():
-            obs_dist = dist.Bernoulli(
-                logits=tones_generator(x, y.unsqueeze(-2))
-            ).to_event(1)
+            obs_dist = dist.Bernoulli(logits=tones_generator(x, y.unsqueeze(-2))).to_event(1)
             obs_dist = obs_dist.mask((t < lengths.unsqueeze(-1)).unsqueeze(-1))
             hmm_dist = dist.DiscreteHMM(init_logits, trans_logits, obs_dist)
         pyro.sample("y", hmm_dist, obs=y)
 
 
-models = {
-    name[len("model_") :]: model
-    for name, model in globals().items()
-    if name.startswith("model_")
-}
+models = {name[len("model_") :]: model for name, model in globals().items() if name.startswith("model_")}
 
 
 def main(args):
@@ -627,11 +611,7 @@ def main(args):
 
     logging.info("-" * 40)
     model = models[args.model]
-    logging.info(
-        "Training {} on {} sequences".format(
-            model.__name__, len(data["train"]["sequences"])
-        )
-    )
+    logging.info("Training {} on {} sequences".format(model.__name__, len(data["train"]["sequences"])))
     sequences = data["train"]["sequences"]
     lengths = data["train"]["sequence_lengths"]
 
@@ -651,21 +631,17 @@ def main(args):
     # out the hidden state x. This is accomplished via an automatic guide that
     # learns point estimates of all of our conditional probability tables,
     # named probs_*.
-    guide = AutoDelta(
-        poutine.block(model, expose_fn=lambda msg: msg["name"].startswith("probs_"))
-    )
+    guide = AutoDelta(poutine.block(model, expose_fn=lambda msg: msg["name"].startswith("probs_")))
 
     # To help debug our tensor shapes, let's print the shape of each site's
     # distribution, value, and log_prob tensor. Note this information is
     # automatically printed on most errors inside SVI.
     if args.print_shapes:
         first_available_dim = -2 if model is model_0 else -3
-        guide_trace = poutine.trace(guide).get_trace(
+        guide_trace = poutine.trace(guide).get_trace(sequences, lengths, args=args, batch_size=args.batch_size)
+        model_trace = poutine.trace(poutine.replay(poutine.enum(model, first_available_dim), guide_trace)).get_trace(
             sequences, lengths, args=args, batch_size=args.batch_size
         )
-        model_trace = poutine.trace(
-            poutine.replay(poutine.enum(model, first_available_dim), guide_trace)
-        ).get_trace(sequences, lengths, args=args, batch_size=args.batch_size)
         logging.info(model_trace.format_shapes())
 
     # Enumeration requires a TraceEnum elbo and declaring the max_plate_nesting.
@@ -700,9 +676,7 @@ def main(args):
         logging.info("{: >5d}\t{}".format(step, loss / num_observations))
 
     if args.jit and args.time_compilation:
-        logging.debug(
-            "time to compile: {} s.".format(elbo._differentiable_loss.compile_time)
-        )
+        logging.debug("time to compile: {} s.".format(elbo._differentiable_loss.compile_time))
 
     # We evaluate on the entire training dataset,
     # excluding the prior term so our results are comparable across models.
@@ -711,9 +685,7 @@ def main(args):
 
     # Finally we evaluate on the test dataset.
     logging.info("-" * 40)
-    logging.info(
-        "Evaluating on {} test sequences".format(len(data["test"]["sequences"]))
-    )
+    logging.info("Evaluating on {} test sequences".format(len(data["test"]["sequences"])))
     sequences = data["test"]["sequences"][..., present_notes]
     lengths = data["test"]["sequence_lengths"]
     if args.truncate:
@@ -723,24 +695,18 @@ def main(args):
     # note that since we removed unseen notes above (to make the problem a bit easier and for
     # numerical stability) this test loss may not be directly comparable to numbers
     # reported on this dataset elsewhere.
-    test_loss = elbo.loss(
-        model, guide, sequences, lengths, args=args, include_prior=False
-    )
+    test_loss = elbo.loss(model, guide, sequences, lengths, args=args, include_prior=False)
     logging.info("test loss = {}".format(test_loss / num_observations))
 
     # We expect models with higher capacity to perform better,
     # but eventually overfit to the training set.
-    capacity = sum(
-        value.reshape(-1).size(0) for value in pyro.get_param_store().values()
-    )
+    capacity = sum(value.reshape(-1).size(0) for value in pyro.get_param_store().values())
     logging.info("{} capacity = {} parameters".format(model.__name__, capacity))
 
 
 if __name__ == "__main__":
     assert pyro.__version__.startswith("1.9.0")
-    parser = argparse.ArgumentParser(
-        description="MAP Baum-Welch learning Bach Chorales"
-    )
+    parser = argparse.ArgumentParser(description="MAP Baum-Welch learning Bach Chorales")
     parser.add_argument(
         "-m",
         "--model",

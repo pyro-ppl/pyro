@@ -121,9 +121,7 @@ class DynamicModel(nn.Module, metaclass=ABCMeta):
         :return: :class:`~pyro.distributions.torch.MultivariateNormal`.
         """
         Q = self.process_noise_cov(dt)
-        return dist.MultivariateNormal(
-            torch.zeros(Q.shape[-1], dtype=Q.dtype, device=Q.device), Q
-        )
+        return dist.MultivariateNormal(torch.zeros(Q.shape[-1], dtype=Q.dtype, device=Q.device), Q)
 
 
 class DifferentiableDynamicModel(DynamicModel):

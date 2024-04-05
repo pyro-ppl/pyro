@@ -60,8 +60,7 @@ class ParamStoreDictTests(TestCase):
             bias_equal = (
                 np.sum(
                     np.fabs(
-                        self.linear_module3.bias.detach().cpu().numpy()
-                        - self.linear_module.bias.detach().cpu().numpy()
+                        self.linear_module3.bias.detach().cpu().numpy() - self.linear_module.bias.detach().cpu().numpy()
                     )
                 )
                 == 0.0
@@ -81,9 +80,7 @@ class ParamStoreDictTests(TestCase):
         assert myparam_copy_stale != myparam.detach().cpu().numpy()
         assert myparam_copy == myparam.detach().cpu().numpy()
         assert sorted(param_store_params.keys()) == sorted(store._params.keys())
-        assert sorted(param_store_param_to_name.values()) == sorted(
-            store._param_to_name.values()
-        )
+        assert sorted(param_store_param_to_name.values()) == sorted(store._param_to_name.values())
         assert sorted(store._params.keys()) == sorted(store._param_to_name.values())
 
 

@@ -35,17 +35,7 @@ class SVI(TracePosterior):
     `SVI Part I <http://pyro.ai/examples/svi_part_i.html>`_ for a discussion.
     """
 
-    def __init__(
-        self,
-        model,
-        guide,
-        optim,
-        loss,
-        loss_and_grads=None,
-        num_samples=0,
-        num_steps=0,
-        **kwargs
-    ):
+    def __init__(self, model, guide, optim, loss, loss_and_grads=None, num_samples=0, num_steps=0, **kwargs):
         if num_steps:
             warnings.warn(
                 "The `num_steps` argument to SVI is deprecated and will be removed in "
@@ -69,9 +59,7 @@ class SVI(TracePosterior):
         super().__init__(**kwargs)
 
         if not isinstance(optim, pyro.optim.PyroOptim):
-            raise ValueError(
-                "Optimizer should be an instance of pyro.optim.PyroOptim class."
-            )
+            raise ValueError("Optimizer should be an instance of pyro.optim.PyroOptim class.")
 
         if isinstance(loss, ELBO):
             self.loss = loss.loss
@@ -111,9 +99,7 @@ class SVI(TracePosterior):
     def _traces(self, *args, **kwargs):
         for i in range(self.num_samples):
             guide_trace = poutine.trace(self.guide).get_trace(*args, **kwargs)
-            model_trace = poutine.trace(
-                poutine.replay(self.model, trace=guide_trace)
-            ).get_trace(*args, **kwargs)
+            model_trace = poutine.trace(poutine.replay(self.model, trace=guide_trace)).get_trace(*args, **kwargs)
             yield model_trace, 1.0
 
     def evaluate_loss(self, *args, **kwargs):
@@ -144,9 +130,7 @@ class SVI(TracePosterior):
         with poutine.trace(param_only=True) as param_capture:
             loss = self.loss_and_grads(self.model, self.guide, *args, **kwargs)
 
-        params = set(
-            site["value"].unconstrained() for site in param_capture.trace.nodes.values()
-        )
+        params = set(site["value"].unconstrained() for site in param_capture.trace.nodes.values())
 
         # actually perform gradient steps
         # torch.optim objects gets instantiated for any params that haven't been seen yet

@@ -31,13 +31,9 @@ class TestDelta(TestCase):
         assert_equal(log_px_torch.item(), 0)
 
     def test_batch_log_prob(self):
-        log_px_torch = (
-            dist.Delta(self.vs_expanded).log_prob(self.batch_test_data_1).data
-        )
+        log_px_torch = dist.Delta(self.vs_expanded).log_prob(self.batch_test_data_1).data
         assert_equal(log_px_torch.sum().item(), 0)
-        log_px_torch = (
-            dist.Delta(self.vs_expanded).log_prob(self.batch_test_data_2).data
-        )
+        log_px_torch = dist.Delta(self.vs_expanded).log_prob(self.batch_test_data_2).data
         assert_equal(log_px_torch.sum().item(), float("-inf"))
 
     def test_batch_log_prob_shape(self):
@@ -45,19 +41,14 @@ class TestDelta(TestCase):
         assert dist.Delta(self.v).log_prob(self.batch_test_data_3).size() == (4, 1)
 
     def test_mean_and_var(self):
-        torch_samples = [
-            dist.Delta(self.v).sample().detach().cpu().numpy()
-            for _ in range(self.n_samples)
-        ]
+        torch_samples = [dist.Delta(self.v).sample().detach().cpu().numpy() for _ in range(self.n_samples)]
         torch_mean = np.mean(torch_samples)
         torch_var = np.var(torch_samples)
         assert_equal(torch_mean, self.analytic_mean)
         assert_equal(torch_var, self.analytic_var)
 
 
-@pytest.mark.parametrize(
-    "batch_dim,event_dim", [(b, e) for b in range(4) for e in range(1 + b)]
-)
+@pytest.mark.parametrize("batch_dim,event_dim", [(b, e) for b in range(4) for e in range(1 + b)])
 @pytest.mark.parametrize("has_log_density", [False, True])
 def test_shapes(batch_dim, event_dim, has_log_density):
     shape = tuple(range(2, 2 + batch_dim + event_dim))

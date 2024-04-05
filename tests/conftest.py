@@ -15,15 +15,9 @@ torch.set_default_device(os.environ.get("PYRO_DEVICE", "cpu"))
 
 
 def pytest_configure(config):
-    config.addinivalue_line(
-        "markers", "init(rng_seed): initialize the RNG using the seed provided."
-    )
-    config.addinivalue_line(
-        "markers", "stage(NAME): mark test to run when testing stage matches NAME."
-    )
-    config.addinivalue_line(
-        "markers", "disable_validation: disable all validation on this test."
-    )
+    config.addinivalue_line("markers", "init(rng_seed): initialize the RNG using the seed provided.")
+    config.addinivalue_line("markers", "stage(NAME): mark test to run when testing stage matches NAME.")
+    config.addinivalue_line("markers", "disable_validation: disable all validation on this test.")
 
 
 def pytest_runtest_setup(item):
@@ -100,11 +94,7 @@ def pytest_collection_modifyitems(config, items):
         stage_marker = item.get_closest_marker("stage")
         if not stage_marker:
             selected_items.append(item)
-            warnings.warn(
-                "No stage associated with the test {}. Will run on each stage invocation.".format(
-                    item.name
-                )
-            )
+            warnings.warn("No stage associated with the test {}. Will run on each stage invocation.".format(item.name))
             continue
         item_stage_markers = _get_highest_specificity_marker(stage_marker)
         if test_stages.isdisjoint(item_stage_markers):

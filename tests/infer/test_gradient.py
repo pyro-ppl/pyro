@@ -94,9 +94,7 @@ def test_particle_gradient(Elbo, reparameterized, has_rsample):
     if reparameterized and has_rsample is not False:
         # pathwise gradient estimator
         expected_grads = {
-            "scale": (
-                -(-z * (z - loc) + (x - z) * (z - loc) + 1).sum(0, keepdim=True) / scale
-            ),
+            "scale": (-(-z * (z - loc) + (x - z) * (z - loc) + 1).sum(0, keepdim=True) / scale),
             "loc": -(-z + (x - z)),
         }
     else:
@@ -145,9 +143,7 @@ def test_particle_gradient(Elbo, reparameterized, has_rsample):
         (TraceEnum_ELBO, True),
     ],
 )
-def test_subsample_gradient(
-    Elbo, reparameterized, has_rsample, subsample, local_samples, scale
-):
+def test_subsample_gradient(Elbo, reparameterized, has_rsample, subsample, local_samples, scale):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
     subsample_size = 1 if subsample else len(data)
@@ -188,22 +184,13 @@ def test_subsample_gradient(
     inference = SVI(model, guide, optim, loss=elbo)
     with xfail_if_not_implemented():
         if subsample_size == 1:
-            inference.loss_and_grads(
-                model, guide, subsample=torch.tensor([0], dtype=torch.long)
-            )
-            inference.loss_and_grads(
-                model, guide, subsample=torch.tensor([1], dtype=torch.long)
-            )
+            inference.loss_and_grads(model, guide, subsample=torch.tensor([0], dtype=torch.long))
+            inference.loss_and_grads(model, guide, subsample=torch.tensor([1], dtype=torch.long))
         else:
-            inference.loss_and_grads(
-                model, guide, subsample=torch.tensor([0, 1], dtype=torch.long)
-            )
+            inference.loss_and_grads(model, guide, subsample=torch.tensor([0, 1], dtype=torch.long))
     params = dict(pyro.get_param_store().named_parameters())
     normalizer = 2 if subsample else 1
-    actual_grads = {
-        name: param.grad.detach().cpu().numpy() / normalizer
-        for name, param in params.items()
-    }
+    actual_grads = {name: param.grad.detach().cpu().numpy() / normalizer for name, param in params.items()}
 
     expected_grads = {
         "loc": scale * np.array([0.5, -2.0]),
@@ -215,12 +202,8 @@ def test_subsample_gradient(
     assert_equal(actual_grads, expected_grads, prec=precision)
 
 
-@pytest.mark.parametrize(
-    "reparameterized", [True, False], ids=["reparam", "nonreparam"]
-)
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, DiffTrace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO]
-)
+@pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, DiffTrace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_plate(Elbo, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
@@ -256,10 +239,7 @@ def test_plate(Elbo, reparameterized):
     inference = SVI(model, guide, optim, loss=elbo)
     inference.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())
-    actual_grads = {
-        name: param.grad.detach().cpu().numpy() / num_particles
-        for name, param in params.items()
-    }
+    actual_grads = {name: param.grad.detach().cpu().numpy() / num_particles for name, param in params.items()}
 
     expected_grads = {"loc": np.array([0.5, -2.0]), "scale": np.array([2.0])}
     for name in sorted(params):
@@ -268,12 +248,8 @@ def test_plate(Elbo, reparameterized):
     assert_equal(actual_grads, expected_grads, prec=precision)
 
 
-@pytest.mark.parametrize(
-    "reparameterized", [True, False], ids=["reparam", "nonreparam"]
-)
-@pytest.mark.parametrize(
-    "Elbo", [Trace_ELBO, DiffTrace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO]
-)
+@pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
+@pytest.mark.parametrize("Elbo", [Trace_ELBO, DiffTrace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_plate_elbo_vectorized_particles(Elbo, reparameterized):
     pyro.clear_param_store()
     data = torch.tensor([-0.5, 2.0])
@@ -311,9 +287,7 @@ def test_plate_elbo_vectorized_particles(Elbo, reparameterized):
     inference = SVI(model, guide, optim, loss=loss)
     inference.loss_and_grads(model, guide)
     params = dict(pyro.get_param_store().named_parameters())
-    actual_grads = {
-        name: param.grad.detach().cpu().numpy() for name, param in params.items()
-    }
+    actual_grads = {name: param.grad.detach().cpu().numpy() for name, param in params.items()}
 
     expected_grads = {"loc": np.array([0.5, -2.0]), "scale": np.array([2.0])}
     for name in sorted(params):
@@ -322,9 +296,7 @@ def test_plate_elbo_vectorized_particles(Elbo, reparameterized):
     assert_equal(actual_grads, expected_grads, prec=precision)
 
 
-@pytest.mark.parametrize(
-    "reparameterized", [True, False], ids=["reparam", "nonreparam"]
-)
+@pytest.mark.parametrize("reparameterized", [True, False], ids=["reparam", "nonreparam"])
 @pytest.mark.parametrize("subsample", [False, True], ids=["full", "subsample"])
 @pytest.mark.parametrize(
     "Elbo",
@@ -380,10 +352,7 @@ def test_subsample_gradient_sequential(Elbo, reparameterized, subsample):
             inference.loss_and_grads(model, guide)
 
     params = dict(pyro.get_param_store().named_parameters())
-    actual_grads = {
-        name: param.grad.detach().cpu().numpy() / iters
-        for name, param in params.items()
-    }
+    actual_grads = {name: param.grad.detach().cpu().numpy() / iters for name, param in params.items()}
 
     expected_grads = {"loc": np.array([0.5, -2.0]), "scale": np.array([2.0])}
     for name in sorted(params):

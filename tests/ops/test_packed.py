@@ -11,11 +11,7 @@ from torch.distributions.utils import broadcast_all
 from pyro.ops import packed
 from tests.common import assert_equal
 
-EXAMPLE_DIMS = [
-    "".join(dims)
-    for num_dims in range(5)
-    for dims in itertools.permutations("abcd"[:num_dims])
-]
+EXAMPLE_DIMS = ["".join(dims) for num_dims in range(5) for dims in itertools.permutations("abcd"[:num_dims])]
 
 
 @pytest.mark.parametrize("dims", EXAMPLE_DIMS)

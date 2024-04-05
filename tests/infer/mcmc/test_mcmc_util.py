@@ -43,9 +43,7 @@ def beta_bernoulli():
 @pytest.mark.parametrize("parallel", [False, True])
 def test_predictive(num_samples, parallel):
     model, data, true_probs = beta_bernoulli()
-    init_params, potential_fn, transforms, _ = initialize_model(
-        model, model_args=(data,)
-    )
+    init_params, potential_fn, transforms, _ = initialize_model(model, model_args=(data,))
     nuts_kernel = NUTS(potential_fn=potential_fn, transforms=transforms)
     mcmc = MCMC(nuts_kernel, 100, initial_params=init_params, warmup_steps=100)
     mcmc.run(data)
@@ -65,9 +63,7 @@ def test_predictive(num_samples, parallel):
     assert predictive_samples["obs"].shape == (100, 1000, 5)
 
     # check sample mean
-    assert_close(
-        predictive_samples["obs"].reshape([-1, 5]).mean(0), true_probs, rtol=0.1
-    )
+    assert_close(predictive_samples["obs"].reshape([-1, 5]).mean(0), true_probs, rtol=0.1)
 
 
 def model_with_param():

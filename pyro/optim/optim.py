@@ -140,14 +140,10 @@ class PyroOptim:
 
             if (
                 hasattr(torch.optim.lr_scheduler, "_LRScheduler")
-                and isinstance(
-                    self.optim_objs[p], torch.optim.lr_scheduler._LRScheduler
-                )
+                and isinstance(self.optim_objs[p], torch.optim.lr_scheduler._LRScheduler)
                 or hasattr(torch.optim.lr_scheduler, "LRScheduler")
                 and isinstance(self.optim_objs[p], torch.optim.lr_scheduler.LRScheduler)
-                or isinstance(
-                    self.optim_objs[p], torch.optim.lr_scheduler.ReduceLROnPlateau
-                )
+                or isinstance(self.optim_objs[p], torch.optim.lr_scheduler.ReduceLROnPlateau)
             ):
                 # if optim object was a scheduler, perform an optimizer step
                 self.optim_objs[p].optimizer.step(*args, **kwargs)
@@ -215,9 +211,7 @@ class PyroOptim:
                 opt_dict = self.pt_optim_args(module_name, stripped_param_name)
 
             # must be dictionary
-            assert isinstance(
-                opt_dict, dict
-            ), "per-param optim arg must return defaults dictionary"
+            assert isinstance(opt_dict, dict), "per-param optim arg must return defaults dictionary"
             return opt_dict
         else:
             return self.pt_optim_args
@@ -246,9 +240,7 @@ class PyroOptim:
             clip_dict = self.pt_clip_args(module_name, stripped_param_name)
 
             # must be dictionary
-            assert isinstance(
-                clip_dict, dict
-            ), "per-param clip arg must return defaults dictionary"
+            assert isinstance(clip_dict, dict), "per-param clip arg must return defaults dictionary"
             return clip_dict
         else:
             return self.pt_clip_args

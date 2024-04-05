@@ -48,10 +48,7 @@ def test_normal(batch_shape, event_shape, splits, dim):
     expected_grads = grad(expected_log_prob, [loc, scale], create_graph=True)
 
     # Run with reparam.
-    split_values = {
-        "x_split_{}".format(i): xi
-        for i, xi in enumerate(expected_value.split(splits, dim))
-    }
+    split_values = {"x_split_{}".format(i): xi for i, xi in enumerate(expected_value.split(splits, dim))}
     rep = SplitReparam(splits, dim)
     reparam_model = poutine.reparam(model, {"x": rep})
     reparam_model = poutine.condition(reparam_model, split_values)

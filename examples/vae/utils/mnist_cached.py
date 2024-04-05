@@ -182,9 +182,7 @@ class MNISTCached(MNIST):
                 self.data = MNISTCached.train_data_unsup
 
                 # making sure that the unsupervised labels are not available to inference
-                self.targets = (
-                    torch.Tensor(MNISTCached.train_labels_unsup.shape[0]).view(-1, 1)
-                ) * np.nan
+                self.targets = (torch.Tensor(MNISTCached.train_labels_unsup.shape[0]).view(-1, 1)) * np.nan
             else:
                 self.data, self.targets = (
                     MNISTCached.data_valid,
@@ -212,9 +210,7 @@ class MNISTCached(MNIST):
         return img, target
 
 
-def setup_data_loaders(
-    dataset, use_cuda, batch_size, sup_num=None, root=None, download=True, **kwargs
-):
+def setup_data_loaders(dataset, use_cuda, batch_size, sup_num=None, root=None, download=True, **kwargs):
     """
         helper function for setting up pytorch data loaders for a semi-supervised dataset
     :param dataset: the data to use
@@ -238,12 +234,8 @@ def setup_data_loaders(
         if sup_num is None and mode == "sup":
             # in this special case, we do not want "sup" and "valid" data loaders
             return loaders["unsup"], loaders["test"]
-        cached_data[mode] = dataset(
-            root=root, mode=mode, download=download, sup_num=sup_num, use_cuda=use_cuda
-        )
-        loaders[mode] = DataLoader(
-            cached_data[mode], batch_size=batch_size, shuffle=True, **kwargs
-        )
+        cached_data[mode] = dataset(root=root, mode=mode, download=download, sup_num=sup_num, use_cuda=use_cuda)
+        loaders[mode] = DataLoader(cached_data[mode], batch_size=batch_size, shuffle=True, **kwargs)
 
     return loaders
 

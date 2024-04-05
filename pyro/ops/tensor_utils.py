@@ -126,9 +126,7 @@ def periodic_cumsum(tensor, period, dim):
         tensor = torch.nn.functional.pad(tensor, (0, 0) * (-1 - dim) + (0, padding))
 
     # Accumulate.
-    shape = (
-        tensor.shape[:dim] + (repeats, period) + tensor.shape[tensor.dim() + dim + 1 :]
-    )
+    shape = tensor.shape[:dim] + (repeats, period) + tensor.shape[tensor.dim() + dim + 1 :]
     result = tensor.reshape(shape).cumsum(dim=dim - 1).reshape(tensor.shape)
 
     # Truncate to original size.
@@ -172,9 +170,7 @@ def periodic_features(duration, max_period=None, min_period=None, **options):
 
     t = torch.arange(float(duration), **options).unsqueeze(-1).unsqueeze(-1)
     phase = torch.tensor([0, math.pi / 2], **options).unsqueeze(-1)
-    freq = torch.arange(1, max_period / min_period, **options).mul_(
-        2 * math.pi / max_period
-    )
+    freq = torch.arange(1, max_period / min_period, **options).mul_(2 * math.pi / max_period)
     result = (freq * t + phase).cos_().reshape(duration, -1).contiguous()
     return result
 
@@ -260,9 +256,7 @@ def repeated_matmul(M, n):
     :param int n: The order of the largest product :math:`M^n`
     :returns torch.Tensor: A batch of square tensors of shape (n, ..., N, N)
     """
-    assert M.size(-1) == M.size(
-        -2
-    ), "Input tensors must satisfy M.size(-1) == M.size(-2)."
+    assert M.size(-1) == M.size(-2), "Input tensors must satisfy M.size(-1) == M.size(-2)."
     assert n > 0, "argument n to repeated_matmul must be 1 or larger"
 
     doubling_rounds = 0 if n <= 2 else math.ceil(math.log(n, 2)) - 1
@@ -303,9 +297,7 @@ def dct(x, dim=-1):
     # Step 2
     Y = rfft(y, n=N)
     # Step 3
-    coef_real = torch.cos(
-        torch.linspace(0, 0.5 * math.pi, N + 1, dtype=x.dtype, device=x.device)
-    )
+    coef_real = torch.cos(torch.linspace(0, 0.5 * math.pi, N + 1, dtype=x.dtype, device=x.device))
     M = Y.size(-1)
     coef = torch.stack([coef_real[:M], -coef_real[-M:].flip(-1)], dim=-1)
     X = as_complex(coef) * Y
@@ -314,9 +306,7 @@ def dct(x, dim=-1):
     # of the negative of the imaginary part of the first half
     X = torch.cat([X.real, -X.imag[..., 1 : (N - M + 1)].flip(-1)], dim=-1)
     # orthogonalize
-    scale = torch.cat(
-        [x.new_tensor([math.sqrt(N)]), x.new_full((N - 1,), math.sqrt(0.5 * N))]
-    )
+    scale = torch.cat([x.new_tensor([math.sqrt(N)]), x.new_full((N - 1,), math.sqrt(0.5 * N))])
     return X / scale
 
 
@@ -338,9 +328,7 @@ def idct(x, dim=-1):
         return idct(y).transpose(-1, -2).reshape(x.shape)
 
     N = x.size(-1)
-    scale = torch.cat(
-        [x.new_tensor([math.sqrt(N)]), x.new_full((N - 1,), math.sqrt(0.5 * N))]
-    )
+    scale = torch.cat([x.new_tensor([math.sqrt(N)]), x.new_full((N - 1,), math.sqrt(0.5 * N))])
     x = x * scale
     # Step 1, solve X = cos(k) * Yr + sin(k) * Yi
     # We know that Y[1:] is conjugate to Y[:0:-1], hence
@@ -352,9 +340,7 @@ def idct(x, dim=-1):
     M = N // 2 + 1  # half size
     xi = torch.nn.functional.pad(-x[..., N - M + 1 :], (0, 1)).flip(-1)
     X = torch.stack([x[..., :M], xi], dim=-1)
-    coef_real = torch.cos(
-        torch.linspace(0, 0.5 * math.pi, N + 1, dtype=x.dtype, device=x.device)
-    )
+    coef_real = torch.cos(torch.linspace(0, 0.5 * math.pi, N + 1, dtype=x.dtype, device=x.device))
     coef = torch.stack([coef_real[:M], coef_real[-M:].flip(-1)], dim=-1)
     Y = as_complex(coef) * as_complex(X)
     # Step 2
@@ -448,9 +434,7 @@ def triangular_solve(x, y, upper=False, transpose=False):
 def precision_to_scale_tril(P):
     Lf = torch.linalg.cholesky(torch.flip(P, (-2, -1)))
     L_inv = torch.transpose(torch.flip(Lf, (-2, -1)), -2, -1)
-    L = torch.linalg.solve_triangular(
-        L_inv, torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), upper=False
-    )
+    L = torch.linalg.solve_triangular(L_inv, torch.eye(P.shape[-1], dtype=P.dtype, device=P.device), upper=False)
     return L
 
 

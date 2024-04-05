@@ -50,16 +50,12 @@ def copy_docs_from(source_class, full_text=False):
                 if full_text or source_doc.startswith("See "):
                     destin_doc = source_doc
                 else:
-                    destin_doc = "See :meth:`{}.{}.{}`".format(
-                        source_class.__module__, source_class.__name__, name
-                    )
+                    destin_doc = "See :meth:`{}.{}.{}`".format(source_class.__module__, source_class.__name__, name)
                 if isinstance(destin_attr, property):
                     # Set docs for object properties.
                     # Since __doc__ is read-only, we need to reset the property
                     # with the updated doc.
-                    updated_property = property(
-                        destin_attr.fget, destin_attr.fset, destin_attr.fdel, destin_doc
-                    )
+                    updated_property = property(destin_attr.fget, destin_attr.fset, destin_attr.fdel, destin_doc)
                     setattr(destin_class, name, updated_property)
                 else:
                     destin_attr.__doc__ = destin_doc
@@ -88,9 +84,7 @@ def weakmethod(fn):
     def weak_fn(weakself, *args, **kwargs):
         self = weakself()
         if self is None:
-            raise AttributeError(
-                "self was garbage collected when calling self.{}".format(fn.__name__)
-            )
+            raise AttributeError("self was garbage collected when calling self.{}".format(fn.__name__))
         return fn(self, *args, **kwargs)
 
     @property

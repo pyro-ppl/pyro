@@ -33,9 +33,7 @@ def test_gumbel_softmax(temperature, shape, dim):
     def model():
         with pyro.plate_stack("plates", shape):
             with pyro.plate("particles", 10000):
-                pyro.sample(
-                    "x", dist.RelaxedOneHotCategorical(temperature, logits=logits)
-                )
+                pyro.sample("x", dist.RelaxedOneHotCategorical(temperature, logits=logits))
 
     value = poutine.trace(model).get_trace().nodes["x"]["value"]
     expected_probe = get_moments(value)
@@ -60,8 +58,6 @@ def test_init(temperature, shape, dim):
 
     def model():
         with pyro.plate_stack("plates", shape):
-            return pyro.sample(
-                "x", dist.RelaxedOneHotCategorical(temperature, logits=logits)
-            )
+            return pyro.sample("x", dist.RelaxedOneHotCategorical(temperature, logits=logits))
 
     check_init_reparam(model, GumbelSoftmaxReparam())

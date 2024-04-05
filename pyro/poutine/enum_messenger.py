@@ -29,9 +29,7 @@ def _tmc_mixture_sample(msg: Message) -> torch.Tensor:
 
     # sample a batch
     sample_shape = (num_samples,)
-    fat_sample = dist(
-        sample_shape=torch.Size(sample_shape)
-    )  # TODO thin before sampling
+    fat_sample = dist(sample_shape=torch.Size(sample_shape))  # TODO thin before sampling
     assert fat_sample.shape == sample_shape + dist.batch_shape + dist.event_shape
     assert any(d > 1 for d in fat_sample.shape)
 
@@ -42,16 +40,10 @@ def _tmc_mixture_sample(msg: Message) -> torch.Tensor:
     if thin_sample.shape != target_shape:
         index = [Ellipsis] + [slice(None)] * (len(thin_sample.shape) - 1)
         squashed_dims = []
-        for squashed_dim, squashed_size in zip(
-            range(1, len(thin_sample.shape)), thin_sample.shape[1:]
-        ):
-            if squashed_size > 1 and (
-                target_shape[squashed_dim] == 1 or squashed_dim == 0
-            ):
+        for squashed_dim, squashed_size in zip(range(1, len(thin_sample.shape)), thin_sample.shape[1:]):
+            if squashed_size > 1 and (target_shape[squashed_dim] == 1 or squashed_dim == 0):
                 # uniformly sample one ancestor per upstream particle population
-                ancestor_dist = Categorical(
-                    logits=torch.zeros((squashed_size,), device=thin_sample.device)
-                )
+                ancestor_dist = Categorical(logits=torch.zeros((squashed_size,), device=thin_sample.device))
                 ancestor_index = ancestor_dist.sample(sample_shape=(num_samples,))
                 index[squashed_dim] = ancestor_index
                 squashed_dims.append(squashed_dim)
@@ -79,9 +71,7 @@ def _tmc_diagonal_sample(msg: Message) -> torch.Tensor:
 
     # sample a batch
     sample_shape = (num_samples,)
-    fat_sample = dist(
-        sample_shape=torch.Size(sample_shape)
-    )  # TODO thin before sampling
+    fat_sample = dist(sample_shape=torch.Size(sample_shape))  # TODO thin before sampling
     assert fat_sample.shape == sample_shape + dist.batch_shape + dist.event_shape
     assert any(d > 1 for d in fat_sample.shape)
 
@@ -92,12 +82,8 @@ def _tmc_diagonal_sample(msg: Message) -> torch.Tensor:
     if thin_sample.shape != target_shape:
         index: List[Any] = [Ellipsis] + [slice(None)] * (len(thin_sample.shape) - 1)
         squashed_dims = []
-        for squashed_dim, squashed_size in zip(
-            range(1, len(thin_sample.shape)), thin_sample.shape[1:]
-        ):
-            if squashed_size > 1 and (
-                target_shape[squashed_dim] == 1 or squashed_dim == 0
-            ):
+        for squashed_dim, squashed_size in zip(range(1, len(thin_sample.shape)), thin_sample.shape[1:]):
+            if squashed_size > 1 and (target_shape[squashed_dim] == 1 or squashed_dim == 0):
                 # diagonal approximation: identify particle indices across populations
                 ancestor_index = torch.arange(squashed_size, device=thin_sample.device)
                 index[squashed_dim] = ancestor_index
@@ -145,24 +131,16 @@ class EnumMessenger(Messenger):
     """
 
     def __init__(self, first_available_dim: Optional[int] = None) -> None:
-        assert (
-            first_available_dim is None or first_available_dim < 0
-        ), first_available_dim
+        assert first_available_dim is None or first_available_dim < 0, first_available_dim
         self.first_available_dim = first_available_dim
         super().__init__()
 
     def __enter__(self) -> Self:
         if self.first_available_dim is not None:
             _ENUM_ALLOCATOR.set_first_available_dim(self.first_available_dim)
-        self._markov_depths: Dict[str, int] = (
-            {}
-        )  # site name -> depth (nonnegative integer)
-        self._param_dims: Dict[str, Dict[int, int]] = (
-            {}
-        )  # site name -> (enum dim -> unique id)
-        self._value_dims: Dict[str, Dict[int, int]] = (
-            {}
-        )  # site name -> (enum dim -> unique id)
+        self._markov_depths: Dict[str, int] = {}  # site name -> depth (nonnegative integer)
+        self._param_dims: Dict[str, Dict[int, int]] = {}  # site name -> (enum dim -> unique id)
+        self._value_dims: Dict[str, Dict[int, int]] = {}  # site name -> (enum dim -> unique id)
         return super().__enter__()
 
     @ignore_jit_warnings()
@@ -181,9 +159,7 @@ class EnumMessenger(Messenger):
         param_dims = _ENUM_ALLOCATOR.dim_to_id.copy()  # enum dim -> unique id
         if scope is not None:
             for name, depth in scope.items():
-                if (
-                    self._markov_depths[name] == depth
-                ):  # hide sites whose markov context has exited
+                if self._markov_depths[name] == depth:  # hide sites whose markov context has exited
                     param_dims.update(self._value_dims[name])
             self._markov_depths[msg["name"]] = msg["infer"]["_markov_depth"]
         self._param_dims[msg["name"]] = param_dims
@@ -195,9 +171,7 @@ class EnumMessenger(Messenger):
         actual_dim = -1 - len(msg["fn"].batch_shape)  # the leftmost dim of log_prob
 
         # Move actual_dim to a safe target_dim.
-        target_dim, id_ = _ENUM_ALLOCATOR.allocate(
-            None if scope is None else set(param_dims)
-        )
+        target_dim, id_ = _ENUM_ALLOCATOR.allocate(None if scope is None else set(param_dims))
         event_dim = msg["fn"].event_dim
         categorical_support = getattr(value, "_pyro_categorical_support", None)
         if categorical_support is not None:
@@ -207,9 +181,7 @@ class EnumMessenger(Messenger):
             value = value.reshape(value.shape[:1] + (1,) * (-1 - target_dim))
             value._pyro_categorical_support = categorical_support  # type: ignore[attr-defined]
         elif actual_dim < target_dim:
-            assert (
-                value.size(target_dim - event_dim) == 1
-            ), "pyro.markov dim conflict at dim {}".format(actual_dim)
+            assert value.size(target_dim - event_dim) == 1, "pyro.markov dim conflict at dim {}".format(actual_dim)
             value = value.transpose(target_dim - event_dim, actual_dim - event_dim)
             while value.dim() and value.size(0) == 1:
                 value = value.squeeze(0)
@@ -248,7 +220,5 @@ class EnumMessenger(Messenger):
         dim_to_id.update(self._param_dims.get(msg["name"], {}))
         with ignore_jit_warnings():
             self._value_dims[msg["name"]] = {
-                dim: id_
-                for dim, id_ in dim_to_id.items()
-                if len(shape) >= -dim and shape[dim] > 1
+                dim: id_ for dim, id_ in dim_to_id.items() if len(shape) >= -dim and shape[dim] > 1
             }

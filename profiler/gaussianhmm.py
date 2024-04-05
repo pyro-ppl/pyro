@@ -30,9 +30,7 @@ def main(args):
 
     # Initialize parts.
     init_dist = random_mvn(batch_shape, hidden_dim, requires_grad=args.grad)
-    trans_dist = random_mvn(
-        batch_shape + (duration,), hidden_dim, requires_grad=args.grad
-    )
+    trans_dist = random_mvn(batch_shape + (duration,), hidden_dim, requires_grad=args.grad)
     obs_dist = random_mvn(batch_shape + (1,), obs_dim, requires_grad=args.grad)
     trans_mat = 0.1 * torch.randn(batch_shape + (duration, hidden_dim, hidden_dim))
     obs_mat = torch.randn(batch_shape + (1, hidden_dim, obs_dim))
@@ -51,9 +49,7 @@ def main(args):
         ]
 
     # Build a distribution.
-    d = dist.GaussianHMM(
-        init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration
-    )
+    d = dist.GaussianHMM(init_dist, trans_mat, trans_dist, obs_mat, obs_dist, duration=duration)
 
     for step in tqdm(range(args.num_steps)):
         if not args.grad:
@@ -63,9 +59,7 @@ def main(args):
 
         # Time forward + backward.
         x = d.rsample()
-        grads = torch.autograd.grad(
-            x.sum(), params, allow_unused=True, retain_graph=True
-        )
+        grads = torch.autograd.grad(x.sum(), params, allow_unused=True, retain_graph=True)
         assert not all(g is None for g in grads)
         del x
 

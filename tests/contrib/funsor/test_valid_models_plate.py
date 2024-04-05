@@ -73,21 +73,13 @@ def test_plate_dim_allocation_ok(plate_dims):
 @pytest.mark.parametrize("subsampling", [False, True])
 @pytest.mark.parametrize("reuse_plate", [False, True])
 def test_enum_recycling_plate(subsampling, reuse_plate, tmc_strategy):
-    @infer.config_enumerate(
-        default="parallel", tmc=tmc_strategy, num_samples=2 if tmc_strategy else None
-    )
+    @infer.config_enumerate(default="parallel", tmc=tmc_strategy, num_samples=2 if tmc_strategy else None)
     def model():
         p = pyro.param("p", torch.ones(3, 3))
         q = pyro.param("q", torch.tensor([0.5, 0.5]))
-        plate_x = pyro.plate(
-            "plate_x", 4, subsample_size=3 if subsampling else None, dim=-1
-        )
-        plate_y = pyro.plate(
-            "plate_y", 5, subsample_size=3 if subsampling else None, dim=-1
-        )
-        plate_z = pyro.plate(
-            "plate_z", 6, subsample_size=3 if subsampling else None, dim=-2
-        )
+        plate_x = pyro.plate("plate_x", 4, subsample_size=3 if subsampling else None, dim=-1)
+        plate_y = pyro.plate("plate_y", 5, subsample_size=3 if subsampling else None, dim=-1)
+        plate_z = pyro.plate("plate_z", 6, subsample_size=3 if subsampling else None, dim=-2)
 
         a = pyro.sample("a", dist.Bernoulli(q[0])).long()
         w = 0
@@ -152,12 +144,8 @@ def test_enum_discrete_plates_dependency_ok(enumerate_, reuse_plate):
 def test_enum_discrete_plate_shape_broadcasting_ok(subsampling, enumerate_):
     @infer.config_enumerate(default=enumerate_)
     def model():
-        x_plate = pyro.plate(
-            "x_plate", 5, subsample_size=2 if subsampling else None, dim=-1
-        )
-        y_plate = pyro.plate(
-            "y_plate", 6, subsample_size=3 if subsampling else None, dim=-2
-        )
+        x_plate = pyro.plate("x_plate", 5, subsample_size=2 if subsampling else None, dim=-1)
+        y_plate = pyro.plate("y_plate", 6, subsample_size=3 if subsampling else None, dim=-2)
         with pyro.plate("num_particles", 50, dim=-3):
             with x_plate:
                 b = pyro.sample("b", dist.Beta(torch.tensor(1.1), torch.tensor(1.1)))

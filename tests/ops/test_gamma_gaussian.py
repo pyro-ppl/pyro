@@ -137,9 +137,7 @@ def test_add(shape, dim):
     y = random_gamma_gaussian(shape, dim)
     value = torch.randn(dim)
     s = torch.randn(()).exp()
-    assert_close(
-        (x + y).log_density(value, s), x.log_density(value, s) + y.log_density(value, s)
-    )
+    assert_close((x + y).log_density(value, s), x.log_density(value, s) + y.log_density(value, s))
 
 
 @pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)], ids=str)
@@ -215,13 +213,8 @@ def test_logsumexp(batch_shape, dim):
 
     num_samples = 200000
     scale = 10
-    samples = (
-        torch.rand((num_samples,) + (1,) * len(batch_shape) + (dim,)) * scale
-        - scale / 2
-    )
-    expected = g.log_density(samples, s).logsumexp(0) + math.log(
-        scale**dim / num_samples
-    )
+    samples = torch.rand((num_samples,) + (1,) * len(batch_shape) + (dim,)) * scale - scale / 2
+    expected = g.log_density(samples, s).logsumexp(0) + math.log(scale**dim / num_samples)
     actual = g.event_logsumexp().log_density(s)
     assert_close(actual, expected, atol=0.05, rtol=0.05)
 
@@ -239,9 +232,7 @@ def test_gamma_and_mvn_to_gamma_gaussian(sample_shape, batch_shape, dim):
 
     s_log_prob = gamma.log_prob(s)
     scaled_prec = mvn.precision_matrix * s.unsqueeze(-1).unsqueeze(-1)
-    mvn_log_prob = dist.MultivariateNormal(
-        mvn.loc, precision_matrix=scaled_prec
-    ).log_prob(value)
+    mvn_log_prob = dist.MultivariateNormal(mvn.loc, precision_matrix=scaled_prec).log_prob(value)
     expected_log_prob = s_log_prob + mvn_log_prob
     assert_close(actual_log_prob, expected_log_prob)
 
@@ -262,9 +253,7 @@ def test_matrix_and_mvn_to_gamma_gaussian(sample_shape, batch_shape, x_dim, y_di
     y_pred = x.unsqueeze(-2).matmul(matrix).squeeze(-2)
     loc = y_pred + y_mvn.loc
     scaled_prec = y_mvn.precision_matrix * s.unsqueeze(-1).unsqueeze(-1)
-    expected_log_prob = dist.MultivariateNormal(
-        loc, precision_matrix=scaled_prec
-    ).log_prob(y)
+    expected_log_prob = dist.MultivariateNormal(loc, precision_matrix=scaled_prec).log_prob(y)
     assert_close(actual_log_prob, expected_log_prob)
 
 
@@ -300,9 +289,7 @@ def test_matrix_and_mvn_to_gamma_gaussian(sample_shape, batch_shape, x_dim, y_di
     ids=str,
 )
 @pytest.mark.parametrize("x_rank,y_rank", [(1, 1), (4, 1), (1, 4), (4, 4)], ids=str)
-def test_gamma_gaussian_tensordot(
-    dot_dims, x_batch_shape, x_dim, x_rank, y_batch_shape, y_dim, y_rank
-):
+def test_gamma_gaussian_tensordot(dot_dims, x_batch_shape, x_dim, x_rank, y_batch_shape, y_dim, y_rank):
     x_rank = min(x_rank, x_dim)
     y_rank = min(y_rank, y_dim)
     x = random_gamma_gaussian(x_batch_shape, x_dim, x_rank)
@@ -326,15 +313,9 @@ def test_gamma_gaussian_tensordot(
     precision = pad(x.precision, (0, nc, 0, nc)) + pad(y.precision, (na, 0, na, 0))
     info_vec = pad(x.info_vec, (0, nc)) + pad(y.info_vec, (na, 0))
     covariance = torch.inverse(precision)
-    loc = (
-        covariance.matmul(info_vec.unsqueeze(-1)).squeeze(-1)
-        if info_vec.size(-1) > 0
-        else info_vec
-    )
+    loc = covariance.matmul(info_vec.unsqueeze(-1)).squeeze(-1) if info_vec.size(-1) > 0 else info_vec
     z_covariance = torch.inverse(z.precision)
-    z_loc = z_covariance.matmul(
-        z.info_vec.view(z.info_vec.shape + (int(z.dim() > 0),))
-    ).sum(-1)
+    z_loc = z_covariance.matmul(z.info_vec.view(z.info_vec.shape + (int(z.dim() > 0),))).sum(-1)
     assert_close(loc[..., :na], z_loc[..., :na])
     assert_close(loc[..., x_dim:], z_loc[..., na:])
     assert_close(covariance[..., :na, :na], z_covariance[..., :na, :na])
@@ -350,9 +331,7 @@ def test_gamma_gaussian_tensordot(
     value_b = torch.rand((num_samples,) + z.batch_shape + (nb,)) * scale - scale / 2
     value_x = pad(value_b, (na, 0))
     value_y = pad(value_b, (0, nc))
-    expect = torch.logsumexp(
-        x.log_density(value_x, s) + y.log_density(value_y, s), dim=0
-    )
+    expect = torch.logsumexp(x.log_density(value_x, s) + y.log_density(value_y, s), dim=0)
     expect += math.log(scale**nb / num_samples)
     actual = z.log_density(torch.zeros(z.batch_shape + (z.dim(),)), s)
     assert_close(actual.clamp(max=10.0), expect.clamp(max=10.0), atol=0.1, rtol=0.1)

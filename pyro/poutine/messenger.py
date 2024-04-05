@@ -87,9 +87,7 @@ class Messenger:
 
     def __call__(self, fn: Callable[_P, _T]) -> Callable[_P, _T]:
         if not callable(fn):
-            raise ValueError(
-                f"{fn!r} is not callable, did you mean to pass it as a keyword arg?"
-            )
+            raise ValueError(f"{fn!r} is not callable, did you mean to pass it as a keyword arg?")
         wraps = _bound_partial(partial(_context_wrap, self, fn))
         return wraps
 
@@ -261,9 +259,7 @@ class Messenger:
 
 
 @contextmanager
-def block_messengers(
-    predicate: Callable[[Messenger], bool]
-) -> Iterator[List[Messenger]]:
+def block_messengers(predicate: Callable[[Messenger], bool]) -> Iterator[List[Messenger]]:
     """
     EXPERIMENTAL Context manager to temporarily remove matching messengers from
     the _PYRO_STACK. Note this does not call the ``.__exit__()`` and

@@ -152,8 +152,7 @@ def backtest(
 
     if train_window is not None and forecaster_options_fn().get("warm_start"):
         raise ValueError(
-            "Cannot warm start with moving training window; "
-            "either set warm_start=False or train_window=None"
+            "Cannot warm start with moving training window; " "either set warm_start=False or train_window=None"
         )
 
     duration = data.size(-2)
@@ -172,11 +171,7 @@ def backtest(
         t0 = 0 if train_window is None else t1 - train_window
         t2 = duration if test_window is None else t1 + test_window
         assert 0 <= t0 < t1 < t2 <= duration
-        logger.info(
-            "Training on window [{t0}:{t1}], testing on window [{t1}:{t2}]".format(
-                t0=t0, t1=t1, t2=t2
-            )
-        )
+        logger.info("Training on window [{t0}:{t1}], testing on window [{t1}:{t2}]".format(t0=t0, t1=t1, t2=t2))
 
         # Train a forecaster on the training window.
         pyro.set_rng_seed(seed)
@@ -187,9 +182,7 @@ def backtest(
         train_covariates = covariates[..., t0:t1, :]
         start_time = default_timer()
         model = model_fn()
-        forecaster = forecaster_fn(
-            model, train_data, train_covariates, **forecaster_options
-        )
+        forecaster = forecaster_fn(model, train_data, train_covariates, **forecaster_options)
         train_walltime = default_timer() - start_time
 
         # Forecast forward to testing window.

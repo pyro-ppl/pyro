@@ -14,6 +14,7 @@ module.
 An accompanying example that makes use of this implementation can be
 found at examples/minipyro.py.
 """
+
 import random
 import warnings
 import weakref
@@ -76,9 +77,7 @@ class trace(Messenger):
     # trace illustrates why we need postprocess_message in addition to process_message:
     # We only want to record a value after all other effects have been applied
     def postprocess_message(self, msg):
-        assert (
-            msg["type"] != "sample" or msg["name"] not in self.trace
-        ), "sample sites must have unique names"
+        assert msg["type"] != "sample" or msg["name"] not in self.trace, "sample sites must have unique names"
         self.trace[msg["name"]] = msg.copy()
 
     def get_trace(self, *args, **kwargs):
@@ -224,16 +223,12 @@ def param(
             assert init_value is not None
             with torch.no_grad():
                 constrained_value = init_value.detach()
-                unconstrained_value = torch.distributions.transform_to(constraint).inv(
-                    constrained_value
-                )
+                unconstrained_value = torch.distributions.transform_to(constraint).inv(constrained_value)
             unconstrained_value.requires_grad_()
             PARAM_STORE[name] = unconstrained_value, constraint
 
         # Transform from unconstrained space to constrained space.
-        constrained_value = torch.distributions.transform_to(constraint)(
-            unconstrained_value
-        )
+        constrained_value = torch.distributions.transform_to(constraint)(unconstrained_value)
         constrained_value.unconstrained = weakref.ref(unconstrained_value)
         return constrained_value
 
@@ -376,9 +371,7 @@ class JitTrace_ELBO:
             self._param_trace = tr
 
         # Augment args with reads from the global param store.
-        unconstrained_params = tuple(
-            param(name).unconstrained() for name in self._param_trace
-        )
+        unconstrained_params = tuple(param(name).unconstrained() for name in self._param_trace)
         params_and_args = unconstrained_params + args
 
         # On first call, create a compiled elbo.
@@ -387,9 +380,7 @@ class JitTrace_ELBO:
             def compiled(*params_and_args):
                 unconstrained_params = params_and_args[: len(self._param_trace)]
                 args = params_and_args[len(self._param_trace) :]
-                for name, unconstrained_param in zip(
-                    self._param_trace, unconstrained_params
-                ):
+                for name, unconstrained_param in zip(self._param_trace, unconstrained_params):
                     constrained_param = param(name)  # assume param has been initialized
                     assert constrained_param.unconstrained() is unconstrained_param
                     self._param_trace[name]["value"] = constrained_param
@@ -398,8 +389,6 @@ class JitTrace_ELBO:
             with validation_enabled(False), warnings.catch_warnings():
                 if self.ignore_jit_warnings:
                     warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
-                self._compiled = torch.jit.trace(
-                    compiled, params_and_args, check_trace=False
-                )
+                self._compiled = torch.jit.trace(compiled, params_and_args, check_trace=False)
 
         return self._compiled(*params_and_args)

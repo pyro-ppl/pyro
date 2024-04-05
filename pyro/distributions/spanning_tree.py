@@ -67,11 +67,7 @@ class SpanningTree(TorchDistribution):
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
         if self._validate_args:
             if edge_logits.shape != (K,):
-                raise ValueError(
-                    "Expected edge_logits of shape ({},), but got shape {}".format(
-                        K, edge_logits.shape
-                    )
-                )
+                raise ValueError("Expected edge_logits of shape ({},), but got shape {}".format(K, edge_logits.shape))
         self.num_vertices = V
         self.sampler_options = {} if sampler_options is None else sampler_options
 
@@ -94,14 +90,9 @@ class SpanningTree(TorchDistribution):
             raise ValueError("Vertices are not sorted in each edge:\n{}".format(edges))
         if not (
             (edges[..., :-1, 1] < edges[..., 1:, 1])
-            | (
-                (edges[..., :-1, 1] == edges[..., 1:, 1])
-                & (edges[..., :-1, 0] < edges[..., 1:, 0])
-            )
+            | ((edges[..., :-1, 1] == edges[..., 1:, 1]) & (edges[..., :-1, 0] < edges[..., 1:, 0]))
         ).all():
-            raise ValueError(
-                "Edges are not sorted colexicographically:\n{}".format(edges)
-            )
+            raise ValueError("Edges are not sorted colexicographically:\n{}".format(edges))
 
         # Verify tree property, i.e. connectivity.
         V = self.num_vertices
@@ -232,12 +223,8 @@ def _get_cpp_module():
 
         from torch.utils.cpp_extension import load
 
-        path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "spanning_tree.cpp"
-        )
-        _cpp_module = load(
-            name="cpp_spanning_tree", sources=[path], extra_cflags=["-O2"], verbose=True
-        )
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spanning_tree.cpp")
+        _cpp_module = load(name="cpp_spanning_tree", sources=[path], extra_cflags=["-O2"], verbose=True)
     return _cpp_module
 
 
@@ -600,9 +587,7 @@ def _close_under_permutations(V, tree_generators):
     vertices = list(range(V))
     trees = []
     for tree in tree_generators:
-        trees.extend(
-            set(_permute_tree(perm, tree) for perm in itertools.permutations(vertices))
-        )
+        trees.extend(set(_permute_tree(perm, tree) for perm in itertools.permutations(vertices)))
     trees.sort()
     return trees
 

@@ -26,11 +26,7 @@ def _unsafe_standard_stable(alpha, beta, V, W, coords):
     b = beta * ha.tan()
     # +/- `ha` term to keep the precision of alpha * (V + half_pi) when V ~ -half_pi
     v = b.atan() - ha + alpha * (V + half_pi)
-    Z = (
-        v.sin()
-        / ((1 + b * b).rsqrt() * V.cos()).pow(inv_alpha)
-        * ((v - V).cos().clamp(min=eps) / W).pow(inv_alpha - 1)
-    )
+    Z = v.sin() / ((1 + b * b).rsqrt() * V.cos()).pow(inv_alpha) * ((v - V).cos().clamp(min=eps) / W).pow(inv_alpha - 1)
     Z.data[Z.data != Z.data] = 0  # drop occasional NANs
 
     # Optionally convert to Nolan's parametrization S^0 where samples depend
@@ -61,9 +57,7 @@ def _standard_stable(alpha, beta, aux_uniform, aux_exponential, coords):
         hole = 1.0
         near_hole = (alpha - hole).abs() <= RADIUS
     if not torch._C._get_tracing_state() and not near_hole.any():
-        return _unsafe_standard_stable(
-            alpha, beta, aux_uniform, aux_exponential, coords=coords
-        )
+        return _unsafe_standard_stable(alpha, beta, aux_uniform, aux_exponential, coords=coords)
     if coords == "S":
         # S coords are discontinuous, so interpolate instead in S0 coords.
         Z = _standard_stable(alpha, beta, aux_uniform, aux_exponential, "S0")
@@ -86,9 +80,7 @@ def _standard_stable(alpha, beta, aux_uniform, aux_exponential, coords):
         #              2 * RADIUS
         weights = (alpha_ - alpha.unsqueeze(-1)).abs_().mul_(-1 / (2 * RADIUS)).add_(1)
         weights[~near_hole] = 0.5
-    pairs = _unsafe_standard_stable(
-        alpha_, beta_, aux_uniform_, aux_exponential_, coords=coords
-    )
+    pairs = _unsafe_standard_stable(alpha_, beta_, aux_uniform_, aux_exponential_, coords=coords)
     return (pairs * weights).sum(-1)
 
 
@@ -154,13 +146,9 @@ class Stable(TorchDistribution):
     }
     support = constraints.real
 
-    def __init__(
-        self, stability, skew, scale=1.0, loc=0.0, coords="S0", validate_args=None
-    ):
+    def __init__(self, stability, skew, scale=1.0, loc=0.0, coords="S0", validate_args=None):
         assert coords in ("S", "S0"), coords
-        self.stability, self.skew, self.scale, self.loc = broadcast_all(
-            stability, skew, scale, loc
-        )
+        self.stability, self.skew, self.scale, self.loc = broadcast_all(stability, skew, scale, loc)
         self.coords = coords
         super().__init__(self.loc.shape, validate_args=validate_args)
 
@@ -186,18 +174,14 @@ class Stable(TorchDistribution):
             aux_exponential = new_empty(shape).exponential_()
 
         # Differentiably transform.
-        x = _standard_stable(
-            self.stability, self.skew, aux_uniform, aux_exponential, coords=self.coords
-        )
+        x = _standard_stable(self.stability, self.skew, aux_uniform, aux_exponential, coords=self.coords)
         return self.loc + self.scale * x
 
     @property
     def mean(self):
         result = self.loc
         if self.coords == "S0":
-            result = (
-                result - self.scale * self.skew * (math.pi / 2 * self.stability).tan()
-            )
+            result = result - self.scale * self.skew * (math.pi / 2 * self.stability).tan()
         return result.masked_fill(self.stability <= 1, math.nan)
 
     @property

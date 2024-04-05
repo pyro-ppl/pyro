@@ -35,9 +35,7 @@ class HashingMarginal(dist.Distribution):
     """
 
     def __init__(self, trace_dist, sites=None):
-        assert isinstance(
-            trace_dist, TracePosterior
-        ), "trace_dist must be trace posterior distribution object"
+        assert isinstance(trace_dist, TracePosterior), "trace_dist must be trace posterior distribution object"
 
         if sites is None:
             sites = "_RETURN"
@@ -70,9 +68,7 @@ class HashingMarginal(dist.Distribution):
                 value_hash = hash(value)
             if value_hash in logits:
                 # Value has already been seen.
-                logits[value_hash] = dist.util.logsumexp(
-                    torch.stack([logits[value_hash], logit]), dim=-1
-                )
+                logits[value_hash] = dist.util.logsumexp(torch.stack([logits[value_hash], logit]), dim=-1)
             else:
                 logits[value_hash] = logit
                 values_map[value_hash] = value
@@ -161,17 +157,11 @@ class Search(TracePosterior):
 
 def pqueue(fn, queue):
     def sample_escape(tr, site):
-        return (
-            (site["name"] not in tr)
-            and (site["type"] == "sample")
-            and (not site["is_observed"])
-        )
+        return (site["name"] not in tr) and (site["type"] == "sample") and (not site["is_observed"])
 
     def _fn(*args, **kwargs):
         for i in range(int(1e6)):
-            assert (
-                not queue.empty()
-            ), "trying to get() from an empty queue will deadlock"
+            assert not queue.empty(), "trying to get() from an empty queue will deadlock"
 
             priority, next_trace = queue.get()
             try:
@@ -184,13 +174,9 @@ def pqueue(fn, queue):
                 return ftr(*args, **kwargs)
             except NonlocalExit as site_container:
                 site_container.reset_stack()
-                for tr in poutine.util.enum_extend(
-                    ftr.trace.copy(), site_container.site
-                ):
+                for tr in poutine.util.enum_extend(ftr.trace.copy(), site_container.site):
                     # add a little bit of noise to the priority to break ties...
-                    queue.put(
-                        (tr.log_prob_sum().item() - torch.rand(1).item() * 1e-2, tr)
-                    )
+                    queue.put((tr.log_prob_sum().item() - torch.rand(1).item() * 1e-2, tr))
 
         raise ValueError("max tries ({}) exceeded".format(str(1e6)))
 

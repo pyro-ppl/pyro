@@ -122,9 +122,7 @@ class PositionMeasurement(DifferentiableMeasurement):
         self._jacobian = torch.cat(
             [
                 eye_like(mean, self.dimension),
-                torch.zeros(
-                    self.dimension, self.dimension, dtype=mean.dtype, device=mean.device
-                ),
+                torch.zeros(self.dimension, self.dimension, dtype=mean.dtype, device=mean.device),
             ],
             dim=1,
         )

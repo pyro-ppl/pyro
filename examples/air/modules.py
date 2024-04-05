@@ -42,9 +42,7 @@ class Decoder(nn.Module):
 # [Linear (256 -> 256), ReLU (), Linear (256 -> 1), ReLU ()]
 # etc.
 class MLP(nn.Module):
-    def __init__(
-        self, in_size, out_sizes, non_linear_layer, output_non_linearity=False
-    ):
+    def __init__(self, in_size, out_sizes, non_linear_layer, output_non_linearity=False):
         super().__init__()
         assert len(out_sizes) >= 1
         layers = []
@@ -65,9 +63,7 @@ class MLP(nn.Module):
 # Takes the guide RNN hidden state to parameters of the guide
 # distributions over z_where and z_pres.
 class Predict(nn.Module):
-    def __init__(
-        self, input_size, h_sizes, z_pres_size, z_where_size, non_linear_layer
-    ):
+    def __init__(self, input_size, h_sizes, z_pres_size, z_where_size, non_linear_layer):
         super().__init__()
         self.z_pres_size = z_pres_size
         self.z_where_size = z_where_size

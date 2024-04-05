@@ -19,7 +19,7 @@ class SparseGPRegression(GPModel):
     the covariance matrix :math:`k(X, X)` will require a lot of computational steps to
     compute its inverse (for log likelihood and for prediction). By introducing an
     additional inducing-input parameter :math:`X_u`, we can reduce computational cost
-    by approximate :math:`k(X, X)` by a low-rank Nystr\u00F6m approximation :math:`Q`
+    by approximate :math:`k(X, X)` by a low-rank Nystr\u00f6m approximation :math:`Q`
     (see reference [1]), where
 
     .. math:: Q = k(X, X_u) k(X_u,X_u)^{-1} k(X_u, X).
@@ -72,7 +72,7 @@ class SparseGPRegression(GPModel):
     References:
 
     [1] `A Unifying View of Sparse Approximate Gaussian Process Regression`,
-    Joaquin Qui\u00F1onero-Candela, Carl E. Rasmussen
+    Joaquin Qui\u00f1onero-Candela, Carl E. Rasmussen
 
     [2] `Variational learning of inducing variables in sparse Gaussian processes`,
     Michalis Titsias
@@ -95,19 +95,11 @@ class SparseGPRegression(GPModel):
     :param str name: Name of this model.
     """
 
-    def __init__(
-        self, X, y, kernel, Xu, noise=None, mean_function=None, approx=None, jitter=1e-6
-    ):
-        assert isinstance(
-            X, torch.Tensor
-        ), "X needs to be a torch Tensor instead of a {}".format(type(X))
+    def __init__(self, X, y, kernel, Xu, noise=None, mean_function=None, approx=None, jitter=1e-6):
+        assert isinstance(X, torch.Tensor), "X needs to be a torch Tensor instead of a {}".format(type(X))
         if y is not None:
-            assert isinstance(
-                y, torch.Tensor
-            ), "y needs to be a torch Tensor instead of a {}".format(type(y))
-        assert isinstance(
-            Xu, torch.Tensor
-        ), "Xu needs to be a torch Tensor instead of a {}".format(type(Xu))
+            assert isinstance(y, torch.Tensor), "y needs to be a torch Tensor instead of a {}".format(type(y))
+        assert isinstance(Xu, torch.Tensor), "Xu needs to be a torch Tensor instead of a {}".format(type(Xu))
 
         super().__init__(X, y, kernel, mean_function, jitter)
 
@@ -121,10 +113,7 @@ class SparseGPRegression(GPModel):
         elif approx in ["DTC", "FITC", "VFE"]:
             self.approx = approx
         else:
-            raise ValueError(
-                "The sparse approximation method should be one of "
-                "'DTC', 'FITC', 'VFE'."
-            )
+            raise ValueError("The sparse approximation method should be one of " "'DTC', 'FITC', 'VFE'.")
 
     @pyro_method
     def model(self):
@@ -168,9 +157,7 @@ class SparseGPRegression(GPModel):
 
             return pyro.sample(
                 self._pyro_get_fullname("y"),
-                dist.LowRankMultivariateNormal(f_loc, W, D)
-                .expand_by(self.y.shape[:-1])
-                .to_event(self.y.dim() - 1),
+                dist.LowRankMultivariateNormal(f_loc, W, D).expand_by(self.y.shape[:-1]).to_event(self.y.dim() - 1),
                 obs=self.y,
             )
 

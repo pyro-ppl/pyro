@@ -97,9 +97,7 @@ def guide(detections, args):
     with torch.set_grad_enabled(args.assignment_grad):
         # Evaluate log likelihoods. TODO make this more pyronic.
         exists_logits = compute_exists_logits(objects, args)
-        assign_logits = compute_assign_logits(
-            objects, detections.unsqueeze(-1), noise_scale, args
-        )
+        assign_logits = compute_assign_logits(objects, detections.unsqueeze(-1), noise_scale, args)
         assert exists_logits.shape == (max_num_objects,)
         assert assign_logits.shape == (num_detections, max_num_objects)
 
@@ -115,13 +113,9 @@ def guide(detections, args):
 def generate_data(args):
     num_objects = args.expected_num_objects
     true_objects = torch.randn(num_objects)
-    true_assign = dist.Categorical(
-        torch.ones(args.num_real_detections, num_objects)
-    ).sample()
+    true_assign = dist.Categorical(torch.ones(args.num_real_detections, num_objects)).sample()
     real_detections = true_objects[true_assign]
-    real_detections = real_detections + args.init_noise_scale * torch.randn(
-        real_detections.shape
-    )
+    real_detections = real_detections + args.init_noise_scale * torch.randn(real_detections.shape)
     fake_detections = torch.randn(args.num_fake_detections)
     detections = torch.cat([real_detections, fake_detections])
     assert detections.shape == (args.num_real_detections + args.num_fake_detections,)
@@ -215,10 +209,7 @@ def test_svi_multi():
     for svi_step in range(50):
         with poutine.trace(param_only=True) as param_capture:
             loss = elbo.differentiable_loss(model, guide, detections, args)
-        params = {
-            name: pyro.param(name).unconstrained()
-            for name in param_capture.trace.nodes.keys()
-        }
+        params = {name: pyro.param(name).unconstrained() for name in param_capture.trace.nodes.keys()}
         optim.step(loss, params)
         logger.debug(
             "step {: >2d}, loss = {:0.6f}, noise_scale = {:0.6f}".format(

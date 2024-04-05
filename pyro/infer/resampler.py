@@ -44,9 +44,7 @@ class Resampler:
     ):
         super().__init__()
         if max_plate_nesting is None:
-            max_plate_nesting = _guess_max_plate_nesting(
-                guide if simulator is None else simulator
-            )
+            max_plate_nesting = _guess_max_plate_nesting(guide if simulator is None else simulator)
         self._particle_dim = -1 - max_plate_nesting
         self._gumbels: Optional[torch.Tensor] = None
 
@@ -65,9 +63,7 @@ class Resampler:
         }
 
     @torch.no_grad()
-    def sample(
-        self, model: Callable, num_samples: int, stable: bool = True
-    ) -> Dict[str, torch.Tensor]:
+    def sample(self, model: Callable, num_samples: int, stable: bool = True) -> Dict[str, torch.Tensor]:
         """Draws a set of at most ``num_samples`` many model samples,
         optionally extended by the ``simulator``.
 
@@ -94,9 +90,7 @@ class Resampler:
         samples = {k: v[i] for k, v in self._samples.items()}
         return samples
 
-    def _categorical_sample(
-        self, logits: torch.Tensor, num_samples: int, stable: bool
-    ) -> torch.Tensor:
+    def _categorical_sample(self, logits: torch.Tensor, num_samples: int, stable: bool) -> torch.Tensor:
         if not stable:
             return torch.multinomial(logits.exp(), num_samples, replacement=True)
 
@@ -125,9 +119,6 @@ def _guess_max_plate_nesting(model: callable) -> int:
     with torch.no_grad(), poutine.block(), poutine.mask(mask=False):
         trace = poutine.trace(model).get_trace()
     plate_nesting = {0}.union(
-        -f.dim
-        for site in trace.nodes.values()
-        for f in site.get("cond_indep_stack", [])
-        if f.vectorized
+        -f.dim for site in trace.nodes.values() for f in site.get("cond_indep_stack", []) if f.vectorized
     )
     return max(plate_nesting)

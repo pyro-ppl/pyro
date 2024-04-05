@@ -50,9 +50,7 @@ def _skewness(event_shape):
 )
 @pytest.mark.parametrize("dist", BASE_DISTS)
 def test_ss_multidim_log_prob(expand_shape, dist):
-    base_dist = dist[0](
-        *(torch.tensor(param).expand(expand_shape) for param in dist[1])
-    ).to_event(1)
+    base_dist = dist[0](*(torch.tensor(param).expand(expand_shape) for param in dist[1])).to_event(1)
 
     loc = base_dist.sample((10,)) + Normal(0.0, 1e-3).sample()
 
@@ -67,9 +65,7 @@ def test_ss_multidim_log_prob(expand_shape, dist):
 @pytest.mark.parametrize("dist", BASE_DISTS)
 @pytest.mark.parametrize("dim", [1, 2])
 def test_ss_mle(dim, dist):
-    base_dist = dist[0](
-        *(torch.tensor(param).expand((dim,)) for param in dist[1])
-    ).to_event(1)
+    base_dist = dist[0](*(torch.tensor(param).expand((dim,)) for param in dist[1])).to_event(1)
 
     skewness_tar = _skewness(base_dist.event_shape)
     data = SineSkewed(base_dist, skewness_tar).sample((1000,))
@@ -101,7 +97,5 @@ def test_ss_mle(dim, dist):
     for step in range(steps):
         losses.append(svi.step(data, base_dist.batch_shape))
 
-    act_skewness = torch.stack(
-        [v for k, v in pyro.get_param_store().items() if "skew" in k], dim=-1
-    )
+    act_skewness = torch.stack([v for k, v in pyro.get_param_store().items() if "skew" in k], dim=-1)
     assert_equal(act_skewness, skewness_tar, 1e-1)

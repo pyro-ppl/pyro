@@ -191,9 +191,7 @@ def sample(
         return msg["value"]
 
 
-def factor(
-    name: str, log_factor: torch.Tensor, *, has_rsample: Optional[bool] = None
-) -> None:
+def factor(name: str, log_factor: torch.Tensor, *, has_rsample: Optional[bool] = None) -> None:
     """
     Factor statement to add arbitrary log probability factor to a
     probabilisitic model.
@@ -217,9 +215,7 @@ def factor(
     sample(name, unit_dist, obs=unit_value, infer={"is_auxiliary": True})
 
 
-def deterministic(
-    name: str, value: torch.Tensor, event_dim: Optional[int] = None
-) -> torch.Tensor:
+def deterministic(name: str, value: torch.Tensor, event_dim: Optional[int] = None) -> torch.Tensor:
     """
     Deterministic statement to add a :class:`~pyro.distributions.Delta` site
     with name `name` and value `value` to the trace. This is useful when we
@@ -390,24 +386,18 @@ class plate(PlateMessenger):
 
 class iarange(plate):
     def __init__(self, *args, **kwargs):
-        warnings.warn(
-            "pyro.iarange is deprecated; use pyro.plate instead", DeprecationWarning
-        )
+        warnings.warn("pyro.iarange is deprecated; use pyro.plate instead", DeprecationWarning)
         super().__init__(*args, **kwargs)
 
 
 class irange(SubsampleMessenger):
     def __init__(self, *args, **kwargs):
-        warnings.warn(
-            "pyro.irange is deprecated; use pyro.plate instead", DeprecationWarning
-        )
+        warnings.warn("pyro.irange is deprecated; use pyro.plate instead", DeprecationWarning)
         super().__init__(*args, **kwargs)
 
 
 @contextmanager
-def plate_stack(
-    prefix: str, sizes: Sequence[int], rightmost_dim: int = -1
-) -> Iterator[None]:
+def plate_stack(prefix: str, sizes: Sequence[int], rightmost_dim: int = -1) -> Iterator[None]:
     """
     Create a contiguous stack of :class:`plate` s with dimensions::
 
@@ -425,9 +415,7 @@ def plate_stack(
         yield
 
 
-def module(
-    name: str, nn_module: torch.nn.Module, update_module_params: bool = False
-) -> torch.nn.Module:
+def module(name: str, nn_module: torch.nn.Module, update_module_params: bool = False) -> torch.nn.Module:
     """
     Registers all parameters of a :class:`torch.nn.Module` with Pyro's
     :mod:`~pyro.params.param_store`.  In conjunction with the
@@ -453,15 +441,10 @@ def module(
     :returns: torch.nn.Module
     """
     assert hasattr(nn_module, "parameters"), "module has no parameters"
-    assert _MODULE_NAMESPACE_DIVIDER not in name, (
-        "improper module name, since contains %s" % _MODULE_NAMESPACE_DIVIDER
-    )
+    assert _MODULE_NAMESPACE_DIVIDER not in name, "improper module name, since contains %s" % _MODULE_NAMESPACE_DIVIDER
 
     if isclass(nn_module):
-        raise NotImplementedError(
-            "pyro.module does not support class constructors for "
-            + "the argument nn_module"
-        )
+        raise NotImplementedError("pyro.module does not support class constructors for " + "the argument nn_module")
 
     target_state_dict = OrderedDict()
 
@@ -493,9 +476,7 @@ def module(
                 mod_name = _name
             if _name in target_state_dict.keys():
                 if not is_param:
-                    deep_getattr(nn_module, mod_name)._parameters[param_name] = (
-                        target_state_dict[_name]
-                    )
+                    deep_getattr(nn_module, mod_name)._parameters[param_name] = target_state_dict[_name]
                 else:
                     nn_module._parameters[mod_name] = target_state_dict[_name]  # type: ignore[assignment]
 

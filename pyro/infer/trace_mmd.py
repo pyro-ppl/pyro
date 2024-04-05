@@ -99,17 +99,13 @@ class Trace_MMD(ELBO):
                 if isinstance(k, pyro.contrib.gp.kernels.kernel.Kernel):
                     k.requires_grad_(False)
                 else:
-                    raise TypeError(
-                        "`kernel` values should be instances of `pyro.contrib.gp.kernels.kernel.Kernel`"
-                    )
+                    raise TypeError("`kernel` values should be instances of `pyro.contrib.gp.kernels.kernel.Kernel`")
             self._kernel = kernel
         elif isinstance(kernel, pyro.contrib.gp.kernels.kernel.Kernel):
             kernel.requires_grad_(False)
             self._kernel = defaultdict(lambda: kernel)
         else:
-            raise TypeError(
-                "`kernel` should be an instance of `pyro.contrib.gp.kernels.kernel.Kernel`"
-            )
+            raise TypeError("`kernel` should be an instance of `pyro.contrib.gp.kernels.kernel.Kernel`")
 
     @property
     def mmd_scale(self):
@@ -129,9 +125,7 @@ class Trace_MMD(ELBO):
         Returns a single trace from the guide, and the model that is run
         against it.
         """
-        model_trace, guide_trace = get_importance_trace(
-            "flat", self.max_plate_nesting, model, guide, args, kwargs
-        )
+        model_trace, guide_trace = get_importance_trace("flat", self.max_plate_nesting, model, guide, args, kwargs)
         if is_validation_enabled():
             check_if_enumerated(guide_trace)
         return model_trace, guide_trace
@@ -144,13 +138,11 @@ class Trace_MMD(ELBO):
         penalty = 0.0
         for model_trace, guide_trace in self._get_traces(model, guide, args, kwargs):
             if self.vectorize_particles:
-                model_trace_independent = poutine.trace(
-                    self._vectorized_num_particles(model)
-                ).get_trace(*args, **kwargs)
+                model_trace_independent = poutine.trace(self._vectorized_num_particles(model)).get_trace(
+                    *args, **kwargs
+                )
             else:
-                model_trace_independent = poutine.trace(
-                    model, graph_type="flat"
-                ).get_trace(*args, **kwargs)
+                model_trace_independent = poutine.trace(model, graph_type="flat").get_trace(*args, **kwargs)
 
             loglikelihood_particle = 0.0
             for name, model_site in model_trace.nodes.items():
@@ -159,36 +151,21 @@ class Trace_MMD(ELBO):
                         guide_site = guide_trace.nodes[name]
                         independent_model_site = model_trace_independent.nodes[name]
                         if not independent_model_site["fn"].has_rsample:
-                            raise ValueError(
-                                "Model site {} is not reparameterizable".format(name)
-                            )
+                            raise ValueError("Model site {} is not reparameterizable".format(name))
                         if not guide_site["fn"].has_rsample:
-                            raise ValueError(
-                                "Guide site {} is not reparameterizable".format(name)
-                            )
+                            raise ValueError("Guide site {} is not reparameterizable".format(name))
 
-                        particle_dim = (
-                            -self.max_plate_nesting
-                            - independent_model_site["fn"].event_dim
-                        )
+                        particle_dim = -self.max_plate_nesting - independent_model_site["fn"].event_dim
 
                         model_samples = independent_model_site["value"]
                         guide_samples = guide_site["value"]
 
                         if self.vectorize_particles:
-                            model_samples = model_samples.transpose(
-                                -model_samples.dim(), particle_dim
-                            )
-                            model_samples = model_samples.view(
-                                model_samples.shape[0], -1
-                            )
+                            model_samples = model_samples.transpose(-model_samples.dim(), particle_dim)
+                            model_samples = model_samples.view(model_samples.shape[0], -1)
 
-                            guide_samples = guide_samples.transpose(
-                                -guide_samples.dim(), particle_dim
-                            )
-                            guide_samples = guide_samples.view(
-                                guide_samples.shape[0], -1
-                            )
+                            guide_samples = guide_samples.transpose(-guide_samples.dim(), particle_dim)
+                            guide_samples = guide_samples.view(guide_samples.shape[0], -1)
                         else:
                             model_samples = model_samples.view(1, -1)
                             guide_samples = guide_samples.view(1, -1)
@@ -196,9 +173,7 @@ class Trace_MMD(ELBO):
                         all_model_samples[name].append(model_samples)
                         all_guide_samples[name].append(guide_samples)
                     else:
-                        loglikelihood_particle = (
-                            loglikelihood_particle + model_site["log_prob_sum"]
-                        )
+                        loglikelihood_particle = loglikelihood_particle + model_site["log_prob_sum"]
 
             loglikelihood = loglikelihood_particle / self.num_particles + loglikelihood
 
@@ -228,9 +203,7 @@ class Trace_MMD(ELBO):
             Shengjia Zhao
             https://ermongroup.github.io/blog/a-tutorial-on-mmd-variational-autoencoders/
         """
-        loglikelihood, penalty = self._differentiable_loss_parts(
-            model, guide, args, kwargs
-        )
+        loglikelihood, penalty = self._differentiable_loss_parts(model, guide, args, kwargs)
         loss = -loglikelihood + penalty
         warn_if_nan(loss, "loss")
         return loss

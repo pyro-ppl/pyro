@@ -55,9 +55,7 @@ def guide_generic(config):
             )  # infer={"num_samples": 10})
 
         N_s = config["sizes"]["individual"]
-        with pyro.plate("individual", N_s, dim=-2), poutine.mask(
-            mask=config["individual"]["mask"]
-        ):
+        with pyro.plate("individual", N_s, dim=-2), poutine.mask(mask=config["individual"]["mask"]):
             # individual-level random effects
             if config["individual"]["random"] == "continuous":
                 pyro.sample(
@@ -99,9 +97,7 @@ def model_generic(config):
             ).abs(),
             constraint=constraints.simplex,
         )
-        theta_i = pyro.param(
-            "theta_individual", lambda: torch.randn((N_c, N_v, N_state**2))
-        )
+        theta_i = pyro.param("theta_individual", lambda: torch.randn((N_c, N_v, N_state**2)))
     elif config["individual"]["random"] == "continuous":
         loc_i = torch.zeros(
             (
@@ -173,9 +169,7 @@ def model_generic(config):
         gamma = gamma + eps_g
 
         N_s = config["sizes"]["individual"]
-        with pyro.plate("individual", N_s, dim=-2), poutine.mask(
-            mask=config["individual"]["mask"]
-        ):
+        with pyro.plate("individual", N_s, dim=-2), poutine.mask(mask=config["individual"]["mask"]):
             # individual-level random effects
             if config["individual"]["random"] == "discrete":
                 # individual-level discrete effect
@@ -201,9 +195,7 @@ def model_generic(config):
                     gamma_t = gamma  # per-timestep variable
 
                     # finally, reshape gamma as batch of transition matrices
-                    gamma_t = gamma_t.reshape(
-                        tuple(gamma_t.shape[:-1]) + (N_state, N_state)
-                    )
+                    gamma_t = gamma_t.reshape(tuple(gamma_t.shape[:-1]) + (N_state, N_state))
 
                     # we've accounted for all effects, now actually compute gamma_y
                     gamma_y = Vindex(gamma_t)[..., y, :]
@@ -224,9 +216,7 @@ def model_generic(config):
                         obs=step_zi_mask.long(),
                     )
                     step_zi_zero_dist = dist.Delta(v=torch.tensor(MISSING))
-                    step_zi_dist = dist.MaskedMixture(
-                        step_zi_mask, step_dist, step_zi_zero_dist
-                    )
+                    step_zi_dist = dist.MaskedMixture(step_zi_mask, step_dist, step_zi_zero_dist)
 
                     pyro.sample(
                         "step_{}".format(t),
@@ -261,9 +251,7 @@ def model_generic(config):
                     )
 
                     omega_zi_zero_dist = dist.Delta(v=torch.tensor(MISSING))
-                    omega_zi_dist = dist.MaskedMixture(
-                        omega_zi_mask, omega_dist, omega_zi_zero_dist
-                    )
+                    omega_zi_dist = dist.MaskedMixture(omega_zi_mask, omega_dist, omega_zi_zero_dist)
 
                     pyro.sample(
                         "omega_{}".format(t),
