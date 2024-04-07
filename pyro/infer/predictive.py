@@ -471,12 +471,23 @@ class MHResampler(torch.nn.Module):
     proposal distribution being equal to the ``guide`` and independent of the
     current sample such that :math:`g(x')=g(x' \mid x)`.
 
-    In case the ``guide`` perfectly tracks the ``model`` this sampler will do nothing
-    as the acceptance probability :math:`A(x', x)` will always be one.
-
     :param callable sampler: When called returns :class:`WeighedPredictiveResults`.
     :param slice source_samples_slice: Select source samples for storage (default is `slice(0)`, i.e. none).
     :param slice stored_samples_slice: Select output samples for storage (default is `slice(0)`, i.e. none).
+
+    .. _mhsampler-behavior:
+
+    **Notes on Sampler Behavior:**
+
+    -   In case the ``guide`` perfectly tracks the ``model`` this sampler will do nothing
+        as the acceptance probability :math:`A(x', x)` will always be one.
+    -   Furtheremore, if the guide is approximately separable, i.e. :math:`g(z_A, z_B) \approx g_A(z_A) g_B(z_B)`,
+        with :math:`g_A(z_A)` pefectly tracking the ``model`` and :math:`g_B(z_B)` poorly tracking the ``model``,
+        quantiles of :math:`z_A` calculated from samples taken from :class:`MHResampler`, will have much lower
+        variance then quantiles of :math:`z_A` calculated by using :any:`weighed_quantile`, as the effective sample size
+        of the calculation using :any:`weighed_quantile` will be low due to :math:`g_B(z_B)` poorly tracking
+        the ``model``, whereas when using :class:`MHResampler` the poor ``model`` tracking of :math:`g_B(z_B)` has
+        negligible affect on the effective sample size of :math:`z_A` samples.
     """
 
     def __init__(
