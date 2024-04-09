@@ -95,7 +95,7 @@ def test_posterior_predictive_svi_manual_guide(
         weighed_quantile_test_point_value = weighed_quantile(
             marginal_return_vals, [quantile_test_point], weighed_samples.log_weights
         )[0]
-        resampled_quantile_tesT_point_value = quantile(
+        resampled_quantile_test_point_value = quantile(
             resampled_marginal_return_vals, [quantile_test_point]
         )[0]
         logging.info(
@@ -107,12 +107,12 @@ def test_posterior_predictive_svi_manual_guide(
         )
         logging.info(
             "Resampled quantile at test point is: "
-            + str(resampled_quantile_tesT_point_value)
+            + str(resampled_quantile_test_point_value)
         )
         # Weighed and resampled quantiles should match
         assert_close(
             weighed_quantile_test_point_value,
-            resampled_quantile_tesT_point_value,
+            resampled_quantile_test_point_value,
             rtol=0.01,
         )
         if test_unweighed_convergence:
@@ -123,7 +123,7 @@ def test_posterior_predictive_svi_manual_guide(
             # Weighed and unweighed quantiles should match if guide converged to true model
             assert_close(
                 quantile_test_point_value,
-                resampled_quantile_tesT_point_value,
+                resampled_quantile_test_point_value,
                 rtol=0.01,
             )
     assert_close(marginal_return_vals.mean(dim=0), torch.ones(5) * 280, rtol=0.1)
