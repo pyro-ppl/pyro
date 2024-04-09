@@ -42,8 +42,6 @@ try:
 except ImportError:
     pass
 
-# isort: split
-
 import torch
 from torch.distributions.constraints import __all__ as torch_constraints
 

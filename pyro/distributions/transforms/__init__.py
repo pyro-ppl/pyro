@@ -31,8 +31,6 @@ try:
 except ImportError:
     pass
 
-# isort: split
-
 from torch.distributions import biject_to, transform_to
 from torch.distributions.transforms import __all__ as torch_transforms
 
