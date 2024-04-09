@@ -53,8 +53,6 @@ try:
 except ImportError:
     pass
 
-# isort: split
-
 from pyro.distributions.affine_beta import AffineBeta
 from pyro.distributions.asymmetriclaplace import (
     AsymmetricLaplace,
