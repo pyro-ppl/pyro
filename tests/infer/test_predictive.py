@@ -82,7 +82,8 @@ def test_posterior_predictive_svi_manual_guide(
         assert marginal_return_vals.shape[:1] == weighed_samples.log_weights.shape
         # Resample weighed samples
         resampler = MHResampler(posterior_predictive)
-        for resampling_count in range(10):
+        num_mh_steps = 10
+        for mh_step_count in range(num_mh_steps):
             resampled_weighed_samples = resampler(
                 num_trials, model_guide=conditioned_model
             )
