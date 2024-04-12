@@ -30,7 +30,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip wheel 'setuptools!=58.5.*,<60'
-        pip install ruff==0.3.4 black mypy nbstripout nbformat
+        pip install ruff black mypy nbstripout nbformat
     - name: Lint
       run: |
         make lint
