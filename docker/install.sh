@@ -2,7 +2,7 @@
 set -xe
 
 pip install --upgrade pip
-pip install jupyter matplotlib
+pip install notebook matplotlib
 
 # 1. Install PyTorch
 # Use conda package if pytorch_branch = 'release'.
