@@ -12,6 +12,7 @@ from pyro.ops.stats import (
     autocovariance,
     crps_empirical,
     effective_sample_size,
+    energy_score_empirical,
     fit_generalized_pareto,
     gelman_rubin,
     hpdi,
@@ -323,4 +324,18 @@ def test_crps_empirical(num_samples, event_shape):
     expected = (pred - truth).abs().mean(0) - 0.5 * (
         pred - pred.unsqueeze(1)
     ).abs().mean([0, 1])
+    assert_close(actual, expected)
+
+
+@pytest.mark.parametrize("event_shape", [(), (4,), (3, 2)])
+@pytest.mark.parametrize("num_samples", [1, 2, 3, 4, 10])
+def test_energy_score_empirical(num_samples, event_shape):
+    truth = torch.randn(event_shape)
+    pred = truth + 0.1 * torch.randn((num_samples,) + event_shape)
+
+    actual = crps_empirical(pred, truth)
+    expected = energy_score_empirical(
+        pred[..., None].swapaxes(0, -1)[0, ..., None], truth[..., None]
+    )
+
     assert_close(actual, expected)

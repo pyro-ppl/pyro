@@ -508,3 +508,54 @@ def crps_empirical(pred, truth):
     weight = weight.reshape(weight.shape + (1,) * (diff.dim() - 1))
 
     return (pred - truth).abs().mean(0) - (diff * weight).sum(0) / num_samples**2
+
+
+def energy_score_empirical(pred, truth):
+    """
+    Computes negative Energy Score ES* [1] between a
+    set of multivariate samples ``pred`` and a true data vector ``truth``. Running time
+    is quadratic in the number of samples ``n``. In case of univariate samples
+    the output coincides with the CRPS::
+
+        ES* = E|pred - truth| - 1/2 E|pred - pred'|
+
+    Note that for a single sample this reduces to the Euclidean norm of the difference between
+    the sample ``pred`` and the ``truth``.
+
+    This is a strictly proper metric so that for ``pred`` distirbuted according to a
+    distribution :math:`P` and ``truth`` distributed according to a distribution :math:`Q`
+    we have :math:`ES(P,Q) \ge ES(Q,Q)` with equality holding if and only if :math:`P=Q`.
+
+    **References**
+
+    [1] Tilmann Gneiting, Adrian E. Raftery (2007)
+        `Strictly Proper Scoring Rules, Prediction, and Estimation`
+        https://www.stat.washington.edu/raftery/Research/PDF/Gneiting2007jasa.pdf
+
+    :param torch.Tensor pred: A set of sample predictions batched on the second leftmost dim.
+        The leftmost dim is that of the multivariate sample.
+    :param torch.Tensor truth: A tensor of true observations with same shape as ``pred`` except
+        for the second leftmost dim which can have any value or be omitted.
+    :return: A tensor of shape ``truth.shape``.
+    :rtype: torch.Tensor
+    """
+    if pred.dim() == (truth.dim() + 1):
+        remove_leftmost_dim = True
+        truth = truth[..., None, :]
+    elif pred.dim() == truth.dim():
+        remove_leftmost_dim = False
+    else:
+        raise ValueError(
+            "Expected pred to have at most one extra dim versus truth."
+            "Actual shapes: {} versus {}".format(pred.shape, truth.shape)
+        )
+
+    retval = (
+        torch.cdist(pred, truth).mean(dim=-2)
+        - 0.5 * torch.cdist(pred, pred).mean(dim=[-1, -2])[..., None]
+    )
+
+    if remove_leftmost_dim:
+        retval = retval[..., 0]
+
+    return retval
