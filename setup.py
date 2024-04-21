@@ -66,6 +66,7 @@ long_description = "\n".join([str(line) for line in long_description.split("\n")
 # examples/tutorials
 EXTRAS_REQUIRE = [
     "notebook",
+    "ipywidgets",
     "graphviz>=0.8",
     "matplotlib>=1.3",
     "torchvision>=0.15.0",
