@@ -269,6 +269,44 @@ def test_deterministic(with_plate, event_shape, predictive):
     assert_close(actual["x3"].mean(), y, rtol=0.1)
 
 
+@pytest.mark.parametrize("with_plate", [True, False])
+@pytest.mark.parametrize("event_shape", [(), (2,)])
+@pytest.mark.parametrize("return_deterministic_guide_sites", [True, False])
+def test_deterministic_guide_return(
+    with_plate, event_shape, return_deterministic_guide_sites
+):
+    def model(y=None):
+        with pyro.util.optional(pyro.plate("plate", 3), with_plate):
+            x = pyro.sample("x", dist.Normal(0, 1).expand(event_shape).to_event())
+            x2 = pyro.deterministic("x2", x**2, event_dim=len(event_shape))
+
+        pyro.deterministic("x3", x2)
+        return pyro.sample("obs", dist.Normal(x2, 0.1).to_event(), obs=y)
+
+    def guide(y=None):
+        with pyro.util.optional(pyro.plate("plate", 3), with_plate):
+            x = pyro.sample("x", dist.Normal(0, 1).expand(event_shape).to_event())
+
+        pyro.deterministic("x4", x)
+
+    y = torch.tensor(4.0)
+    svi = SVI(model, guide, optim.Adam(dict(lr=0.1)), Trace_ELBO())
+    for i in range(100):
+        svi.step(y)
+
+    actual = Predictive(
+        model,
+        guide=guide,
+        num_samples=1000,
+        return_deterministic_guide_sites=return_deterministic_guide_sites,
+    )()
+
+    if return_deterministic_guide_sites:
+        assert "x4" in actual
+    else:
+        assert "x4" not in actual
+
+
 def test_get_mask_optimization():
     def model():
         x = pyro.sample("x", dist.Normal(0, 1))
