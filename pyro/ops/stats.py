@@ -510,9 +510,9 @@ def crps_empirical(pred, truth):
     return (pred - truth).abs().mean(0) - (diff * weight).sum(0) / num_samples**2
 
 
-def energy_score_empirical(pred, truth):
+def energy_score_empirical(pred: torch.Tensor, truth: torch.Tensor) -> torch.Tensor:
     """
-    Computes negative Energy Score ES* [1] between a
+    Computes negative Energy Score ES* (see equation 22 in [1]) between a
     set of multivariate samples ``pred`` and a true data vector ``truth``. Running time
     is quadratic in the number of samples ``n``. In case of univariate samples
     the output coincides with the CRPS::
@@ -522,9 +522,11 @@ def energy_score_empirical(pred, truth):
     Note that for a single sample this reduces to the Euclidean norm of the difference between
     the sample ``pred`` and the ``truth``.
 
-    This is a strictly proper metric so that for ``pred`` distirbuted according to a
+    This is a strictly proper score so that for ``pred`` distirbuted according to a
     distribution :math:`P` and ``truth`` distributed according to a distribution :math:`Q`
-    we have :math:`ES(P,Q) \ge ES(Q,Q)` with equality holding if and only if :math:`P=Q`.
+    we have :math:`ES*(P,Q) \ge ES*(Q,Q)` with equality holding if and only if :math:`P=Q', i.e.
+    if :math:`P` and :math:`Q` have the same multivariate distribution (it is not sufficient for
+    :math:`P` and :math:`Q` to have the same marginals in order for equality to hold).
 
     **References**
 

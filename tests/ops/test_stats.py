@@ -333,7 +333,7 @@ def test_crps_univariate_energy_score_empirical(num_samples, event_shape):
 
 
 @pytest.mark.parametrize("sample_dim", [3, 10, 30, 100])
-def test_multivariate_energy_score(sample_dim, num_samples = 10000):
+def test_multivariate_energy_score(sample_dim, num_samples=10000):
     pred_uncorrelated = torch.randn(num_samples, sample_dim)
 
     pred = torch.randn(num_samples, 1)
@@ -349,5 +349,9 @@ def test_multivariate_energy_score(sample_dim, num_samples = 10000):
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         from scipy.stats import chi
 
-    assert_close(energy_score, torch.tensor(0.5*chi(1).mean()*(2*sample_dim)**0.5), rtol=0.02)
+    assert_close(
+        energy_score,
+        torch.tensor(0.5 * chi(1).mean() * (2 * sample_dim) ** 0.5),
+        rtol=0.02,
+    )
     assert energy_score * 1.02 < energy_score_uncorrelated
