@@ -524,7 +524,7 @@ def energy_score_empirical(pred: torch.Tensor, truth: torch.Tensor) -> torch.Ten
 
     This is a strictly proper score so that for ``pred`` distirbuted according to a
     distribution :math:`P` and ``truth`` distributed according to a distribution :math:`Q`
-    we have :math:`ES*(P,Q) \ge ES*(Q,Q)` with equality holding if and only if :math:`P=Q', i.e.
+    we have :math:`ES^{*}(P,Q) \ge ES^{*}(Q,Q)` with equality holding if and only if :math:`P=Q`, i.e.
     if :math:`P` and :math:`Q` have the same multivariate distribution (it is not sufficient for
     :math:`P` and :math:`Q` to have the same marginals in order for equality to hold).
 
