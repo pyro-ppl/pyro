@@ -123,7 +123,7 @@ notebook: ##
 
 notebook-gpu: create-host-workspace
 notebook-gpu: ##
-	## Start a juptyer notebook on the Pyro GPU docker container.
+	## Start a jupyter notebook on the Pyro GPU docker container.
 	## Args:
 	##   img: use image name given by `img`.
 	##
