@@ -92,9 +92,7 @@ def main(args):
         indices = torch.randperm(sum(data_lengths), device=device).tolist()
         dataset_train, dataset_test = [
             torch.utils.data.Subset(dataset, indices[(offset - length) : offset])
-            for offset, length in zip(
-                torch._utils._accumulate(data_lengths), data_lengths
-            )
+            for offset, length in zip(pyro.util._accumulate(data_lengths), data_lengths)
         ]
     else:
         dataset_train = dataset
