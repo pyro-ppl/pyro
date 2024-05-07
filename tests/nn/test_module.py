@@ -1045,3 +1045,24 @@ class TestPyroModuleList(ModuleListTester):
 
 def test_module_list() -> None:
     assert PyroModule[torch.nn.ModuleList] is pyro.nn.PyroModuleList
+
+
+@pytest.mark.parametrize("use_module_local_params", [True, False])
+def test_render_constrained_param(use_module_local_params):
+
+    class Model(PyroModule):
+
+        @PyroParam(constraint=constraints.positive)
+        def x(self):
+            return torch.tensor(1.234)
+
+        @PyroParam(constraint=constraints.real)
+        def y(self):
+            return torch.tensor(0.456)
+
+        def forward(self):
+            return self.x + self.y
+
+    with pyro.settings.context(module_local_params=use_module_local_params):
+        model = Model()
+        pyro.render_model(model)

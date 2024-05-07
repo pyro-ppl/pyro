@@ -582,7 +582,12 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                     constrained_value.unconstrained = weakref.ref(unconstrained_value)
                     return pyro.poutine.runtime.effectful(type="param")(
                         lambda *_, **__: constrained_value
-                    )(fullname, event_dim=event_dim, name=fullname)
+                    )(
+                        fullname,
+                        constraint=constraint,
+                        event_dim=event_dim,
+                        name=fullname,
+                    )
                 else:  # Cannot determine supermodule and hence cannot compute fullname.
                     constrained_value = transform_to(constraint)(unconstrained_value)
                     constrained_value.unconstrained = weakref.ref(unconstrained_value)
@@ -621,7 +626,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 # even though we don't use the contents of the local parameter store
                 fullname = self._pyro_get_fullname(name)
                 pyro.poutine.runtime.effectful(type="param")(lambda *_, **__: result)(
-                    fullname, result, name=fullname
+                    fullname, result, constraint=constraints.real, name=fullname
                 )
 
         if isinstance(result, torch.nn.Module):
@@ -645,7 +650,12 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                         )
                         pyro.poutine.runtime.effectful(type="param")(
                             lambda *_, **__: param_value
-                        )(fullname_param, param_value, name=fullname_param)
+                        )(
+                            fullname_param,
+                            param_value,
+                            constraint=constraints.real,
+                            name=fullname_param,
+                        )
 
         return result
 
