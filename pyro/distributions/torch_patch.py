@@ -5,6 +5,7 @@ import functools
 import math
 import warnings
 import weakref
+from typing import List
 
 import torch
 
@@ -92,4 +93,4 @@ def _lazy_property__call__(self):
     raise NotImplementedError
 
 
-__all__ = []
+__all__: List[str] = []

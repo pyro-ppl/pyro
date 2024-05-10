@@ -8,6 +8,8 @@ from torch.distributions.constraints import *  # noqa F403
 try:
     from torch.distributions.constraints import (
         Constraint,
+        _GreaterThan,
+        _LowerCholesky,
         boolean,
         cat,
         corr_cholesky,
@@ -122,12 +124,12 @@ class _PositiveOrderedVector(Constraint):
         return ordered_vector.check(value) & independent(positive, 1).check(value)
 
 
-class _SoftplusPositive(type(positive)):
+class _SoftplusPositive(_GreaterThan):
     def __init__(self):
         super().__init__(lower_bound=0.0)
 
 
-class _SoftplusLowerCholesky(type(lower_cholesky)):
+class _SoftplusLowerCholesky(_LowerCholesky):
     pass
 
 

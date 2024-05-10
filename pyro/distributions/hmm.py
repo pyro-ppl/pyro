@@ -1005,7 +1005,6 @@ class LinearHMM(HiddenMarkovModel):
     """
 
     arg_constraints = {}
-    support = constraints.independent(constraints.real, 2)
     has_rsample = True
 
     def __init__(
