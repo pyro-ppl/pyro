@@ -319,14 +319,14 @@ def test_deterministic_guide_return(
     )()
 
     if return_deterministic_guide_sites and use_determinisitic_guide:
+        assert "x4" in actual
+        assert_close(actual["x4"].mean(), y, rtol=0.1)
         # When return_sites is empty, include all deterministic guide sites
         if len(return_sites) == 0:
             assert "x5" in actual
             assert_close(actual["x5"].mean(), y, rtol=0.1)
         else:
             assert "x5" not in actual
-        assert "x4" in actual
-        assert_close(actual["x4"].mean(), y, rtol=0.1)
     else:
         assert "x4" not in actual
         assert "x5" not in actual
