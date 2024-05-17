@@ -272,8 +272,14 @@ def test_deterministic(with_plate, event_shape, predictive):
 @pytest.mark.parametrize("with_plate", [True, False])
 @pytest.mark.parametrize("event_shape", [(), (2,)])
 @pytest.mark.parametrize("return_deterministic_guide_sites", [True, False])
+@pytest.mark.parametrize("return_sites", [[], ["x4"]])
+@pytest.mark.parametrize("use_determinisitic_guide", [True, False])
 def test_deterministic_guide_return(
-    with_plate, event_shape, return_deterministic_guide_sites
+    with_plate,
+    event_shape,
+    return_deterministic_guide_sites,
+    return_sites,
+    use_determinisitic_guide,
 ):
     def model(y=None):
         with pyro.util.optional(pyro.plate("plate", 3), with_plate):
@@ -283,11 +289,21 @@ def test_deterministic_guide_return(
         pyro.deterministic("x3", x2)
         return pyro.sample("obs", dist.Normal(x2, 0.1).to_event(), obs=y)
 
-    def guide(y=None):
+    def determinisitic_guide(y=None):
         with pyro.util.optional(pyro.plate("plate", 3), with_plate):
-            x = pyro.sample("x", dist.Normal(0, 1).expand(event_shape).to_event())
+            x = pyro.sample("x", dist.Normal(0, 2).expand(event_shape).to_event())
+            x4 = pyro.deterministic("x4", x**2, event_dim=len(event_shape))
 
-        pyro.deterministic("x4", x)
+        pyro.deterministic("x5", x4)
+
+    def non_determinisitic_guide(y=None):
+        with pyro.util.optional(pyro.plate("plate", 3), with_plate):
+            pyro.sample("x", dist.Normal(0, 2).expand(event_shape).to_event())
+
+    if use_determinisitic_guide:
+        guide = determinisitic_guide
+    else:
+        guide = non_determinisitic_guide
 
     y = torch.tensor(4.0)
     svi = SVI(model, guide, optim.Adam(dict(lr=0.1)), Trace_ELBO())
@@ -298,13 +314,22 @@ def test_deterministic_guide_return(
         model,
         guide=guide,
         num_samples=1000,
+        return_sites=return_sites,
         return_deterministic_guide_sites=return_deterministic_guide_sites,
     )()
 
-    if return_deterministic_guide_sites:
+    if return_deterministic_guide_sites and use_determinisitic_guide:
         assert "x4" in actual
+        assert_close(actual["x4"].mean(), y, rtol=0.1)
+        # When return_sites is empty, include all deterministic guide sites
+        if len(return_sites) == 0:
+            assert "x5" in actual
+            assert_close(actual["x5"].mean(), y, rtol=0.1)
+        else:
+            assert "x5" not in actual
     else:
         assert "x4" not in actual
+        assert "x5" not in actual
 
 
 def test_get_mask_optimization():
