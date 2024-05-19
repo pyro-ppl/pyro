@@ -5,7 +5,7 @@ from functools import partial
 
 from scipy.special import roots_legendre
 
-from .stable import Stable
+from .stable import Stable, RADIUS
 
 def set_integrator(num_points):
     global integrate
@@ -34,24 +34,42 @@ class StableWithLogProb(Stable):
         beta = self.skew.double()
         value = value.double()
 
-        # Optionally convert from Nolan's parametrization S^0 where samples depend
-        # continuously on (alpha,beta), allowing interpolation around the hole at
-        # alpha=1.
-        if self.coords == "S0":
-            value = value + beta * (math.pi / 2 * alpha).tan()
-        elif self.coords != "S":
-            raise ValueError("Unknown coords: {}".format(self.coords))
-
-        # Integration is not valid for very small values
-        value = torch.where(value > 0, value.clamp(min=0.01), value.clamp(max=-0.01))
-
-        log_prob = _unsafe_stable_log_prob(alpha, beta, value)
+        log_prob = _unsafe_alpha_stable_log_prob(alpha, beta, value, self.coords)
 
         return log_prob - self.scale.log()
 
 
+def _unsafe_alpha_stable_log_prob(alpha, beta, Z, coords):
+    # Calculate log-probability of Z. This will fail if alpha is close to 1
+
+    # Optionally convert from Nolan's parametrization S^0 where samples depend
+    # continuously on (alpha,beta), allowing interpolation around the hole at
+    # alpha=1.
+    if coords == "S0":
+        Z = Z + beta * (math.pi / 2 * alpha).tan()
+    elif coords != "S":
+        raise ValueError("Unknown coords: {}".format(coords))
+    
+    # Find near zero values
+    idx = Z.abs() < RADIUS
+
+    # Calculate log-prob at safe values
+    log_prob = _unsafe_stable_log_prob(alpha, beta, torch.where(idx, RADIUS, Z))
+
+    # Handle small values by interpolation
+    if idx.any():
+        log_prob_pos = log_prob[idx]
+        log_prob_neg = _unsafe_stable_log_prob(alpha[idx], beta[idx],
+                                               -RADIUS * log_prob_pos.new_ones(log_prob_pos.shape))
+        weights = Z[idx] / (2 * RADIUS) + 0.5
+        log_prob[idx] = torch.logsumexp(torch.stack((log_prob_pos + weights.log(),
+                                                     log_prob_neg + (1 - weights).log()), dim=0), dim=0)
+        
+    return log_prob
+
+
 def _unsafe_stable_log_prob(alpha, beta, Z):
-    # Calculate log-probability of Z given V. This will fail if alpha is close to 1
+    # Calculate log-probability of Z. This will fail if alpha is close to 1
     # or if Z is close to 0
     ha = math.pi / 2 * alpha
     b = beta * ha.tan()
