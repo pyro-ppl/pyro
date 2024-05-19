@@ -6,7 +6,7 @@ from functools import partial
 from scipy.special import roots_legendre
 
 
-value_near_zero_tolerance = 0.05
+value_near_zero_tolerance = 0.01
 alpha_near_one_tolerance = 0.05
 
 
