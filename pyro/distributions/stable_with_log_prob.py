@@ -5,7 +5,12 @@ from functools import partial
 
 from scipy.special import roots_legendre
 
-from .stable import Stable, RADIUS
+from .stable import Stable
+
+
+value_near_zero_tolerance = 0.01
+alpha_near_one_tolerance = 0.05
+
 
 def set_integrator(num_points):
     global integrate
@@ -34,34 +39,51 @@ class StableWithLogProb(Stable):
         beta = self.skew.double()
         value = value.double()
 
-        log_prob = _unsafe_alpha_stable_log_prob(alpha, beta, value, self.coords)
+        # Convert to Nolan's parametrization S^0 where samples depend
+        # continuously on (alpha,beta), allowing interpolation around the hole at
+        # alpha=1.
+        if self.coords == "S":
+            value = torch.where(alpha == 1, value, value - beta * (math.pi / 2 * alpha)).tan()
+        elif self.coords != "S0":
+            raise ValueError("Unknown coords: {}".format(self.coords))
+    
+        # Find near one alpha
+        idx = (alpha - 1).abs() < alpha_near_one_tolerance
 
+        log_prob = _unsafe_alpha_stable_log_prob_S0(torch.where(idx, 1 + alpha_near_one_tolerance, alpha), beta, value)
+
+        # Handle small values by interpolation
+        if idx.any():
+            log_prob_pos = log_prob[idx]
+            log_prob_neg = _unsafe_alpha_stable_log_prob_S0(
+                (1 - alpha_near_one_tolerance) * log_prob_pos.new_ones(log_prob_pos.shape), beta[idx], value[idx])
+            weights = (alpha[idx] - 1) / (2 * alpha_near_one_tolerance) + 0.5
+            log_prob[idx] = torch.logsumexp(torch.stack((log_prob_pos + weights.log(),
+                                                         log_prob_neg + (1 - weights).log()), dim=0), dim=0)
+        
         return log_prob - self.scale.log()
 
 
-def _unsafe_alpha_stable_log_prob(alpha, beta, Z, coords):
-    # Calculate log-probability of Z. This will fail if alpha is close to 1
+def _unsafe_alpha_stable_log_prob_S0(alpha, beta, Z):
+    # Calculate log-probability of Z in Nolan's parametrization S^0. This will fail if alpha is close to 1
 
-    # Optionally convert from Nolan's parametrization S^0 where samples depend
+    # Convert from Nolan's parametrization S^0 where samples depend
     # continuously on (alpha,beta), allowing interpolation around the hole at
     # alpha=1.
-    if coords == "S0":
-        Z = Z + beta * (math.pi / 2 * alpha).tan()
-    elif coords != "S":
-        raise ValueError("Unknown coords: {}".format(coords))
+    Z = Z + beta * (math.pi / 2 * alpha).tan()
     
     # Find near zero values
-    idx = Z.abs() < RADIUS
+    idx = Z.abs() < value_near_zero_tolerance
 
     # Calculate log-prob at safe values
-    log_prob = _unsafe_stable_log_prob(alpha, beta, torch.where(idx, RADIUS, Z))
+    log_prob = _unsafe_stable_log_prob(alpha, beta, torch.where(idx, value_near_zero_tolerance, Z))
 
     # Handle small values by interpolation
     if idx.any():
         log_prob_pos = log_prob[idx]
         log_prob_neg = _unsafe_stable_log_prob(alpha[idx], beta[idx],
-                                               -RADIUS * log_prob_pos.new_ones(log_prob_pos.shape))
-        weights = Z[idx] / (2 * RADIUS) + 0.5
+                                               -value_near_zero_tolerance * log_prob_pos.new_ones(log_prob_pos.shape))
+        weights = Z[idx] / (2 * value_near_zero_tolerance) + 0.5
         log_prob[idx] = torch.logsumexp(torch.stack((log_prob_pos + weights.log(),
                                                      log_prob_neg + (1 - weights).log()), dim=0), dim=0)
         
@@ -110,4 +132,4 @@ def _unsafe_stable_given_uniform_log_prob(V, alpha, beta, Z):
           * (v - V).cos().clamp(min=eps) 
         )
 
-    return -W + (alpha * W / Z / (alpha - 1)).abs().log()
+    return torch.where(W==torch.inf, -torch.inf, -W + (alpha * W / Z / (alpha - 1)).abs().log())
