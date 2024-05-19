@@ -10,6 +10,11 @@ value_near_zero_tolerance = 0.01
 alpha_near_one_tolerance = 0.05
 
 
+finfo = torch.finfo(torch.float64)
+MAX_LOG = math.log10(finfo.max)
+MIN_LOG = math.log10(finfo.tiny)
+
+
 def set_integrator(num_points):
     global integrate
     roots, weights = roots_legendre(num_points)
@@ -129,10 +134,17 @@ def _unsafe_stable_given_uniform_log_prob(V, alpha, beta, Z):
     
     # +/- `ha` term to keep the precision of alpha * (V + half_pi) when V ~ -half_pi
     v = atan_b - ha + alpha * (V + half_pi)
+
     W = ( ( v.sin() / Z /
            (atan_b.cos() * V.cos()).pow(inv_alpha)
           ).pow(alpha / (1 - alpha))
           * (v - V).cos().clamp(min=eps) 
         )
 
-    return torch.where(W==torch.inf, -torch.inf, -W + (alpha * W / Z / (alpha - 1)).abs().log())
+    log_prob = -W + (alpha * W / Z / (alpha - 1)).abs().log()
+
+    # Range limiting in order to eliminate zero probability
+    log_prob = torch.where(W==torch.inf, -torch.inf, log_prob)
+    log_prob = log_prob.clamp(min=MIN_LOG, max=MAX_LOG)
+
+    return log_prob
