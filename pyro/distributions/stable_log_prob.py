@@ -6,7 +6,7 @@ from functools import partial
 from scipy.special import roots_legendre
 
 
-value_near_zero_tolerance = 0.01
+value_near_zero_tolerance = 0.05
 alpha_near_one_tolerance = 0.05
 
 
@@ -75,17 +75,18 @@ def _unsafe_alpha_stable_log_prob_S0(alpha, beta, Z):
     Z = Z + beta * (math.pi / 2 * alpha).tan()
     
     # Find near zero values
-    idx = Z.abs() < value_near_zero_tolerance
+    per_alpha_value_near_zero_tolerance = value_near_zero_tolerance * alpha / (1 - alpha).abs()
+    idx = Z.abs() < per_alpha_value_near_zero_tolerance
 
     # Calculate log-prob at safe values
-    log_prob = _unsafe_stable_log_prob(alpha, beta, torch.where(idx, value_near_zero_tolerance, Z))
+    log_prob = _unsafe_stable_log_prob(alpha, beta, torch.where(idx, per_alpha_value_near_zero_tolerance, Z))
 
     # Handle small values by interpolation
     if idx.any():
         log_prob_pos = log_prob[idx]
         log_prob_neg = _unsafe_stable_log_prob(alpha[idx], beta[idx],
-                                               -value_near_zero_tolerance * log_prob_pos.new_ones(log_prob_pos.shape))
-        weights = Z[idx] / (2 * value_near_zero_tolerance) + 0.5
+                                               -per_alpha_value_near_zero_tolerance[idx] * log_prob_pos.new_ones(log_prob_pos.shape))
+        weights = Z[idx] / (2 * per_alpha_value_near_zero_tolerance[idx]) + 0.5
         log_prob[idx] = torch.logsumexp(torch.stack((log_prob_pos + weights.log(),
                                                      log_prob_neg + (1 - weights).log()), dim=0), dim=0)
         
