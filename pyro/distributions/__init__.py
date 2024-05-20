@@ -143,8 +143,10 @@ from pyro.distributions.zero_inflated import (
 
 from . import constraints, kl, transforms
 
+
 class StableWithLogProb(StableLogProb, Stable):
     pass
+
 
 __all__ = [
     "AVFMultivariateNormal",
