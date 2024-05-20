@@ -15,8 +15,7 @@ MAX_LOG = math.log10(finfo.max)
 MIN_LOG = math.log10(finfo.tiny)
 
 
-def set_integrator(num_points):
-    global integrate
+def create_integrator(num_points):
     roots, weights = roots_legendre(num_points)
     roots = torch.Tensor(roots).double()
     weights = torch.Tensor(weights).double()
@@ -27,6 +26,12 @@ def set_integrator(num_points):
         half_roots_sl = half_roots[sl]
         value = domain[0] * (0.5 - half_roots_sl) + domain[1] * (0.5 + half_roots_sl)
         return torch.logsumexp(fn(value) + log_weights[sl], dim=0) + ((domain[1] - domain[0]) / 2).log()
+    return integrate
+
+
+def set_integrator(num_points):
+    global integrate
+    integrate = create_integrator(num_points)
 
 
 set_integrator(num_points=501)
@@ -59,14 +64,14 @@ def _stable_log_prob(alpha, beta, value, coords):
 
     log_prob = _unsafe_alpha_stable_log_prob_S0(torch.where(idx, 1 + alpha_near_one_tolerance, alpha), beta, value)
 
-    # Handle small values by interpolation
+    # Handle alpha near one by interpolation
     if idx.any():
         log_prob_pos = log_prob[idx]
         log_prob_neg = _unsafe_alpha_stable_log_prob_S0(
             (1 - alpha_near_one_tolerance) * log_prob_pos.new_ones(log_prob_pos.shape), beta[idx], value[idx])
         weights = (alpha[idx] - 1) / (2 * alpha_near_one_tolerance) + 0.5
         log_prob[idx] = torch.logsumexp(torch.stack((log_prob_pos + weights.log(),
-                                                        log_prob_neg + (1 - weights).log()), dim=0), dim=0)
+                                                     log_prob_neg + (1 - weights).log()), dim=0), dim=0)
 
     return log_prob
 
@@ -86,11 +91,10 @@ def _unsafe_alpha_stable_log_prob_S0(alpha, beta, Z):
     # Calculate log-prob at safe values
     log_prob = _unsafe_stable_log_prob(alpha, beta, torch.where(idx, per_alpha_value_near_zero_tolerance, Z))
 
-    # Handle small values by interpolation
+    # Handle near zero values by interpolation
     if idx.any():
         log_prob_pos = log_prob[idx]
-        log_prob_neg = _unsafe_stable_log_prob(alpha[idx], beta[idx],
-                                               -per_alpha_value_near_zero_tolerance[idx] * log_prob_pos.new_ones(log_prob_pos.shape))
+        log_prob_neg = _unsafe_stable_log_prob(alpha[idx], beta[idx], -per_alpha_value_near_zero_tolerance[idx])
         weights = Z[idx] / (2 * per_alpha_value_near_zero_tolerance[idx]) + 0.5
         log_prob[idx] = torch.logsumexp(torch.stack((log_prob_pos + weights.log(),
                                                      log_prob_neg + (1 - weights).log()), dim=0), dim=0)
