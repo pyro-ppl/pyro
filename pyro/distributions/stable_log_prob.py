@@ -123,7 +123,7 @@ def _unsafe_stable_log_prob(alpha, beta, Z):
 def _unsafe_stable_given_uniform_log_prob(V, alpha, beta, Z):
     # Calculate log-probability of Z given V. This will fail if alpha is close to 1
     # or if Z is close to 0
-    inv_alpha = alpha.reciprocal()
+    inv_alpha_minus_one = (alpha - 1).reciprocal()
     half_pi = math.pi / 2
     eps = torch.finfo(V.dtype).eps
     # make V belong to the open interval (-pi/2, pi/2)
@@ -131,20 +131,24 @@ def _unsafe_stable_given_uniform_log_prob(V, alpha, beta, Z):
     ha = half_pi * alpha
     b = beta * ha.tan()
     atan_b = b.atan()
-    
+    cos_V = V.cos()
+
     # +/- `ha` term to keep the precision of alpha * (V + half_pi) when V ~ -half_pi
     v = atan_b - ha + alpha * (V + half_pi)
 
-    W = ( ( v.sin() / Z /
-           (atan_b.cos() * V.cos()).pow(inv_alpha)
-          ).pow(alpha / (1 - alpha))
-          * (v - V).cos().clamp(min=eps) 
-        )
+    term1_log = atan_b.cos().log() * inv_alpha_minus_one
+    term2_log = (Z * cos_V / v.sin()).log() * alpha * inv_alpha_minus_one
+    term3_log = ((v - V).cos() / cos_V).log()
+
+    W_log = term1_log + term2_log + term3_log
+
+    W = W_log.clamp(min=MIN_LOG, max=MAX_LOG).exp()
 
     log_prob = -W + (alpha * W / Z / (alpha - 1)).abs().log()
 
-    # Range limiting in order to eliminate zero probability
+    # Infinite W means zero-probability
     log_prob = torch.where(W==torch.inf, -torch.inf, log_prob)
+
     log_prob = log_prob.clamp(min=MIN_LOG, max=MAX_LOG)
 
     return log_prob
