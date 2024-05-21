@@ -158,7 +158,7 @@ class StableReparam(Reparam):
         is_observed = msg["is_observed"]
 
         fn, event_dim = self._unwrap(fn)
-        assert isinstance(fn, dist.Stable) and fn.coords == "S0"
+        assert isinstance(fn, dist.Stable) and fn.coords == "S0" and not isinstance(fn, dist.StableWithLogProb)
 
         # Strategy: Let X ~ S0(a,b,s,m) be the stable variable of interest.
         # 1. WLOG scale and shift so s=1 and m=0, additionally shifting to convert
