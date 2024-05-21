@@ -7,6 +7,7 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all
 
+from pyro.distributions.stable_log_prob import StableLogProb
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
@@ -204,3 +205,7 @@ class Stable(TorchDistribution):
     def variance(self):
         var = self.scale * self.scale
         return var.mul(2).masked_fill(self.stability < 2, math.inf)
+
+
+class StableWithLogProb(StableLogProb, Stable):
+    pass
