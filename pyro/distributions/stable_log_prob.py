@@ -5,7 +5,6 @@ import math
 from functools import partial
 
 import torch
-from scipy.special import roots_legendre
 
 value_near_zero_tolerance = 0.01
 alpha_near_one_tolerance = 0.05
@@ -17,6 +16,8 @@ MIN_LOG = math.log10(finfo.tiny)
 
 
 def create_integrator(num_points):
+    from scipy.special import roots_legendre
+
     roots, weights = roots_legendre(num_points)
     roots = torch.Tensor(roots).double()
     weights = torch.Tensor(weights).double()
@@ -40,7 +41,11 @@ def set_integrator(num_points):
     integrate = create_integrator(num_points)
 
 
-set_integrator(num_points=501)
+# Stub which is replaced by the default integrator when called for the first time
+# if a default integrator has not already been set.
+def integrate(*args, **kwargs):
+    set_integrator(num_points=501)
+    return integrate(*args, **kwargs)
 
 
 class StableLogProb:
