@@ -52,7 +52,7 @@ def test_stable_with_log_prob_param_fit(alpha, beta, c, mu, alpha_0, beta_0, c_0
         with pyro.plate("data", data.shape[0]):
             pyro.sample("obs", Stable(alpha, beta, c, mu), obs=data)
 
-    def train(model, guide, num_steps=300, lr=0.03):
+    def train(model, guide, num_steps=400, lr=0.03):
         pyro.clear_param_store()
         pyro.set_rng_seed(20240520)
 
@@ -90,7 +90,7 @@ def test_stable_with_log_prob_param_fit(alpha, beta, c, mu, alpha_0, beta_0, c_0
 
 
 # # The below tests will be executed:
-# test_stable_with_log_prob_param_fit(1.00,   0.8,  2.0,  3.0, 1.3, 0.0, 1.0, 0.0)
+test_stable_with_log_prob_param_fit(1.00,   0.8,  2.0,  3.0, 1.3, 0.0, 1.0, 0.0)
 # test_stable_with_log_prob_param_fit(1.02,  -0.8,  2.0, -3.0, 1.3, 0.0, 1.0, 0.0)
 # test_stable_with_log_prob_param_fit(0.98,   0.5,  1.0, -3.0, 1.3, 0.0, 1.0, 0.0)
 # test_stable_with_log_prob_param_fit(0.95,  -0.5,  1.0,  3.0, 1.3, 0.0, 1.0, 0.0)
