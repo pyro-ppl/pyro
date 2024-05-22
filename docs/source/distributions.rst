@@ -407,6 +407,13 @@ Stable
     :undoc-members:
     :show-inheritance:
 
+StableWithLogProb
+-----------------
+.. autoclass:: pyro.distributions.StableWithLogProb
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 TruncatedPolyaGamma
 -------------------
 .. autoclass:: pyro.distributions.TruncatedPolyaGamma

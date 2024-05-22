@@ -208,4 +208,21 @@ class Stable(TorchDistribution):
 
 
 class StableWithLogProb(StableLogProb, Stable):
-    pass
+    r"""
+    Levy :math:`\alpha`-stable distribution that is based on
+    :class:`Stable` but with an added method for calculating the
+    log probability density using numerical integration.
+
+    This should be used in cases where reparameterization does not work
+    like when trying to estimate the skew :math:`\beta` parameter. Running
+    times are slower than with reparameterization.
+
+    The numerical integration implementation is based on the algorithm
+    proposed by Chambers, Mallows and Stuck (CMS) for simulating the
+    Levy :math:`\alpha`-stable distribution. The CMS algorithm involves a
+    nonlinear transformation of two independent random variables into
+    one stable random variable. The first random variable is uniformly
+    distributed while the second is exponentially distributed. The numerical
+    integration is performed over the first uniformly distributed random
+    variable.
+    """
