@@ -53,13 +53,16 @@ class StableLogProb:
     def log_prob(self, value):
         # Undo shift and scale
         value = (value - self.loc) / self.scale
+        value_dtype = value.dtype
 
         # Use double precision math
         alpha = self.stability.double()
         beta = self.skew.double()
         value = value.double()
 
-        return _stable_log_prob(alpha, beta, value, self.coords) - self.scale.log()
+        log_prob = _stable_log_prob(alpha, beta, value, self.coords)
+
+        return log_prob.to(dtype=value_dtype) - self.scale.log()
 
 
 def _stable_log_prob(alpha, beta, value, coords):
