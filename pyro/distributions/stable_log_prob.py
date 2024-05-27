@@ -6,7 +6,8 @@ from functools import partial
 
 import torch
 
-value_near_zero_tolerance = 0.01
+value_near_zero_tolerance_alpha = 0.01
+value_near_zero_tolerance_density = 0.1
 alpha_near_one_tolerance = 0.05
 
 
@@ -108,23 +109,26 @@ def _unsafe_alpha_stable_log_prob_S0(alpha, beta, Z):
     Z = Z + beta * (math.pi / 2 * alpha).tan()
 
     # Find near zero values
-    per_alpha_value_near_zero_tolerance = (
-        value_near_zero_tolerance * alpha / (1 - alpha).abs()
+    per_param_value_near_zero_tolerance = (
+        value_near_zero_tolerance_alpha * alpha / (1 - alpha).abs()
+    ).clamp(
+        max=value_near_zero_tolerance_density
+        * _unsafe_alpha_stable_log_prob_at_zero(alpha, 0).exp().reciprocal()
     )
-    idx = Z.abs() < per_alpha_value_near_zero_tolerance
+    idx = Z.abs() < per_param_value_near_zero_tolerance
 
     # Calculate log-prob at safe values
     log_prob = _unsafe_stable_log_prob(
-        alpha, beta, torch.where(idx, per_alpha_value_near_zero_tolerance, Z)
+        alpha, beta, torch.where(idx, per_param_value_near_zero_tolerance, Z)
     )
 
     # Handle near zero values by interpolation
     if idx.any():
         log_prob_pos = log_prob[idx]
         log_prob_neg = _unsafe_stable_log_prob(
-            alpha[idx], beta[idx], -per_alpha_value_near_zero_tolerance[idx]
+            alpha[idx], beta[idx], -per_param_value_near_zero_tolerance[idx]
         )
-        weights = Z[idx] / (2 * per_alpha_value_near_zero_tolerance[idx]) + 0.5
+        weights = Z[idx] / (2 * per_param_value_near_zero_tolerance[idx]) + 0.5
         log_prob[idx] = torch.logsumexp(
             torch.stack(
                 (log_prob_pos + weights.log(), log_prob_neg + (1 - weights).log()),
@@ -188,6 +192,25 @@ def _unsafe_stable_given_uniform_log_prob(V, alpha, beta, Z):
 
     # Infinite W means zero-probability
     log_prob = torch.where(W == torch.inf, -torch.inf, log_prob)
+
+    log_prob = log_prob.clamp(min=MIN_LOG, max=MAX_LOG)
+
+    return log_prob
+
+
+def _unsafe_alpha_stable_log_prob_at_zero(alpha, beta):
+    # Calculate log-probability at value of zero. This will fail if alpha is close to 1
+    inv_alpha = alpha.reciprocal()
+    half_pi = math.pi / 2
+    ha = half_pi * alpha
+    b = beta * ha.tan()
+    atan_b = b.atan()
+
+    term1_log = (inv_alpha * atan_b).cos().log()
+    term2_log = atan_b.cos().log() * inv_alpha
+    term3_log = torch.lgamma(1 + inv_alpha)
+
+    log_prob = term1_log - term2_log + term3_log - math.log(math.pi)
 
     log_prob = log_prob.clamp(min=MIN_LOG, max=MAX_LOG)
 
