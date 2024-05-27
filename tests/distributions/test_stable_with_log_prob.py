@@ -5,15 +5,62 @@ import logging
 
 import pytest
 import torch
+from scipy.stats import levy_stable
 
 import pyro
+import pyro.distributions
+import pyro.distributions.stable_log_prob
 from pyro.distributions import StableWithLogProb as Stable
 from pyro.distributions import constraints
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoNormal
 from tests.common import assert_close
+from tests.distributions.test_distributions import auto_goodness_of_fit
+
+TEST_FAILURE_RATE = 5e-4
+
 
 torch.set_default_dtype(torch.float64)
+
+
+@pytest.mark.parametrize("stability", [0.1, 0.95, 1.00, 1.05, 1.99])
+@pytest.mark.parametrize("skew", [-0.8, 0.0, 0.8])
+def test_stable_gof(stability, skew):
+    num_samples = 100000
+    # Use less samples for scipy as its log-probability calculation is much slower than pyro's
+    num_samples_scipy = 10000
+    pyro.set_rng_seed(20240527)
+
+    # Create distributions and samples
+    dist = Stable(stability, skew).expand(torch.Size([num_samples]))
+    dist_scipy = levy_stable(stability, skew)
+    dist_scipy.dist.parameterization = "S0"
+    samples = dist.sample()
+    samples_scipy = samples[:num_samples_scipy]
+
+    # Check goodness of fit of samples to scipy's implementation of the log-probability calculation.
+    logging.info(
+        f"Calculating log-probability of (stablity={stability}, "
+        "skew={skew}) for {len(samples_scipy)} samples with scipy"
+    )
+    probs_scipy = torch.Tensor(dist_scipy.pdf(samples_scipy))
+    gof_scipy = auto_goodness_of_fit(samples_scipy, probs_scipy)
+    assert gof_scipy > TEST_FAILURE_RATE
+    logging.info(
+        f"Goodness of fit failure rate is {gof_scipy} > {TEST_FAILURE_RATE} with scipy"
+    )
+
+    # Check goodness of fit of pyro's implementation of the log-probability calculation to generated samples.
+    logging.info(
+        f"Calculating log-probability of (stablity={stability}, "
+        "skew={skew}) for {len(samples)} samples with pyro"
+    )
+    probs = dist.log_prob(samples).exp()
+    gof = auto_goodness_of_fit(samples, probs)
+    assert gof > TEST_FAILURE_RATE
+    logging.info(
+        f"Goodness of fit failure rate is {gof} > {TEST_FAILURE_RATE} with pyro"
+    )
 
 
 @pytest.mark.parametrize(
