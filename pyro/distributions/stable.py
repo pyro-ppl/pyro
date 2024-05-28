@@ -7,6 +7,7 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all
 
+from pyro.distributions.stable_log_prob import StableLogProb
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
@@ -204,3 +205,24 @@ class Stable(TorchDistribution):
     def variance(self):
         var = self.scale * self.scale
         return var.mul(2).masked_fill(self.stability < 2, math.inf)
+
+
+class StableWithLogProb(StableLogProb, Stable):
+    r"""
+    Levy :math:`\alpha`-stable distribution that is based on
+    :class:`Stable` but with an added method for calculating the
+    log probability density using numerical integration.
+
+    This should be used in cases where reparameterization does not work
+    like when trying to estimate the skew :math:`\beta` parameter. Running
+    times are slower than with reparameterization.
+
+    The numerical integration implementation is based on the algorithm
+    proposed by Chambers, Mallows and Stuck (CMS) for simulating the
+    Levy :math:`\alpha`-stable distribution. The CMS algorithm involves a
+    nonlinear transformation of two independent random variables into
+    one stable random variable. The first random variable is uniformly
+    distributed while the second is exponentially distributed. The numerical
+    integration is performed over the first uniformly distributed random
+    variable.
+    """
