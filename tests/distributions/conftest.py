@@ -515,13 +515,18 @@ continuous_dists = [
                 "skew": 0.0,
                 "scale": 2.0,
                 "loc": -2.0,
-                "test_data": [10.0, -10.0]
+                "test_data": [10.0, -10.0],
             },
         ],
         scipy_arg_fn=lambda stability, skew, scale, loc: (
             (),
-            {"alpha": np.array(stability), "beta": np.array(skew), "scale": np.array(scale), "loc": np.array(loc)}
-        )
+            {
+                "alpha": np.array(stability),
+                "beta": np.array(skew),
+                "scale": np.array(scale),
+                "loc": np.array(loc),
+            },
+        ),
     ),
     Fixture(
         pyro_dist=dist.MultivariateStudentT,

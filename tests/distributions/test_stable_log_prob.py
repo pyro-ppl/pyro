@@ -10,8 +10,7 @@ from scipy.stats import levy_stable
 import pyro
 import pyro.distributions
 import pyro.distributions.stable_log_prob
-from pyro.distributions import Stable
-from pyro.distributions import constraints
+from pyro.distributions import Stable, constraints
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoNormal
 from tests.common import assert_close

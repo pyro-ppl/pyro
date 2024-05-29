@@ -107,7 +107,7 @@ class Stable(TorchDistribution):
 
     This implements a reparametrized sampler :meth:`rsample` , and a relatively
     expensive :meth:`log_prob` calculation by numerical integration which makes
-    inference slow (compared to other distributions) , but with better 
+    inference slow (compared to other distributions) , but with better
     convergence properties especially for :math:`\alpha`-stable distributions
     that are skewed (see the ``skew`` parameter below). Faster
     inference can be performed using either likelihood-free algorithms such as

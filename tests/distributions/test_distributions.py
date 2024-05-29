@@ -171,7 +171,7 @@ def test_mean(continuous_dist):
         "SineBivariateVonMises",
         "VonMises",
         "ProjectedNormal",
-        "Stable"
+        "Stable",
     ]:
         pytest.xfail(reason="Euclidean mean is not defined")
     for i in range(continuous_dist.get_num_test_data()):
