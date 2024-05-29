@@ -49,22 +49,6 @@ def integrate(*args, **kwargs):
     return integrate(*args, **kwargs)
 
 
-class StableLogProb:
-    def log_prob(self, value):
-        # Undo shift and scale
-        value = (value - self.loc) / self.scale
-        value_dtype = value.dtype
-
-        # Use double precision math
-        alpha = self.stability.double()
-        beta = self.skew.double()
-        value = value.double()
-
-        log_prob = _stable_log_prob(alpha, beta, value, self.coords)
-
-        return log_prob.to(dtype=value_dtype) - self.scale.log()
-
-
 def _stable_log_prob(alpha, beta, value, coords):
     # Convert to Nolan's parametrization S^0 where samples depend
     # continuously on (alpha,beta), allowing interpolation around the hole at

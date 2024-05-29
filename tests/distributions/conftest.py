@@ -500,16 +500,21 @@ continuous_dists = [
     ),
     Fixture(
         pyro_dist=dist.Stable,
+        scipy_dist=sp.levy_stable,
         examples=[
-            {"stability": [1.5], "skew": 0.1, "test_data": [-10.0]},
+            {"stability": [1.5], "skew": 0.0, "test_data": [-10.0]},
             {
-                "stability": [1.5],
-                "skew": 0.1,
+                "stability": [1.5, 0.5],
+                "skew": 0.0,
                 "scale": 2.0,
                 "loc": -2.0,
-                "test_data": [10.0],
+                "test_data": [10.0, -10.0]
             },
         ],
+        scipy_arg_fn=lambda stability, skew, scale, loc: (
+            (),
+            {"alpha": np.array(stability), "beta": np.array(skew), "scale": np.array(scale), "loc": np.array(loc)}
+        )
     ),
     Fixture(
         pyro_dist=dist.MultivariateStudentT,
