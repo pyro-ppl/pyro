@@ -7,7 +7,7 @@ import torch
 from torch.distributions import constraints
 from torch.distributions.utils import broadcast_all
 
-from pyro.distributions.stable_log_prob import StableLogProb
+from pyro.distributions.stable_log_prob import _stable_log_prob
 from pyro.distributions.torch_distribution import TorchDistribution
 
 
@@ -105,9 +105,12 @@ class Stable(TorchDistribution):
     pass ``coords="S"``, but BEWARE this is discontinuous at ``stability=1``
     and has poor geometry for inference.
 
-    This implements a reparametrized sampler :meth:`rsample` , but does not
-    implement :meth:`log_prob` . Inference can be performed using either
-    likelihood-free algorithms such as
+    This implements a reparametrized sampler :meth:`rsample` , and a relatively
+    expensive :meth:`log_prob` calculation by numerical integration which makes
+    inference slow (compared to other distributions) , but with better
+    convergence properties especially for :math:`\alpha`-stable distributions
+    that are skewed (see the ``skew`` parameter below). Faster
+    inference can be performed using either likelihood-free algorithms such as
     :class:`~pyro.infer.energy_distance.EnergyDistance`, or reparameterization
     via the :func:`~pyro.poutine.handlers.reparam` handler with one of the
     reparameterizers :class:`~pyro.infer.reparam.stable.LatentStableReparam` ,
@@ -176,7 +179,32 @@ class Stable(TorchDistribution):
         return new
 
     def log_prob(self, value):
-        raise NotImplementedError("Stable.log_prob() is not implemented")
+        r"""Implemented by numerical integration that is based on the algorithm
+        proposed by Chambers, Mallows and Stuck (CMS) for simulating the
+        Levy :math:`\alpha`-stable distribution. The CMS algorithm involves a
+        nonlinear transformation of two independent random variables into
+        one stable random variable. The first random variable is uniformly
+        distributed while the second is exponentially distributed. The numerical
+        integration is performed over the first uniformly distributed random
+        variable.
+        """
+        if self._validate_args:
+            self._validate_sample(value)
+
+        # Undo shift and scale
+        value = (value - self.loc) / self.scale
+        value_dtype = value.dtype
+
+        # Use double precision math
+        alpha = self.stability.double()
+        beta = self.skew.double()
+        value = value.double()
+
+        alpha, beta, value = broadcast_all(alpha, beta, value)
+
+        log_prob = _stable_log_prob(alpha, beta, value, self.coords)
+
+        return log_prob.to(dtype=value_dtype) - self.scale.log()
 
     def rsample(self, sample_shape=torch.Size()):
         # Draw parameter-free noise.
@@ -207,22 +235,12 @@ class Stable(TorchDistribution):
         return var.mul(2).masked_fill(self.stability < 2, math.inf)
 
 
-class StableWithLogProb(StableLogProb, Stable):
+class StableWithLogProb(Stable):
     r"""
-    Levy :math:`\alpha`-stable distribution that is based on
-    :class:`Stable` but with an added method for calculating the
-    log probability density using numerical integration.
-
-    This should be used in cases where reparameterization does not work
-    like when trying to estimate the skew :math:`\beta` parameter. Running
-    times are slower than with reparameterization.
-
-    The numerical integration implementation is based on the algorithm
-    proposed by Chambers, Mallows and Stuck (CMS) for simulating the
-    Levy :math:`\alpha`-stable distribution. The CMS algorithm involves a
-    nonlinear transformation of two independent random variables into
-    one stable random variable. The first random variable is uniformly
-    distributed while the second is exponentially distributed. The numerical
-    integration is performed over the first uniformly distributed random
-    variable.
+    Same as :class:`Stable` but will not undergo reparameterization by
+    :class:`~pyro.infer.reparam.strategies.MinimalReparam` and will fail
+    reparametrization by
+    :class:`~pyro.infer.reparam.stable.LatentStableReparam` ,
+    :class:`~pyro.infer.reparam.stable.SymmetricStableReparam` , or
+    :class:`~pyro.infer.reparam.stable.StableReparam`.
     """

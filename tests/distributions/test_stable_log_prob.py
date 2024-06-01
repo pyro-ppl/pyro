@@ -10,8 +10,7 @@ from scipy.stats import levy_stable
 import pyro
 import pyro.distributions
 import pyro.distributions.stable_log_prob
-from pyro.distributions import StableWithLogProb as Stable
-from pyro.distributions import constraints
+from pyro.distributions import Stable, constraints
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoNormal
 from tests.common import assert_close
@@ -41,7 +40,7 @@ def test_stable_gof(stability, skew):
     # Check goodness of fit of samples to scipy's implementation of the log-probability calculation.
     logging.info(
         f"Calculating log-probability of (stablity={stability}, "
-        "skew={skew}) for {len(samples_scipy)} samples with scipy"
+        f"skew={skew}) for {len(samples_scipy)} samples with scipy"
     )
     probs_scipy = torch.Tensor(dist_scipy.pdf(samples_scipy))
     gof_scipy = auto_goodness_of_fit(samples_scipy, probs_scipy)
@@ -53,7 +52,7 @@ def test_stable_gof(stability, skew):
     # Check goodness of fit of pyro's implementation of the log-probability calculation to generated samples.
     logging.info(
         f"Calculating log-probability of (stablity={stability}, "
-        "skew={skew}) for {len(samples)} samples with pyro"
+        f"skew={skew}) for {len(samples)} samples with pyro"
     )
     probs = dist.log_prob(samples).exp()
     gof = auto_goodness_of_fit(samples, probs)
