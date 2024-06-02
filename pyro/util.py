@@ -266,6 +266,12 @@ def check_model_guide_match(model_trace, guide_trace, max_plate_nesting=math.inf
         if site["type"] == "sample"
         if site["infer"].get("is_auxiliary")
     )
+    det_vars = set(
+        name
+        for name, site in guide_trace.nodes.items()
+        if site["type"] == "sample"
+        if site["infer"].get("_deterministic")
+    )
     model_vars = set(
         name
         for name, site in model_trace.nodes.items()
@@ -284,7 +290,7 @@ def check_model_guide_match(model_trace, guide_trace, max_plate_nesting=math.inf
         warnings.warn(
             "Found auxiliary vars in the model: {}".format(aux_vars & model_vars)
         )
-    if not (guide_vars <= model_vars | aux_vars):
+    if not (guide_vars <= model_vars | aux_vars | det_vars):
         warnings.warn(
             "Found non-auxiliary vars in guide but not model, "
             "consider marking these infer={{'is_auxiliary': True}}:\n{}".format(

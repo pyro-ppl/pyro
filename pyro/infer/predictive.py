@@ -60,7 +60,14 @@ def _predictive_sequential(
         )
         collected_trace.append(trace)
         collected_samples.append(
-            {site: trace.nodes[site]["value"] for site in return_site_shapes}
+            {
+                site: (
+                    trace.nodes[site]["value"]
+                    if site in trace.nodes
+                    else samples[i][site]
+                )
+                for site in return_site_shapes
+            }
         )
 
     return _predictiveResults(
@@ -84,6 +91,7 @@ def _predictive(
     model_args=(),
     model_kwargs={},
     mask=True,
+    posterior_deterministic_sites=(),
 ):
     model = torch.no_grad()(poutine.mask(model, mask=False) if mask else model)
     max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
@@ -122,6 +130,9 @@ def _predictive(
         elif site not in posterior_samples:
             return_site_shapes[site] = site_shape
 
+    for site in posterior_deterministic_sites:
+        return_site_shapes[site] = posterior_samples[site].shape
+
     # handle _RETURN site
     if return_sites is not None and "_RETURN" in return_sites:
         value = model_trace.nodes["_RETURN"]["value"]
@@ -143,7 +154,10 @@ def _predictive(
     ).get_trace(*model_args, **model_kwargs)
     predictions = {}
     for site, shape in return_site_shapes.items():
-        value = trace.nodes[site]["value"]
+        if site in trace.nodes:
+            value = trace.nodes[site]["value"]
+        else:
+            value = reshaped_samples[site]
         if site == "_RETURN" and shape is None:
             predictions[site] = value
             continue
@@ -179,6 +193,8 @@ class Predictive(torch.nn.Module):
     :param bool parallel: predict in parallel by wrapping the existing model
         in an outermost `plate` messenger. Note that this requires that the model has
         all batch dims correctly annotated via :class:`~pyro.plate`. Default is `False`.
+    :param return_deterministic_guide_sites: include deterministic sites from the guide
+        in returned samples; this does not affect the returned trace.
     """
 
     def __init__(
@@ -189,6 +205,7 @@ class Predictive(torch.nn.Module):
         num_samples=None,
         return_sites=(),
         parallel=False,
+        return_deterministic_guide_sites=False,
     ):
         super().__init__()
         if posterior_samples is None:
@@ -231,6 +248,7 @@ class Predictive(torch.nn.Module):
         self.guide = guide
         self.return_sites = return_sites
         self.parallel = parallel
+        self.return_deterministic_guide_sites = return_deterministic_guide_sites
 
     def call(self, *args, **kwargs):
         """
@@ -262,10 +280,13 @@ class Predictive(torch.nn.Module):
         """
         posterior_samples = self.posterior_samples
         return_sites = self.return_sites
+
+        guide_deterministic_sites = ()
+
         if self.guide is not None:
             # return all sites by default if a guide is provided.
             return_sites = None if not return_sites else return_sites
-            posterior_samples = _predictive(
+            guide_pred_res = _predictive(
                 self.guide,
                 posterior_samples,
                 self.num_samples,
@@ -273,7 +294,23 @@ class Predictive(torch.nn.Module):
                 parallel=self.parallel,
                 model_args=args,
                 model_kwargs=kwargs,
-            ).samples
+            )
+            posterior_samples = guide_pred_res.samples
+
+            if self.return_deterministic_guide_sites:
+                if isinstance(guide_pred_res, Trace):
+                    guide_tr = guide_pred_res.trace
+                else:
+                    guide_tr = guide_pred_res.trace[0]
+
+                guide_deterministic_sites = tuple(
+                    name
+                    for name, site in guide_tr.nodes.items()
+                    if site["type"] == "sample"
+                    if site["infer"].get("_deterministic")
+                    if (return_sites is None or name in return_sites)
+                )
+
         return _predictive(
             self.model,
             posterior_samples,
@@ -282,6 +319,7 @@ class Predictive(torch.nn.Module):
             parallel=self.parallel,
             model_args=args,
             model_kwargs=kwargs,
+            posterior_deterministic_sites=guide_deterministic_sites,
         ).samples
 
     def get_samples(self, *args, **kwargs):
