@@ -22,6 +22,8 @@ cmd?=bash
 # Determine name of docker image
 build run notebook: img_prefix=pyro-cpu
 build-gpu run-gpu notebook-gpu: img_prefix=pyro-gpu
+build run lab: img_prefix=pyro-cpu
+build-gpu run-gpu lab-gpu: img_prefix=pyro-gpu
 
 ifeq ($(img), )
 	IMG_NAME=${img_prefix}-${pyro_branch}-${python_version}
@@ -121,10 +123,32 @@ notebook: ##
 
 notebook-gpu: create-host-workspace
 notebook-gpu: ##
-	## Start a juptyer notebook on the Pyro GPU docker container.
+	## Start a jupyter notebook on the Pyro GPU docker container.
 	## Args:
 	##   img: use image name given by `img`.
 	##
 	docker run --runtime=nvidia --init -it -p 8888:8888 --user ${USER} \
 	-v ${HOST_WORK_DIR}:${DOCKER_WORK_DIR} \
 	${IMG_NAME}
+
+	notebook: create-host-workspace
+lab: ##
+	## Start jupyterlab on the Pyro CPU docker container.
+	## Args:
+	##   img: use image name given by `img`.
+	##
+	docker run --init -it -p 8888:8888 --user ${USER} \
+	-v ${HOST_WORK_DIR}:${DOCKER_WORK_DIR} \
+	${IMG_NAME} jupyter lab --port=8888 --no-browser --ip=0.0.0.0
+
+lab-gpu: create-host-workspace
+lab-gpu: ##
+	## Start jupyterlab on the Pyro GPU docker container.
+	## Args:
+	##   img: use image name given by `img`.
+	##
+	docker run --runtime=nvidia --init -it -p 8888:8888 --user ${USER} \
+	-v ${HOST_WORK_DIR}:${DOCKER_WORK_DIR} \
+	${IMG_NAME} jupyter lab --port=8888 --no-browser --ip=0.0.0.0
+
+

@@ -5,6 +5,7 @@ import math
 import numbers
 from collections import Counter, defaultdict
 from contextlib import contextmanager
+from dataclasses import fields
 
 import torch
 from opt_einsum import shared_intermediates
@@ -14,6 +15,7 @@ from pyro.distributions.util import is_identically_zero
 from pyro.ops import packed
 from pyro.ops.einsum.adjoint import require_backward
 from pyro.ops.rings import MarginalRing
+from pyro.poutine.trace_struct import Trace
 from pyro.poutine.util import site_is_subsample
 
 from .. import settings
@@ -342,3 +344,37 @@ def check_fully_reparametrized(guide_site):
         raise NotImplementedError(
             "All distributions in the guide must be fully reparameterized."
         )
+
+
+def plate_log_prob_sum(trace: Trace, plate_symbol: str) -> torch.Tensor:
+    """
+    Get log probability sum from trace while keeping indexing over the specified plate.
+    """
+    log_prob_sum = 0.0
+    for site in trace.nodes.values():
+        if site["type"] != "sample":
+            continue
+        log_prob_sum += torch.einsum(
+            site["packed"]["log_prob"]._pyro_dims + "->" + plate_symbol,
+            [site["packed"]["log_prob"]],
+        )
+    return log_prob_sum
+
+
+class CloneMixin:
+    """
+    Mixin class that adds ``.clone`` method to ``@dataclasses.dataclass`` decorated classes
+    that are made up of ``torch.Tensor`` fields.
+    """
+
+    def clone(self):
+        retval = dict()
+        for field_desc in fields(self):
+            field_name, value = field_desc.name, getattr(self, field_desc.name)
+            if isinstance(value, dict):
+                retval[field_name] = dict()
+                for key in value:
+                    retval[field_name][key] = value[key].clone()
+            else:
+                retval[field_name] = value.clone()
+        return self.__class__(**retval)

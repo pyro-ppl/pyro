@@ -2,9 +2,56 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pyro.distributions.torch_patch  # noqa F403
+
+# Import * to get the latest upstream distributions.
 from pyro.distributions.torch import *  # noqa F403
 
-# isort: split
+# Additionally try to import explicitly to help mypy static analysis.
+try:
+    from pyro.distributions.torch import (
+        Bernoulli,
+        Beta,
+        Binomial,
+        Categorical,
+        Cauchy,
+        Chi2,
+        ContinuousBernoulli,
+        Dirichlet,
+        Exponential,
+        ExponentialFamily,
+        FisherSnedecor,
+        Gamma,
+        Geometric,
+        Gumbel,
+        HalfCauchy,
+        HalfNormal,
+        Independent,
+        Kumaraswamy,
+        Laplace,
+        LKJCholesky,
+        LogisticNormal,
+        LogNormal,
+        LowRankMultivariateNormal,
+        MixtureSameFamily,
+        Multinomial,
+        MultivariateNormal,
+        NegativeBinomial,
+        Normal,
+        OneHotCategorical,
+        OneHotCategoricalStraightThrough,
+        Pareto,
+        Poisson,
+        RelaxedBernoulli,
+        RelaxedOneHotCategorical,
+        StudentT,
+        TransformedDistribution,
+        Uniform,
+        VonMises,
+        Weibull,
+        Wishart,
+    )
+except ImportError:
+    pass
 
 from pyro.distributions.affine_beta import AffineBeta
 from pyro.distributions.asymmetriclaplace import (
@@ -72,7 +119,7 @@ from pyro.distributions.sine_bivariate_von_mises import SineBivariateVonMises
 from pyro.distributions.sine_skewed import SineSkewed
 from pyro.distributions.softlaplace import SoftLaplace
 from pyro.distributions.spanning_tree import SpanningTree
-from pyro.distributions.stable import Stable
+from pyro.distributions.stable import Stable, StableWithLogProb
 from pyro.distributions.torch import __all__ as torch_dists
 from pyro.distributions.torch_distribution import (
     ExpandedDistribution,
@@ -99,7 +146,13 @@ __all__ = [
     "AVFMultivariateNormal",
     "AffineBeta",
     "AsymmetricLaplace",
+    "Bernoulli",
+    "Beta",
     "BetaBinomial",
+    "Binomial",
+    "Categorical",
+    "Cauchy",
+    "Chi2",
     "CoalescentRateLikelihood",
     "CoalescentTimes",
     "CoalescentTimesWithRate",
@@ -108,43 +161,71 @@ __all__ = [
     "ConditionalTransform",
     "ConditionalTransformModule",
     "ConditionalTransformedDistribution",
+    "ContinuousBernoulli",
     "Delta",
+    "Dirichlet",
     "DirichletMultinomial",
     "DiscreteHMM",
     "Distribution",
     "Empirical",
     "ExpandedDistribution",
+    "Exponential",
+    "ExponentialFamily",
     "ExtendedBetaBinomial",
     "ExtendedBinomial",
+    "FisherSnedecor",
     "FoldedDistribution",
+    "Gamma",
     "GammaGaussianHMM",
     "GammaPoisson",
     "GaussianHMM",
     "GaussianMRF",
     "GaussianScaleMixture",
+    "Geometric",
     "GroupedNormalNormal",
+    "Gumbel",
+    "HalfCauchy",
+    "HalfNormal",
     "ImproperUniform",
+    "Independent",
     "IndependentHMM",
     "InverseGamma",
+    "Kumaraswamy",
     "LKJ",
+    "LKJCholesky",
     "LKJCorrCholesky",
+    "Laplace",
     "LinearHMM",
+    "LogNormal",
     "LogNormalNegativeBinomial",
     "Logistic",
+    "LogisticNormal",
+    "LowRankMultivariateNormal",
     "MaskedDistribution",
     "MaskedMixture",
     "MixtureOfDiagNormals",
     "MixtureOfDiagNormalsSharedCovariance",
+    "MixtureSameFamily",
+    "Multinomial",
+    "MultivariateNormal",
     "MultivariateStudentT",
     "NanMaskedMultivariateNormal",
     "NanMaskedNormal",
+    "NegativeBinomial",
+    "Normal",
     "OMTMultivariateNormal",
+    "OneHotCategorical",
+    "OneHotCategoricalStraightThrough",
     "OneOneMatching",
     "OneTwoMatching",
     "OrderedLogistic",
+    "Pareto",
+    "Poisson",
     "ProjectedNormal",
     "Rejector",
+    "RelaxedBernoulli",
     "RelaxedBernoulliStraightThrough",
+    "RelaxedOneHotCategorical",
     "RelaxedOneHotCategoricalStraightThrough",
     "SineBivariateVonMises",
     "SineSkewed",
@@ -153,11 +234,18 @@ __all__ = [
     "SoftLaplace",
     "SpanningTree",
     "Stable",
+    "StableWithLogProb",
+    "StudentT",
     "TorchDistribution",
     "TransformModule",
+    "TransformedDistribution",
     "TruncatedPolyaGamma",
+    "Uniform",
     "Unit",
+    "VonMises",
     "VonMises3D",
+    "Weibull",
+    "Wishart",
     "ZeroInflatedDistribution",
     "ZeroInflatedNegativeBinomial",
     "ZeroInflatedPoisson",
@@ -171,4 +259,5 @@ __all__ = [
 
 # Import all torch distributions from `pyro.distributions.torch_distribution`
 __all__.extend(torch_dists)
+__all__[:] = sorted(set(__all__))
 del torch_dists

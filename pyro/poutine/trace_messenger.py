@@ -110,7 +110,7 @@ class TraceMessenger(Messenger):
             identify_dense_edges(self.trace)
         return super().__exit__(*args, **kwargs)
 
-    def __call__(self, fn: Callable[_P, _T]) -> Callable[_P, _T]:
+    def __call__(self, fn: Callable[_P, _T]) -> "TraceHandler[_P, _T]":
         """
         TODO docs
         """

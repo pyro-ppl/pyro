@@ -3,6 +3,7 @@
 
 import math
 import numbers
+from typing import List, Tuple, Union
 
 import torch
 from torch.fft import irfft, rfft
@@ -261,6 +262,69 @@ def quantile(input, probs, dim=0):
     return quantiles if probs.shape != torch.Size([]) else quantiles.squeeze(dim)
 
 
+def weighed_quantile(
+    input: torch.Tensor,
+    probs: Union[List[float], Tuple[float, ...], torch.Tensor],
+    log_weights: torch.Tensor,
+    dim: int = 0,
+) -> torch.Tensor:
+    """
+    Computes quantiles of weighed ``input`` samples at ``probs``.
+
+    :param torch.Tensor input: the input tensor.
+    :param list probs: quantile positions.
+    :param torch.Tensor log_weights: sample weights tensor.
+    :param int dim: dimension to take quantiles from ``input``.
+    :returns torch.Tensor: quantiles of ``input`` at ``probs``.
+
+    **Example:**
+
+    .. doctest::
+
+        >>> from pyro.ops.stats import weighed_quantile
+        >>> import torch
+        >>> input = torch.Tensor([[10, 50, 40], [20, 30, 0]])
+        >>> probs = torch.Tensor([0.2, 0.8])
+        >>> log_weights = torch.Tensor([0.4, 0.5, 0.1]).log()
+        >>> result = weighed_quantile(input, probs, log_weights, -1)
+        >>> torch.testing.assert_close(result, torch.Tensor([[40.4, 47.6], [9.0, 26.4]]))
+    """
+    dim = dim if dim >= 0 else (len(input.shape) + dim)
+    if isinstance(probs, (list, tuple)):
+        probs = torch.tensor(probs, dtype=input.dtype, device=input.device)
+    assert isinstance(probs, torch.Tensor)
+    # Calculate normalized weights
+    weights = (log_weights - torch.logsumexp(log_weights, 0)).exp()
+    # Sort input and weights
+    sorted_input, sorting_indices = input.sort(dim)
+    weights = weights[sorting_indices].cumsum(dim)
+    # Scale weights to be between zero and one
+    weights = weights - weights.min(dim, keepdim=True)[0]
+    weights = weights / weights.max(dim, keepdim=True)[0]
+    # Calculate indices
+    indices_above = (
+        (weights[..., None] <= probs)
+        .sum(dim, keepdim=True)
+        .swapaxes(dim, -1)
+        .clamp(max=input.size(dim) - 1)[..., 0]
+    )
+    indices_below = (indices_above - 1).clamp(min=0)
+    # Calculate below and above qunatiles
+    quantiles_below = sorted_input.gather(dim, indices_below)
+    quantiles_above = sorted_input.gather(dim, indices_above)
+    # Calculate weights for below and above quantiles
+    probs_shape = [None] * dim + [slice(None)] + [None] * (len(input.shape) - dim - 1)
+    expanded_probs_shape = list(input.shape)
+    expanded_probs_shape[dim] = len(probs)
+    probs = probs[probs_shape].expand(*expanded_probs_shape)
+    weights_below = weights.gather(dim, indices_below)
+    weights_above = weights.gather(dim, indices_above)
+    weights_below = (weights_above - probs) / (weights_above - weights_below)
+    weights_above = 1 - weights_below
+    # Return quantiles
+    return weights_below * quantiles_below + weights_above * quantiles_above
+
+
 def pi(input, prob, dim=0):
     """
     Computes percentile interval which assigns equal probability mass
@@ -444,3 +508,56 @@ def crps_empirical(pred, truth):
     weight = weight.reshape(weight.shape + (1,) * (diff.dim() - 1))
 
     return (pred - truth).abs().mean(0) - (diff * weight).sum(0) / num_samples**2
+
+
+def energy_score_empirical(pred: torch.Tensor, truth: torch.Tensor) -> torch.Tensor:
+    """
+    Computes negative Energy Score ES* (see equation 22 in [1]) between a
+    set of multivariate samples ``pred`` and a true data vector ``truth``. Running time
+    is quadratic in the number of samples ``n``. In case of univariate samples
+    the output coincides with the CRPS::
+
+        ES* = E|pred - truth| - 1/2 E|pred - pred'|
+
+    Note that for a single sample this reduces to the Euclidean norm of the difference between
+    the sample ``pred`` and the ``truth``.
+
+    This is a strictly proper score so that for ``pred`` distirbuted according to a
+    distribution :math:`P` and ``truth`` distributed according to a distribution :math:`Q`
+    we have :math:`ES^{*}(P,Q) \ge ES^{*}(Q,Q)` with equality holding if and only if :math:`P=Q`, i.e.
+    if :math:`P` and :math:`Q` have the same multivariate distribution (it is not sufficient for
+    :math:`P` and :math:`Q` to have the same marginals in order for equality to hold).
+
+    **References**
+
+    [1] Tilmann Gneiting, Adrian E. Raftery (2007)
+        `Strictly Proper Scoring Rules, Prediction, and Estimation`
+        https://www.stat.washington.edu/raftery/Research/PDF/Gneiting2007jasa.pdf
+
+    :param torch.Tensor pred: A set of sample predictions batched on the second leftmost dim.
+        The leftmost dim is that of the multivariate sample.
+    :param torch.Tensor truth: A tensor of true observations with same shape as ``pred`` except
+        for the second leftmost dim which can have any value or be omitted.
+    :return: A tensor of shape ``truth.shape``.
+    :rtype: torch.Tensor
+    """
+    if pred.dim() == (truth.dim() + 1):
+        remove_leftmost_dim = True
+        truth = truth[..., None, :]
+    elif pred.dim() == truth.dim():
+        remove_leftmost_dim = False
+    else:
+        raise ValueError(
+            "Expected pred to have at most one extra dim versus truth."
+            "Actual shapes: {} versus {}".format(pred.shape, truth.shape)
+        )
+
+    retval = (
+        torch.cdist(pred, truth).mean(dim=-2)
+        - 0.5 * torch.cdist(pred, pred).mean(dim=[-1, -2])[..., None]
+    )
+
+    if remove_leftmost_dim:
+        retval = retval[..., 0]
+
+    return retval

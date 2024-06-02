@@ -3,6 +3,7 @@
 
 import math
 import warnings
+from typing import List, Union
 
 import torch
 
@@ -12,9 +13,68 @@ from pyro.ops.stats import fit_generalized_pareto
 
 from .abstract_infer import TracePosterior
 from .enum import get_importance_trace
+from .util import plate_log_prob_sum
 
 
-class Importance(TracePosterior):
+class LogWeightsMixin:
+    """
+    Mixin class to compute analytics from a ``.log_weights`` attribute.
+    """
+
+    log_weights: Union[List[Union[float, torch.Tensor]], torch.Tensor]
+
+    def get_log_normalizer(self):
+        """
+        Estimator of the normalizing constant of the target distribution.
+        (mean of the unnormalized weights)
+        """
+        # ensure list is not empty
+        if len(self.log_weights) > 0:
+            log_w = (
+                self.log_weights
+                if isinstance(self.log_weights, torch.Tensor)
+                else torch.tensor(self.log_weights)
+            )
+            log_num_samples = torch.log(torch.tensor(log_w.numel() * 1.0))
+            return torch.logsumexp(log_w - log_num_samples, 0)
+        else:
+            warnings.warn(
+                "The log_weights list is empty, can not compute normalizing constant estimate."
+            )
+
+    def get_normalized_weights(self, log_scale=False):
+        """
+        Compute the normalized importance weights.
+        """
+        if len(self.log_weights) > 0:
+            log_w = (
+                self.log_weights
+                if isinstance(self.log_weights, torch.Tensor)
+                else torch.tensor(self.log_weights)
+            )
+            log_w_norm = log_w - torch.logsumexp(log_w, 0)
+            return log_w_norm if log_scale else torch.exp(log_w_norm)
+        else:
+            warnings.warn(
+                "The log_weights list is empty. There is nothing to normalize."
+            )
+
+    def get_ESS(self):
+        """
+        Compute (Importance Sampling) Effective Sample Size (ESS).
+        """
+        if len(self.log_weights) > 0:
+            log_w_norm = self.get_normalized_weights(log_scale=True)
+            ess = torch.exp(-torch.logsumexp(2 * log_w_norm, 0))
+        else:
+            warnings.warn(
+                "The log_weights list is empty, effective sample size is zero."
+            )
+            ess = 0
+        return ess
+
+
+class Importance(TracePosterior, LogWeightsMixin):
     """
     :param model: probabilistic model defined as a function
     :param guide: guide used for sampling defined as a function
@@ -53,48 +113,6 @@ class Importance(TracePosterior):
             ).get_trace(*args, **kwargs)
             log_weight = model_trace.log_prob_sum() - guide_trace.log_prob_sum()
             yield (model_trace, log_weight)
-
-    def get_log_normalizer(self):
-        """
-        Estimator of the normalizing constant of the target distribution.
-        (mean of the unnormalized weights)
-        """
-        # ensure list is not empty
-        if self.log_weights:
-            log_w = torch.tensor(self.log_weights)
-            log_num_samples = torch.log(torch.tensor(self.num_samples * 1.0))
-            return torch.logsumexp(log_w - log_num_samples, 0)
-        else:
-            warnings.warn(
-                "The log_weights list is empty, can not compute normalizing constant estimate."
-            )
-
-    def get_normalized_weights(self, log_scale=False):
-        """
-        Compute the normalized importance weights.
-        """
-        if self.log_weights:
-            log_w = torch.tensor(self.log_weights)
-            log_w_norm = log_w - torch.logsumexp(log_w, 0)
-            return log_w_norm if log_scale else torch.exp(log_w_norm)
-        else:
-            warnings.warn(
-                "The log_weights list is empty. There is nothing to normalize."
-            )
-
-    def get_ESS(self):
-        """
-        Compute (Importance Sampling) Effective Sample Size (ESS).
-        """
-        if self.log_weights:
-            log_w_norm = self.get_normalized_weights(log_scale=True)
-            ess = torch.exp(-torch.logsumexp(2 * log_w_norm, 0))
-        else:
-            warnings.warn(
-                "The log_weights list is empty, effective sample size is zero."
-            )
-            ess = 0
-        return ess
 
 
 def vectorized_importance_weights(model, guide, *args, **kwargs):
@@ -143,22 +161,9 @@ def vectorized_importance_weights(model, guide, *args, **kwargs):
         log_weights = model_trace.log_prob_sum() - guide_trace.log_prob_sum()
     else:
         wd = guide_trace.plate_to_symbol["num_particles_vectorized"]
-        log_weights = 0.0
-        for site in model_trace.nodes.values():
-            if site["type"] != "sample":
-                continue
-            log_weights += torch.einsum(
-                site["packed"]["log_prob"]._pyro_dims + "->" + wd,
-                [site["packed"]["log_prob"]],
-            )
-
-        for site in guide_trace.nodes.values():
-            if site["type"] != "sample":
-                continue
-            log_weights -= torch.einsum(
-                site["packed"]["log_prob"]._pyro_dims + "->" + wd,
-                [site["packed"]["log_prob"]],
-            )
+        log_weights = plate_log_prob_sum(model_trace, wd) - plate_log_prob_sum(
+            guide_trace, wd
+        )
 
     if normalized:
         log_weights = log_weights - torch.logsumexp(log_weights)

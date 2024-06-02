@@ -65,7 +65,8 @@ long_description = "\n".join([str(line) for line in long_description.split("\n")
 
 # examples/tutorials
 EXTRAS_REQUIRE = [
-    "jupyter>=1.0.0",
+    "notebook",
+    "ipywidgets",
     "graphviz>=0.8",
     "matplotlib>=1.3",
     "torchvision>=0.15.0",
@@ -88,7 +89,10 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(include=["pyro", "pyro.*"]),
-    package_data={"pyro.distributions": ["*.cpp"]},
+    package_data={
+        "pyro": ["py.typed"],
+        "pyro.distributions": ["*.cpp"],
+    },
     author="Uber AI Labs",
     url="http://pyro.ai",
     project_urls={

@@ -133,7 +133,7 @@ def get_true_pred_CPDs(CPD, posterior_param):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.9.0")
+    assert pyro.__version__.startswith("1.9.1")
     parser = argparse.ArgumentParser(description="Toy mixture model")
     parser.add_argument("-n", "--num-steps", default=4000, type=int)
     parser.add_argument("-o", "--num-obs", default=10000, type=int)
