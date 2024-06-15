@@ -13,9 +13,9 @@ from pyro.poutine.runtime import Message
 
 class EqualizeMessenger(Messenger):
     """
-    Given a stochastic function with some primitive statements
-    and a list of names,
-    force the primitive statements at those names to have the same value.
+    Given a stochastic function with some primitive statements and a list of names,
+    force the primitive statements at those names to have the same value,
+    with that value being the result of the first primitive statement matching those names.
 
     Consider the following Pyro program:
 
