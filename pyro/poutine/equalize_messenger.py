@@ -55,7 +55,7 @@ class EqualizeMessenger(Messenger):
         self.value = None
         return super().__enter__()
 
-    def _is_matching(self, msg: Message):
+    def _is_matching(self, msg: Message) -> bool:
         if msg["type"] == self.type:
             for site in self.sites:
                 if re.compile(site).fullmatch(msg["name"]) is not None:  # type: ignore[arg-type]
