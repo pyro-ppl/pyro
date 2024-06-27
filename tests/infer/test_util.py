@@ -76,9 +76,9 @@ def test_psis_diagnostic(scale, krange, zdim, max_particles, num_particles=500 *
 
 def test_render_model_deterministic_param():
     def model():
-        value = pyro.param("param", torch.tensor(0.))
+        value = pyro.param("param", torch.tensor(0.0))
         pyro.deterministic("deterministic", value)
 
     graph = pyro.render_model(model, render_params=True, render_deterministic=True)
 
-    assert '\tparam -> deterministic\n' in graph.body
+    assert "\tparam -> deterministic\n" in graph.body
