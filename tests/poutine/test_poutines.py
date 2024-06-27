@@ -755,6 +755,50 @@ class InferConfigHandlerTests(TestCase):
         assert tr.nodes["p"]["infer"] == {}
 
 
+class EqualizeHandlerTests(TestCase):
+    def setUp(self):
+        def per_category_model(category):
+            shift = pyro.param(f"{category}_shift", torch.randn(1))
+            mean = pyro.sample(f"{category}_mean", pyro.distributions.Normal(0, 1))
+            std = pyro.sample(f"{category}_std", pyro.distributions.LogNormal(0, 1))
+            with pyro.plate(f"{category}_num_samples", 5):
+                return pyro.sample(
+                    f"{category}_values", pyro.distributions.Normal(mean + shift, std)
+                )
+
+        def model(categories=["dogs", "cats"]):
+            return {category: per_category_model(category) for category in categories}
+
+        self.model = model
+
+    def test_sample_site_equalization(self):
+        pyro.set_rng_seed(20240616)
+        pyro.clear_param_store()
+        model = poutine.equalize(self.model, ".+_std")
+        tr = pyro.poutine.trace(model).get_trace()
+        assert_equal(tr.nodes["cats_std"]["value"], tr.nodes["dogs_std"]["value"])
+        assert_not_equal(
+            tr.nodes["cats_shift"]["value"], tr.nodes["dogs_shift"]["value"]
+        )
+        guide = pyro.infer.autoguide.AutoNormal(model)
+        guide_sites = [*guide()]
+        assert guide_sites == [
+            "dogs_mean",
+            "dogs_std",
+            "dogs_values",
+            "cats_mean",
+            "cats_values",
+        ]
+
+    def test_param_equalization(self):
+        pyro.set_rng_seed(20240616)
+        pyro.clear_param_store()
+        model = poutine.equalize(self.model, ".+_shift", "param")
+        tr = pyro.poutine.trace(model).get_trace()
+        assert_equal(tr.nodes["cats_shift"]["value"], tr.nodes["dogs_shift"]["value"])
+        assert_not_equal(tr.nodes["cats_std"]["value"], tr.nodes["dogs_std"]["value"])
+
+
 @pytest.mark.parametrize("first_available_dim", [-1, -2, -3])
 @pytest.mark.parametrize("depth", [0, 1, 2])
 def test_enumerate_poutine(depth, first_available_dim):
