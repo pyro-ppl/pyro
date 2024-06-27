@@ -92,7 +92,7 @@ from .polynomial import Polynomial, polynomial
 from .power import PositivePowerTransform
 from .radial import ConditionalRadial, Radial, conditional_radial, radial
 from .simplex_to_ordered import SimplexToOrderedTransform
-from .softplus import SoftplusLowerCholeskyTransform, SoftplusTransform
+from .softplus import SoftplusLowerCholeskyTransform, SoftplusTransform  # type: ignore[assignment]
 from .spline import ConditionalSpline, Spline, conditional_spline, spline
 from .spline_autoregressive import (
     ConditionalSplineAutoregressive,

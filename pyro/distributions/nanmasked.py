@@ -24,7 +24,7 @@ class NanMaskedNormal(Normal):
     def log_prob(self, value: torch.Tensor) -> torch.Tensor:
         ok = value.isfinite()
         if ok.all():
-            return super().log_prob(value)
+            return super().log_prob(value)  # type: ignore[no-any-return]
 
         # Broadcast all tensors.
         value, ok, loc, scale = torch.broadcast_tensors(value, ok, self.loc, self.scale)
@@ -65,7 +65,7 @@ class NanMaskedMultivariateNormal(MultivariateNormal):
     def log_prob(self, value: torch.Tensor) -> torch.Tensor:
         ok = value.isfinite()
         if ok.all():
-            return super().log_prob(value)
+            return super().log_prob(value)  # type: ignore[no-any-return]
 
         # Broadcast all tensors. This might waste some computation by eagerly
         # broadcasting, but the optimal implementation is quite complex.

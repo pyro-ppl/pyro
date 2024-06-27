@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+from typing import List
 
 from torch.distributions import (
     Independent,
@@ -53,4 +54,4 @@ def _kl_independent_mvn(p, q):
     raise NotImplementedError
 
 
-__all__ = []
+__all__: List[str] = []
