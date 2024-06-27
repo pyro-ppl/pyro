@@ -44,7 +44,7 @@ def set_integrator(num_points):
 
 # Stub which is replaced by the default integrator when called for the first time
 # if a default integrator has not already been set.
-def integrate(*args, **kwargs):
+def integrate(*args, **kwargs):  # noqa: F811
     set_integrator(num_points=501)
     return integrate(*args, **kwargs)
 

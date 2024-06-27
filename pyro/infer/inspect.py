@@ -331,7 +331,7 @@ def get_model_relations(
 
         sample_param[name] = [
             upstream
-            for upstream in get_provenance(site["fn"].log_prob(site["value"]))
+            for upstream in provenance
             if upstream != name and _get_type_from_frozenname(upstream) == "param"
         ]
 
