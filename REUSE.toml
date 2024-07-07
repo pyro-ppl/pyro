@@ -85,3 +85,15 @@ path = "examples/capture_recapture/**csv"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Copyright (c) 2017-2019 Uber Technologies, Inc."
 SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "MANIFEST.in" 
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright Contributors to the Pyro project."
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "docs/source/_static/img/favicon/manifest.json" 
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright Contributors to the Pyro project."
+SPDX-License-Identifier = "Apache-2.0"
