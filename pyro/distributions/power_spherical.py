@@ -1,3 +1,4 @@
+# Copyright Contributors to the Pyro project.
 # SPDX-FileCopyrightText: 2020 Nicola De Cao
 # SPDX-FileCopyrightText: 2024 Andreas Fehlner
 #
