@@ -26,10 +26,7 @@ lint: FORCE
 	black --check *.py pyro examples tests scripts profiler
 	mypy --install-types --non-interactive pyro scripts tests
 
-license: FORCE
-	python scripts/update_headers.py
-
-format: license FORCE
+format: FORCE
 	ruff check --fix .
 	black *.py pyro examples tests scripts profiler
 
