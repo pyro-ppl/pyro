@@ -1,0 +1,16 @@
+version = 1
+SPDX-PackageName = "pyro"
+SPDX-PackageSupplier = "TODO add"
+SPDX-PackageDownloadLocation = "pyro.ai"
+
+[[annotations]]
+path = "tutorial/source/**ipynb"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright Contributors to the Pyro project."
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "tutorial/source/**rst"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright Contributors to the Pyro project."
+SPDX-License-Identifier = "Apache-2.0"
