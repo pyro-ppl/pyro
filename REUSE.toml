@@ -97,3 +97,11 @@ path = "docs/source/_static/img/favicon/manifest.json"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Copyright Contributors to the Pyro project."
 SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "tests/infer/enum_growth.ipynb" 
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright Contributors to the Pyro project."
+SPDX-License-Identifier = "Apache-2.0"
+
+
