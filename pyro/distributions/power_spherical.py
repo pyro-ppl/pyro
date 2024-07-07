@@ -1,7 +1,5 @@
 # Copyright Contributors to the Pyro project.
-# SPDX-FileCopyrightText: 2020 Nicola De Cao
-# SPDX-FileCopyrightText: 2024 Andreas Fehlner
-#
+# Copyright: 2020 Nicola De Cao, 2024 Andreas Fehlner
 # SPDX-License-Identifier: MIT
 
 import math
