@@ -4,9 +4,10 @@
 # SPDX-License-Identifier: MIT
 
 import math
+
 import torch
-from torch.distributions.kl import register_kl
 from torch import linalg as LA
+from torch.distributions.kl import register_kl
 
 _EPS = 1e-7
 
