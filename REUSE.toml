@@ -43,3 +43,45 @@ path = "docs/source/**rst"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Copyright Contributors to the Pyro project."
 SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "docs/source/**gif" 
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright Contributors to the Pyro project."
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "docs/source/**ico" 
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright Contributors to the Pyro project."
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "docs/source/**csv" 
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright Contributors to the Pyro project."
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "docs/source/**txt" 
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright Contributors to the Pyro project."
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "tutorial/source/**gif" 
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright Contributors to the Pyro project."
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "tutorial/source/**ico" 
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright Contributors to the Pyro project."
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "exampeles/capture_recapture/**csv" 
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Copyright (c) 2017-2019 Uber Technologies, Inc."
+SPDX-License-Identifier = "Apache-2.0"

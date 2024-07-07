@@ -1,3 +1,9 @@
+<!--
+Copyright Contributors to the Pyro project.
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Contributed Code
 
 Code in `pyro.contrib` is under various stages of development.
