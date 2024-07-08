@@ -114,7 +114,7 @@ def _minimal_reparam(fn, is_observed):
                 return TransformReparam()  # Then reparametrize new sites.
         fn = fn.base_dist
 
-    if isinstance(fn, dist.Stable):
+    if isinstance(fn, dist.Stable) and not isinstance(fn, dist.StableWithLogProb):
         if not is_observed:
             return LatentStableReparam()
         elif fn.skew.requires_grad or fn.skew.any():

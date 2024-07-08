@@ -163,6 +163,7 @@ class PyroSample:
         assert isinstance(my_module, PyroModule)
         my_module.x = PyroSample(Normal(0, 1))                    # independent
         my_module.y = PyroSample(lambda self: Normal(self.x, 1))  # dependent
+        my_module.z = PyroSample(lambda self: self.y ** 2)        # deterministic dependent
 
     or EXPERIMENTALLY as a decorator on lazy initialization methods::
 
@@ -175,16 +176,22 @@ class PyroSample:
             def y(self):
                 return Normal(self.x, 1)  # dependent
 
+            @PyroSample
+            def z(self):
+                return self.y ** 2        # deterministic dependent
+
             def forward(self):
-                return self.y             # accessed like a @property
+                return self.z             # accessed like a @property
 
     :param prior: distribution object or function that inputs the
         :class:`PyroModule` instance ``self`` and returns a distribution
-        object.
+        object or a deterministic value.
     """
 
     prior: Union[
-        "TorchDistributionMixin", Callable[["PyroModule"], "TorchDistributionMixin"]
+        "TorchDistributionMixin",
+        Callable[["PyroModule"], "TorchDistributionMixin"],
+        Callable[["PyroModule"], torch.Tensor],
     ]
 
     def __post_init__(self) -> None:
@@ -582,7 +589,12 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                     constrained_value.unconstrained = weakref.ref(unconstrained_value)
                     return pyro.poutine.runtime.effectful(type="param")(
                         lambda *_, **__: constrained_value
-                    )(fullname, event_dim=event_dim, name=fullname)
+                    )(
+                        fullname,
+                        constraint=constraint,
+                        event_dim=event_dim,
+                        name=fullname,
+                    )
                 else:  # Cannot determine supermodule and hence cannot compute fullname.
                     constrained_value = transform_to(constraint)(unconstrained_value)
                     constrained_value.unconstrained = weakref.ref(unconstrained_value)
@@ -600,13 +612,17 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                     if value is None:
                         if not hasattr(prior, "sample"):  # if not a distribution
                             prior = prior(self)
-                        value = pyro.sample(fullname, prior)
+                        value = (
+                            pyro.deterministic(fullname, prior)
+                            if isinstance(prior, torch.Tensor)
+                            else pyro.sample(fullname, prior)
+                        )
                         context.set(fullname, value)
                     return value
                 else:  # Cannot determine supermodule and hence cannot compute fullname.
                     if not hasattr(prior, "sample"):  # if not a distribution
                         prior = prior(self)
-                    return prior()
+                    return prior if isinstance(prior, torch.Tensor) else prior()
 
         result = super().__getattr__(name)
 
@@ -621,7 +637,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 # even though we don't use the contents of the local parameter store
                 fullname = self._pyro_get_fullname(name)
                 pyro.poutine.runtime.effectful(type="param")(lambda *_, **__: result)(
-                    fullname, result, name=fullname
+                    fullname, result, constraint=constraints.real, name=fullname
                 )
 
         if isinstance(result, torch.nn.Module):
@@ -645,7 +661,12 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                         )
                         pyro.poutine.runtime.effectful(type="param")(
                             lambda *_, **__: param_value
-                        )(fullname_param, param_value, name=fullname_param)
+                        )(
+                            fullname_param,
+                            param_value,
+                            constraint=constraints.real,
+                            name=fullname_param,
+                        )
 
         return result
 

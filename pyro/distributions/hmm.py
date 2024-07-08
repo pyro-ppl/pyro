@@ -1090,7 +1090,7 @@ class LinearHMM(HiddenMarkovModel):
         self.transforms = transforms
 
     @constraints.dependent_property(event_dim=2)
-    def support(self):
+    def support(self):  # noqa: F811
         return constraints.independent(self.observation_dist.support, 1)
 
     def expand(self, batch_shape, _instance=None):

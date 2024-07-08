@@ -491,9 +491,10 @@ class AttributeModel(PyroModule):
         )
         self.s = PyroSample(dist.Normal(0, 1))
         self.t = PyroSample(lambda self: dist.Normal(self.s, self.z))
+        self.u = PyroSample(lambda self: self.t**2)
 
     def forward(self):
-        return self.x + self.y + self.t
+        return self.x + self.y + self.u
 
 
 class DecoratorModel(PyroModule):
@@ -521,8 +522,12 @@ class DecoratorModel(PyroModule):
     def t(self):
         return dist.Normal(self.s, self.z).to_event(1)
 
+    @PyroSample
+    def u(self):
+        return self.t**2
+
     def forward(self):
-        return self.x + self.y + self.t
+        return self.x + self.y + self.u
 
 
 @pytest.mark.parametrize("Model", [AttributeModel, DecoratorModel])
@@ -531,19 +536,32 @@ def test_decorator(Model, size):
     model = Model(size)
     for i in range(2):
         trace = poutine.trace(model).get_trace()
-        assert set(trace.nodes.keys()) == {"_INPUT", "x", "y", "z", "s", "t", "_RETURN"}
+        assert set(trace.nodes.keys()) == {
+            "_INPUT",
+            "x",
+            "y",
+            "z",
+            "s",
+            "t",
+            "u",
+            "_RETURN",
+        }
 
         assert trace.nodes["x"]["type"] == "param"
         assert trace.nodes["y"]["type"] == "param"
         assert trace.nodes["z"]["type"] == "param"
         assert trace.nodes["s"]["type"] == "sample"
         assert trace.nodes["t"]["type"] == "sample"
+        assert trace.nodes["u"]["type"] == "sample"
 
         assert trace.nodes["x"]["value"].shape == (size,)
         assert trace.nodes["y"]["value"].shape == (size,)
         assert trace.nodes["z"]["value"].shape == (size,)
         assert trace.nodes["s"]["value"].shape == ()
         assert trace.nodes["t"]["value"].shape == (size,)
+        assert trace.nodes["u"]["value"].shape == (size,)
+
+        assert trace.nodes["u"]["infer"] == {"_deterministic": True}
 
 
 def test_mixin_factory():
@@ -1045,3 +1063,24 @@ class TestPyroModuleList(ModuleListTester):
 
 def test_module_list() -> None:
     assert PyroModule[torch.nn.ModuleList] is pyro.nn.PyroModuleList
+
+
+@pytest.mark.parametrize("use_module_local_params", [True, False])
+def test_render_constrained_param(use_module_local_params):
+
+    class Model(PyroModule):
+
+        @PyroParam(constraint=constraints.positive)
+        def x(self):
+            return torch.tensor(1.234)
+
+        @PyroParam(constraint=constraints.real)
+        def y(self):
+            return torch.tensor(0.456)
+
+        def forward(self):
+            return self.x + self.y
+
+    with pyro.settings.context(module_local_params=use_module_local_params):
+        model = Model()
+        pyro.render_model(model)

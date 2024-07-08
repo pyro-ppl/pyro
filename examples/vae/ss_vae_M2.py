@@ -427,7 +427,7 @@ EXAMPLE_RUN = (
 )
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.9.0")
+    assert pyro.__version__.startswith("1.9.1")
 
     parser = argparse.ArgumentParser(description="SS-VAE\n{}".format(EXAMPLE_RUN))
 
