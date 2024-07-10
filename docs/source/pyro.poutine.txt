@@ -54,6 +54,14 @@ ________________
     :undoc-members:
     :show-inheritance:
 
+EqualizeMessenger
+____________________
+
+.. automodule:: pyro.poutine.equalize_messenger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 EscapeMessenger
 ________________
 
