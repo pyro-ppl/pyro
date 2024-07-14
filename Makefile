@@ -1,7 +1,3 @@
-# Copyright Contributors to the Pyro project.
-#
-# SPDX-License-Identifier: Apache-2.0
-
 .PHONY: all install docs lint format test integration-test clean FORCE
 
 all: docs test
@@ -24,9 +20,13 @@ tutorial: FORCE
 lint: FORCE
 	ruff check .
 	black --check *.py pyro examples tests scripts profiler
+	python scripts/update_headers.py --check
 	mypy --install-types --non-interactive pyro scripts tests
 
-format: FORCE
+license: FORCE
+	python scripts/update_headers.py
+
+format: license FORCE
 	ruff check --fix .
 	black *.py pyro examples tests scripts profiler
 
