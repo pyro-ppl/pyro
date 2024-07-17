@@ -2,9 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Iterable, Iterator, Optional
+from typing import TYPE_CHECKING, Iterator, Optional
 
-import pyro
 from pyro.poutine.broadcast_messenger import BroadcastMessenger
 from pyro.poutine.messenger import Messenger, block_messengers
 from pyro.poutine.subsample_messenger import SubsampleMessenger
