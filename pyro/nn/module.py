@@ -54,6 +54,7 @@ from typing_extensions import Concatenate, ParamSpec
 
 import pyro
 import pyro.params.param_store
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.ops.provenance import detach_provenance
 from pyro.poutine.messenger import Messenger
 from pyro.poutine.runtime import _PYRO_PARAM_STORE, InferDict
@@ -65,7 +66,6 @@ _T = TypeVar("_T")
 _PyroModule = TypeVar("_PyroModule", bound="PyroModule")
 
 if TYPE_CHECKING:
-    from pyro.distributions.torch_distribution import TorchDistributionMixin
     from pyro.params.param_store import StateDict
 
 
@@ -235,7 +235,7 @@ class PyroSample:
 
 
 class _PyroSampleInferDict(InferDict):
-    _original_pyrosample_dist: pyro.distributions.Distribution
+    _original_pyrosample_dist: TorchDistributionMixin
 
 
 class PyroSamplePlateScope(Messenger):
