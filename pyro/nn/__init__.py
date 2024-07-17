@@ -14,6 +14,7 @@ from pyro.nn.module import (
     PyroModuleList,
     PyroParam,
     PyroSample,
+    PyroSamplePlateScope,
     pyro_method,
 )
 
@@ -28,4 +29,5 @@ __all__ = [
     "PyroSample",
     "pyro_method",
     "PyroModuleList",
+    "PyroSamplePlateScope",
 ]

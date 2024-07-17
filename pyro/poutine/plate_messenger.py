@@ -89,27 +89,3 @@ def block_plate(
                 "setting strict=False."
             )
         yield
-
-
-class PyroSamplePlateScope(Messenger):
-    """
-    Handler for executing PyroSample statements in a more intuitive plate context.
-    """
-    def __init__(self, allowed_plates: Iterable[str] = ()):
-        self._inner_allowed_plates = frozenset(allowed_plates)
-
-    def __enter__(self):
-        self._plates: frozenset[str] = frozenset(p.name for p in pyro.poutine.runtime.get_plates()) | self._inner_allowed_plates
-        return super().__enter__()
-
-    def _is_local_plate(self, m: Messenger) -> bool:
-        return isinstance(m, PlateMessenger) and m.name not in self._plates
-
-    def _pyro_sample(self, msg):
-        if not msg["infer"].get("_original_pyrosample_dist", None):
-            return
-        msg["stop"] = True
-        msg["done"] = True
-        with block_messengers(lambda m: m is self or self._is_local_plate(m)):
-            d = msg["infer"].pop("_original_pyrosample_dist")
-            msg["value"] = pyro.sample(msg["name"], d, obs=msg["value"] if msg["is_observed"] else None, infer=msg["infer"])

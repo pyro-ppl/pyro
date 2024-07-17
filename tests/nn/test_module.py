@@ -1101,7 +1101,7 @@ def test_pyrosample_platescope():
         def scale(self):
             return pyro.distributions.LogNormal(0, 1).expand([self.num_outputs]).to_event(1)
 
-        @pyro.poutine.plate_messenger.PyroSamplePlateScope()
+        @pyro.nn.PyroSamplePlateScope()
         def forward(self, x):
             with pyro.plate("data", x.shape[-2], dim=-1):
                 assert len(self.linear.weight.shape) == 2 or self.linear.weight.shape[-3] != 1  # sampled outside data plate

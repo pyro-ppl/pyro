@@ -55,6 +55,7 @@ from typing_extensions import Concatenate, ParamSpec
 import pyro
 import pyro.params.param_store
 from pyro.ops.provenance import detach_provenance
+from pyro.poutine.messenger import Messenger
 from pyro.poutine.runtime import _PYRO_PARAM_STORE
 
 _MODULE_LOCAL_PARAMS: bool = False
@@ -231,6 +232,30 @@ class PyroSample:
         assert self.name is not None
         value: PyroSample = obj.__getattr__(self.name)
         return value
+
+
+class PyroSamplePlateScope(Messenger):
+    """
+    Handler for executing PyroSample statements in a more intuitive plate context.
+    """
+    def __init__(self, allowed_plates: Iterable[str] = ()):
+        self._inner_allowed_plates = frozenset(allowed_plates)
+
+    def __enter__(self):
+        self._plates: frozenset[str] = frozenset(p.name for p in pyro.poutine.runtime.get_plates()) | self._inner_allowed_plates
+        return super().__enter__()
+
+    def _is_local_plate(self, m: Messenger) -> bool:
+        return isinstance(m, pyro.poutine.plate_messenger.PlateMessenger) and m.name not in self._plates
+
+    def _pyro_sample(self, msg):
+        if not msg["infer"].get("_original_pyrosample_dist", None):
+            return
+        msg["stop"] = True
+        msg["done"] = True
+        with pyro.poutine.messenger.block_messengers(lambda m: m is self or self._is_local_plate(m)):
+            d = msg["infer"].pop("_original_pyrosample_dist")
+            msg["value"] = pyro.sample(msg["name"], d, obs=msg["value"] if msg["is_observed"] else None, infer=msg["infer"])
 
 
 def _make_name(prefix: str, name: str) -> str:
