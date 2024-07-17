@@ -56,7 +56,7 @@ import pyro
 import pyro.params.param_store
 from pyro.ops.provenance import detach_provenance
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.runtime import _PYRO_PARAM_STORE
+from pyro.poutine.runtime import _PYRO_PARAM_STORE, InferDict
 
 _MODULE_LOCAL_PARAMS: bool = False
 
@@ -234,6 +234,10 @@ class PyroSample:
         return value
 
 
+class _PyroSampleInferDict(InferDict):
+    _original_pyrosample_dist: pyro.distributions.Distribution
+
+
 class PyroSamplePlateScope(Messenger):
     """
     Handler for executing PyroSample statements in a more intuitive plate context.
@@ -243,7 +247,7 @@ class PyroSamplePlateScope(Messenger):
         self._inner_allowed_plates = frozenset(allowed_plates)
 
     def __enter__(self):
-        self._plates: frozenset[str] = (
+        self._plates = (
             frozenset(p.name for p in pyro.poutine.runtime.get_plates())
             | self._inner_allowed_plates
         )
@@ -255,7 +259,7 @@ class PyroSamplePlateScope(Messenger):
             and m.name not in self._plates
         )
 
-    def _pyro_sample(self, msg):
+    def _pyro_sample(self, msg) -> None:
         if not msg["infer"].get("_original_pyrosample_dist", None):
             return
         msg["stop"] = True
@@ -658,7 +662,9 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                             else pyro.sample(
                                 fullname,
                                 prior,
-                                infer={"_original_pyrosample_dist": prior},
+                                infer=_PyroSampleInferDict(
+                                    _original_pyrosample_dist=prior
+                                ),
                             )
                         )
                         context.set(fullname, value)
