@@ -37,6 +37,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Iterable,
     Iterator,
     List,
     NamedTuple,
@@ -230,6 +231,29 @@ class PyroSample:
         assert self.name is not None
         value: PyroSample = obj.__getattr__(self.name)
         return value
+
+
+class PyroSamplePlateScope(pyro.poutine.messenger.Messenger):
+    """
+    Handler for executing PyroSample statements in a more intuitive plate context.
+    """
+    def __init__(self, allowed_plates: Iterable[str] = ()):
+        self._inner_allowed_plates = frozenset(allowed_plates)
+
+    def __enter__(self):
+        self._plates: frozenset[str] = frozenset(p.name for p in pyro.poutine.runtime.get_plates()) | self._inner_allowed_plates
+        return super().__enter__()
+
+    def _is_local_plate(self, m: pyro.poutine.messenger.Messenger) -> bool:
+        return isinstance(m, pyro.poutine.plate_messenger.PlateMessenger) and m.name not in self._plates
+
+    def _pyro_sample(self, msg):
+        if not msg["infer"].get("_is_global_sample", False):
+            return
+        msg["stop"] = True
+        msg["done"] = True
+        with pyro.poutine.messenger.block_messenger(lambda m: m is self or self._is_local_plate(m)):
+            msg["value"] = pyro.sample(msg["name"], msg["fn"], obs=msg["value"] if msg["is_observed"] else None, infer=msg["infer"])
 
 
 def _make_name(prefix: str, name: str) -> str:
@@ -615,7 +639,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                         value = (
                             pyro.deterministic(fullname, prior)
                             if isinstance(prior, torch.Tensor)
-                            else pyro.sample(fullname, prior)
+                            else pyro.sample(fullname, prior, infer={"_is_global_sample": True})
                         )
                         context.set(fullname, value)
                     return value
