@@ -72,6 +72,6 @@ class EqualizeMessenger(Messenger):
         if self.value is not None and self._is_matching(msg):  # type: ignore[unreachable]
             msg["value"] = self.value  # type: ignore[unreachable]
             if msg["type"] == "sample":
-                msg["fn"] = Delta(self.value, event_dim=msg["fn"].event_dim)
+                msg["fn"] = Delta(self.value, event_dim=msg["fn"].event_dim).mask(False)
                 msg["infer"] = {"_deterministic": True}
                 msg["is_observed"] = True

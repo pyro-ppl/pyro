@@ -798,6 +798,12 @@ class EqualizeHandlerTests(TestCase):
         assert_equal(tr.nodes["cats_shift"]["value"], tr.nodes["dogs_shift"]["value"])
         assert_not_equal(tr.nodes["cats_std"]["value"], tr.nodes["dogs_std"]["value"])
 
+    def test_render_model(self):
+        pyro.set_rng_seed(20240616)
+        pyro.clear_param_store()
+        model = poutine.equalize(self.model, ".+_std")
+        pyro.render_model(model)
+
 
 @pytest.mark.parametrize("first_available_dim", [-1, -2, -3])
 @pytest.mark.parametrize("depth", [0, 1, 2])
