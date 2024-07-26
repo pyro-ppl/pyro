@@ -14,7 +14,7 @@ from pyro.infer.importance import LogWeightsMixin
 from pyro.infer.util import CloneMixin, plate_log_prob_sum
 from pyro.poutine.trace_struct import Trace
 from pyro.poutine.util import prune_subsample_sites
-
+from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
 
 def _guess_max_plate_nesting(model, args, kwargs):
     """
@@ -86,12 +86,13 @@ def _predictive(
     mask=True,
 ):
     model = torch.no_grad()(poutine.mask(model, mask=False) if mask else model)
-    max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
+    initailized_model = InitMessenger(init_to_median)(model)
+    max_plate_nesting = _guess_max_plate_nesting(initailized_model, model_args, model_kwargs)
     vectorize = pyro.plate(
         _predictive_vectorize_plate_name, num_samples, dim=-max_plate_nesting - 1
     )
     model_trace = prune_subsample_sites(
-        poutine.trace(model).get_trace(*model_args, **model_kwargs)
+        poutine.trace(initailized_model).get_trace(*model_args, **model_kwargs)
     )
     reshaped_samples = {}
 
