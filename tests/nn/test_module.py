@@ -598,7 +598,7 @@ def test_mixin_factory():
         del module
         pyro.clear_param_store()
         f.seek(0)
-        module = torch.load(f)
+        module = torch.load(f, weights_only=False)
     assert type(module).__name__ == "PyroSequential"
     actual = module(data)
     assert_equal(actual, expected)
@@ -680,7 +680,7 @@ def test_torch_serialize_attributes(local_params):
             torch.save(module, f)
             pyro.clear_param_store()
             f.seek(0)
-            actual = torch.load(f)
+            actual = torch.load(f, weights_only=False)
 
         assert_equal(actual.x, module.x)
         actual_names = {name for name, _ in actual.named_parameters()}
@@ -704,7 +704,7 @@ def test_torch_serialize_decorators(local_params):
             torch.save(module, f)
             pyro.clear_param_store()
             f.seek(0)
-            actual = torch.load(f)
+            actual = torch.load(f, weights_only=False)
 
         assert_equal(actual.x, module.x)
         assert_equal(actual.y, module.y)

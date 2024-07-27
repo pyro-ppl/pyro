@@ -331,7 +331,7 @@ class ParamStoreDict:
         :type map_location: function, torch.device, string or a dict
         """
         with open(filename, "rb") as input_file:
-            state = torch.load(input_file, map_location)
+            state = torch.load(input_file, map_location, weights_only=False)
         self.set_state(state)
 
     @contextmanager
