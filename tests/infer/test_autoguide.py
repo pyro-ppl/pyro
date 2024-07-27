@@ -489,7 +489,7 @@ def test_serialization(auto_class, jit):
             f = io.BytesIO()
             torch.save(guide, f)
             f.seek(0)
-            guide_deser = torch.load(f)
+            guide_deser = torch.load(f, weights_only=False)
 
     # Check .call() result.
     pyro.set_rng_seed(0)

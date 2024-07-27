@@ -64,7 +64,7 @@ def test_serialization(jit, feature_dim, outcome_dist):
             warnings.filterwarnings("ignore", category=UserWarning)
             torch.save(cevae, f)
         f.seek(0)
-        loaded_cevae = torch.load(f)
+        loaded_cevae = torch.load(f, weights_only=False)
 
     pyro.set_rng_seed(0)
     actual_ite = loaded_cevae.ite(x)

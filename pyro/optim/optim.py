@@ -192,7 +192,9 @@ class PyroOptim:
         Load optimizer state from disk
         """
         with open(filename, "rb") as input_file:
-            state = torch.load(input_file, map_location=map_location)
+            state = torch.load(
+                input_file, map_location=map_location, weights_only=False
+            )
         self.set_state(state)
 
     def _get_optim(self, param: Union[Iterable[Tensor], Iterable[Dict[Any, Any]]]):

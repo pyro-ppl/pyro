@@ -1027,7 +1027,7 @@ def test_pickling(wrapper):
     # default protocol cannot serialize torch.Size objects (see https://github.com/pytorch/pytorch/issues/20823)
     torch.save(wrapped, buffer, pickle_protocol=pickle.HIGHEST_PROTOCOL)
     buffer.seek(0)
-    deserialized = torch.load(buffer)
+    deserialized = torch.load(buffer, weights_only=False)
     obs = torch.tensor(0.5)
     pyro.set_rng_seed(0)
     actual_trace = poutine.trace(deserialized).get_trace(obs)
