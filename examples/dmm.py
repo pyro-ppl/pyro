@@ -465,7 +465,7 @@ def main(args):
             args.load_model
         ), "--load-model and/or --load-opt misspecified"
         logging.info("loading model from %s..." % args.load_model)
-        dmm.load_state_dict(torch.load(args.load_model))
+        dmm.load_state_dict(torch.load(args.load_model, weights_only=False))
         logging.info("loading optimizer states from %s..." % args.load_opt)
         adam.load(args.load_opt)
         logging.info("done loading model and optimizer states.")
