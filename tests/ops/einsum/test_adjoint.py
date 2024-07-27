@@ -117,7 +117,7 @@ def test_marginal(equation):
         assert_equal(expected, actual)
 
 
-@pytest.mark.filterwarnings("ignore:.*reduce_op` is deprecated")
+@pytest.mark.filterwarnings("ignore:.*reduce_op`? is deprecated")
 def test_require_backward_memory_leak():
     tensors = [o for o in gc.get_objects() if torch.is_tensor(o)]
     num_global_tensors = len(tensors)
