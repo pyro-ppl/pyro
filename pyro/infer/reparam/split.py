@@ -6,8 +6,29 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 
 from .reparam import Reparam
+
+
+def same_support(fn: TorchDistributionMixin):
+    '''
+    Returns support of the `fn` distribution.
+
+    :param fn: distribution class
+    :returns: distribution support
+    '''
+    return fn.support
+
+
+def real_support(fn: TorchDistributionMixin):
+    '''
+    Returns real support with same event dimension as that of the `fn` distribution.
+
+    :param fn: distribution class
+    :returns: distribution support
+    '''
+    return dist.constraints.independent(dist.constraints.real, fn.event_dim)
 
 
 class SplitReparam(Reparam):
@@ -28,14 +49,20 @@ class SplitReparam(Reparam):
         each chunk.
     :type: list(int)
     :param int dim: Dimension along which to split. Defaults to -1.
+    :param callable support_fn: Function which derives the split support
+        from the site's sampling function. Default is :func:`same_support`
+        as the sampling function, but in some cases such as sampling functions
+        which are stacked transforms, you would have to explicitly specify
+        the support with :func:`real_support`
     """
 
-    def __init__(self, sections, dim):
+    def __init__(self, sections, dim, support_fn=same_support):
         assert isinstance(dim, int) and dim < 0
         assert isinstance(sections, list)
         assert all(isinstance(size, int) for size in sections)
         self.event_dim = -dim
         self.sections = sections
+        self.support_fn = support_fn
 
     def apply(self, msg):
         name = msg["name"]
@@ -57,7 +84,7 @@ class SplitReparam(Reparam):
             event_shape = left_shape + (size,) + right_shape
             value_split[i] = pyro.sample(
                 f"{name}_split_{i}",
-                dist.ImproperUniform(fn.support, fn.batch_shape, event_shape),
+                dist.ImproperUniform(self.support_fn(fn), fn.batch_shape, event_shape),
                 obs=value_split[i],
                 infer={"is_observed": is_observed},
             )
