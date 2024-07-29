@@ -12,22 +12,22 @@ from .reparam import Reparam
 
 
 def same_support(fn: TorchDistributionMixin):
-    '''
+    """
     Returns support of the `fn` distribution.
 
     :param fn: distribution class
     :returns: distribution support
-    '''
+    """
     return fn.support
 
 
 def real_support(fn: TorchDistributionMixin):
-    '''
+    """
     Returns real support with same event dimension as that of the `fn` distribution.
 
     :param fn: distribution class
     :returns: distribution support
-    '''
+    """
     return dist.constraints.independent(dist.constraints.real, fn.event_dim)
 
 
