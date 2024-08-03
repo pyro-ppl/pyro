@@ -6,6 +6,7 @@ import torch
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+from pyro.ops.tensor_utils import broadcast_tensors_without_dim
 
 from .reparam import Reparam
 
@@ -64,6 +65,7 @@ class SplitReparam(Reparam):
 
         # Combine parts into value.
         if value is None:
+            value_split = broadcast_tensors_without_dim(value_split, -self.event_dim)
             value = torch.cat(value_split, dim=-self.event_dim)
 
         if poutine.get_mask() is False:
