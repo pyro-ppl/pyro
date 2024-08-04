@@ -8,6 +8,7 @@ from torch.autograd import grad
 import pyro
 import pyro.distributions as dist
 from pyro import poutine
+from pyro.infer.autoguide.initialization import InitMessenger, init_to_median
 from pyro.infer.reparam import SplitReparam
 from tests.common import assert_close
 
@@ -89,6 +90,34 @@ def test_init(batch_shape, event_shape, splits, dim):
             return pyro.sample("x", dist.Normal(loc, scale).to_event(len(event_shape)))
 
     check_init_reparam(model, SplitReparam(splits, dim))
+
+
+def test_observe():
+    def model():
+        x_dist = dist.TransformedDistribution(
+            dist.Normal(0, 1).expand((8,)).to_event(1), dist.transforms.HaarTransform()
+        )
+        return pyro.sample("x", x_dist)
+
+    # Build reparameterized model
+    rep = SplitReparam([6, 2], -1)
+    reparam_model = poutine.reparam(model, {"x": rep})
+
+    # Sample from the reparameterized model to create an observation
+    initialized_reparam_model = InitMessenger(init_to_median)(reparam_model)
+    trace = poutine.trace(initialized_reparam_model).get_trace()
+    observation = {"x_split_1": trace.nodes["x_split_1"]["value"]}
+
+    # Create a model conditioned on the observation
+    conditioned_reparam_model = poutine.condition(reparam_model, observation)
+
+    # Fit a guide for the conditioned model
+    guide = pyro.infer.autoguide.AutoMultivariateNormal(conditioned_reparam_model)
+    optim = pyro.optim.Adam(dict(lr=0.1))
+    loss = pyro.infer.Trace_ELBO(num_particles=20, vectorize_particles=True)
+    svi = pyro.infer.SVI(conditioned_reparam_model, guide, optim, loss)
+    for iter_count in range(10):
+        svi.step()
 
 
 @batch_shape
