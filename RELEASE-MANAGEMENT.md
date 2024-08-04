@@ -1,3 +1,9 @@
+<!--
+Copyright Contributors to the Pyro project.
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Pyro release management
 
 This describes the process by which versions of Pyro are officially released to the public.

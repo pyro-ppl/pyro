@@ -1,3 +1,9 @@
+<!--
+Copyright (c) 2017-2019 Uber Technologies, Inc.
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 Analysis of the eight schools data (chapter 5 of [Gelman et al 2013]) using MCMC (NUTS) and SVI.
 
 The starting model is the Stan model:
