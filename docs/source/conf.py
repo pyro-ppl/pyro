@@ -194,10 +194,10 @@ texinfo_documents = [
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
     "torch": ("https://pytorch.org/docs/master/", None),
-    "funsor": ("http://funsor.pyro.ai/en/stable/", None),
+    "funsor": ("https://funsor.pyro.ai/en/stable/", None),
     "opt_einsum": ("https://optimized-einsum.readthedocs.io/en/stable/", None),
-    "scipy": ("https://docs.scipy.org/doc/scipy/reference/", None),
-    "Bio": ("https://biopython.org/docs/latest/api/", None),
+    "scipy": ("https://docs.scipy.org/doc/scipy/", None),
+    "Bio": ("https://biopython.org/docs/latest/", None),
     "horovod": ("https://horovod.readthedocs.io/en/stable/", None),
     "graphviz": ("https://graphviz.readthedocs.io/en/stable/", None),
 }

@@ -74,6 +74,7 @@ from pyro.poutine.collapse_messenger import CollapseMessenger
 from pyro.poutine.condition_messenger import ConditionMessenger
 from pyro.poutine.do_messenger import DoMessenger
 from pyro.poutine.enum_messenger import EnumMessenger
+from pyro.poutine.equalize_messenger import EqualizeMessenger
 from pyro.poutine.escape_messenger import EscapeMessenger
 from pyro.poutine.infer_config_messenger import InferConfigMessenger
 from pyro.poutine.lift_messenger import LiftMessenger
@@ -299,6 +300,29 @@ def escape(  # type: ignore[empty-body]
     fn: Callable[_P, _T],
     escape_fn: Callable[["Message"], bool],
 ) -> Union[EscapeMessenger, Callable[_P, _T]]: ...
+
+
+@overload
+def equalize(
+    sites: Union[str, List[str]],
+    type: Optional[str],
+) -> ConditionMessenger: ...
+
+
+@overload
+def equalize(
+    fn: Callable[_P, _T],
+    sites: Union[str, List[str]],
+    type: Optional[str],
+) -> Callable[_P, _T]: ...
+
+
+@_make_handler(EqualizeMessenger)
+def equalize(  # type: ignore[empty-body]
+    fn: Callable[_P, _T],
+    sites: Union[str, List[str]],
+    type: Optional[str],
+) -> Union[EqualizeMessenger, Callable[_P, _T]]: ...
 
 
 @overload

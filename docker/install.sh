@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+# Copyright Contributors to the Pyro project.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 set -xe
 
 pip install --upgrade pip

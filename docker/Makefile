@@ -1,3 +1,7 @@
+# Copyright Contributors to the Pyro project.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 .PHONY: help create-host-workspace build build-gpu run run-gpu notebook notebook-gpu
 
 DOCKER_FILE=Dockerfile

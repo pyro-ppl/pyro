@@ -1,3 +1,9 @@
+<!--
+Copyright Contributors to the Pyro project.
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Development
 
 Please follow our established coding style including variable names, module imports, and function definitions.

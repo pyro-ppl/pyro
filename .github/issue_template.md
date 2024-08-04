@@ -1,3 +1,9 @@
+<!--
+Copyright Contributors to the Pyro project.
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 ### Guidelines
 
 **NOTE:** Issues are for bugs and feature requests only. If you have a question about using Pyro or general modeling questions, please post it on the [forum](https://forum.pyro.ai/).

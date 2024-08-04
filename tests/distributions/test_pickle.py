@@ -88,5 +88,5 @@ def test_pickle(Dist):
     # Note that pickling torch.Size() requires protocol >= 2
     torch.save(dist, buffer, pickle_protocol=pickle.HIGHEST_PROTOCOL)
     buffer.seek(0)
-    deserialized = torch.load(buffer)
+    deserialized = torch.load(buffer, weights_only=False)
     assert isinstance(deserialized, Dist)

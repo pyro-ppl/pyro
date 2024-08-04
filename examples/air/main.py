@@ -200,7 +200,7 @@ def main(**kwargs):
 
     if "load" in args:
         print("Loading parameters...")
-        air.load_state_dict(torch.load(args.load))
+        air.load_state_dict(torch.load(args.load, weights_only=False))
 
     # Viz sample from prior.
     if args.viz:
