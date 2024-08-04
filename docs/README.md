@@ -1,3 +1,9 @@
+<!--
+Copyright Contributors to the Pyro project.
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Documentation #
 Pyro Documentation is supported by [Sphinx](http://www.sphinx-doc.org/en/stable/). 
 To build the docs, run from the toplevel directory:
