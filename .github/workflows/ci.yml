@@ -17,7 +17,7 @@ env:
 
 jobs:
   lint:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         python-version: [3.8]
@@ -30,6 +30,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip wheel setuptools>=69.0.0
+        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
         pip install ruff black mypy nbstripout nbformat
     - name: Lint
       run: |
