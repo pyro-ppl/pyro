@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [tool.ruff]
+extend-exclude = ["*.ipynb"]
 line-length = 120
 
 
