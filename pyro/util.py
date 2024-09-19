@@ -1,7 +1,6 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import functools
 import math
 import numbers
 import random
@@ -702,14 +701,6 @@ def ignore_experimental_warning():
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=ExperimentalWarning)
         yield
-
-
-def deep_getattr(obj: object, name: str) -> Any:
-    """
-    Python getattr() for arbitrarily deep attributes
-    Throws an AttributeError if bad attribute
-    """
-    return functools.reduce(getattr, name.split("."), obj)
 
 
 class timed:

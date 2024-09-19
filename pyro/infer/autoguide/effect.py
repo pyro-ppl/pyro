@@ -1,6 +1,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
+from operator import attrgetter
 from typing import Callable, Optional, Tuple, Union
 
 import torch
@@ -14,7 +15,7 @@ from pyro.poutine.guide import GuideMessenger
 from pyro.poutine.runtime import get_plates
 
 from .initialization import init_to_feasible, init_to_mean
-from .utils import deep_getattr, deep_setattr, helpful_support_errors
+from .utils import deep_setattr, helpful_support_errors
 
 
 class AutoMessengerMeta(type(GuideMessenger), type(PyroModule)):
@@ -175,8 +176,8 @@ class AutoNormalMessenger(AutoMessenger):
 
     def _get_params(self, name: str, prior: Distribution):
         try:
-            loc = deep_getattr(self.locs, name)
-            scale = deep_getattr(self.scales, name)
+            loc = attrgetter(name)(self.locs)
+            scale = attrgetter(name)(self.scales)
             return loc, scale
         except AttributeError:
             pass
@@ -287,10 +288,10 @@ class AutoHierarchicalNormalMessenger(AutoNormalMessenger):
 
     def _get_params(self, name: str, prior: Distribution):
         try:
-            loc = deep_getattr(self.locs, name)
-            scale = deep_getattr(self.scales, name)
+            loc = attrgetter(name)(self.locs)
+            scale = attrgetter(name)(self.scales)
             if (self._hierarchical_sites is None) or (name in self._hierarchical_sites):
-                weight = deep_getattr(self.weights, name)
+                weight = attrgetter(name)(self.weights)
                 return loc, scale, weight
             else:
                 return loc, scale
@@ -427,8 +428,8 @@ class AutoRegressiveMessenger(AutoMessenger):
 
     def _get_params(self, name: str, prior: Distribution):
         try:
-            loc = deep_getattr(self.locs, name)
-            scale = deep_getattr(self.scales, name)
+            loc = attrgetter(name)(self.locs)
+            scale = attrgetter(name)(self.scales)
             return loc, scale
         except AttributeError:
             pass
