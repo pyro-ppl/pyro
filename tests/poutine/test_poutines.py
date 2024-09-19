@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 def eq(x, y, prec=1e-10):
-    return torch.norm(x - y).item() < prec
+    return torch.linalg.norm(x - y).item() < prec
 
 
 # XXX name is a bit silly

@@ -20,6 +20,7 @@ import operator
 import warnings
 import weakref
 from contextlib import ExitStack
+from operator import attrgetter
 
 import torch
 from torch import nn
@@ -38,7 +39,7 @@ from pyro.ops.tensor_utils import periodic_repeat
 from pyro.poutine.util import site_is_subsample
 
 from .initialization import InitMessenger, init_to_feasible, init_to_median
-from .utils import _product, deep_getattr, deep_setattr, helpful_support_errors
+from .utils import _product, deep_setattr, helpful_support_errors
 
 
 def prototype_hide_fn(msg):
@@ -491,8 +492,8 @@ class AutoNormal(AutoGuide):
             )
 
     def _get_loc_and_scale(self, name):
-        site_loc = deep_getattr(self.locs, name)
-        site_scale = deep_getattr(self.scales, name)
+        site_loc = attrgetter(name)(self.locs)
+        site_scale = attrgetter(name)(self.scales)
         return site_loc, site_scale
 
     def forward(self, *args, **kwargs):

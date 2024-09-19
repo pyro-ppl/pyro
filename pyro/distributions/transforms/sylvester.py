@@ -92,11 +92,11 @@ class Sylvester(Householder):
         u = self.u()
         partial_Q = torch.eye(
             self.input_dim, dtype=x.dtype, layout=x.layout, device=x.device
-        ) - 2.0 * torch.ger(u[0], u[0])
+        ) - 2.0 * torch.outer(u[0], u[0])
 
         for idx in range(1, self.u_unnormed.size(-2)):
             partial_Q = torch.matmul(
-                partial_Q, torch.eye(self.input_dim) - 2.0 * torch.ger(u[idx], u[idx])
+                partial_Q, torch.eye(self.input_dim) - 2.0 * torch.outer(u[idx], u[idx])
             )
 
         return partial_Q

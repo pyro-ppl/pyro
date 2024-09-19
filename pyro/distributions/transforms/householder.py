@@ -29,7 +29,7 @@ class ConditionedHouseholder(Transform):
     # Construct normalized vectors for Householder transform
     def u(self):
         u_unnormed = self.u_unnormed() if callable(self.u_unnormed) else self.u_unnormed
-        norm = torch.norm(u_unnormed, p=2, dim=-1, keepdim=True)
+        norm = torch.linalg.norm(u_unnormed, ord=2, dim=-1, keepdim=True)
         return torch.div(u_unnormed, norm)
 
     def _call(self, x):
