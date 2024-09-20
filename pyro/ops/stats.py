@@ -511,7 +511,7 @@ def crps_empirical(pred, truth):
 
 
 def energy_score_empirical(pred: torch.Tensor, truth: torch.Tensor) -> torch.Tensor:
-    """
+    r"""
     Computes negative Energy Score ES* (see equation 22 in [1]) between a
     set of multivariate samples ``pred`` and a true data vector ``truth``. Running time
     is quadratic in the number of samples ``n``. In case of univariate samples
