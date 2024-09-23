@@ -306,7 +306,8 @@ def escape(  # type: ignore[empty-body]
 def equalize(
     sites: Union[str, List[str]],
     type: Optional[str],
-) -> ConditionMessenger: ...
+    keep_dist: Optional[bool],
+) -> EqualizeMessenger: ...
 
 
 @overload
@@ -314,6 +315,7 @@ def equalize(
     fn: Callable[_P, _T],
     sites: Union[str, List[str]],
     type: Optional[str],
+    keep_dist: Optional[bool],
 ) -> Callable[_P, _T]: ...
 
 
@@ -322,6 +324,7 @@ def equalize(  # type: ignore[empty-body]
     fn: Callable[_P, _T],
     sites: Union[str, List[str]],
     type: Optional[str],
+    keep_dist: Optional[bool],
 ) -> Union[EqualizeMessenger, Callable[_P, _T]]: ...
 
 
