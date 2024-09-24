@@ -68,7 +68,7 @@ class EqualizeMessenger(Messenger):
         self,
         sites: Union[str, List[str]],
         type: Optional[str] = "sample",
-        keep_dist: bool = False,
+        keep_dist: Optional[bool] = False,
     ) -> None:
         super().__init__()
         self.sites = [sites] if isinstance(sites, str) else sites
