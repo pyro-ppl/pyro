@@ -373,3 +373,8 @@ def test_energy_score_empirical_batched_calculation(
     actual = energy_score_empirical(pred, truth, pred_batch_size=pred_batch_size)
     # Check accuracy
     assert_close(actual, expected)
+
+
+def test_jit_compilation():
+    # Test that functions can be JIT compiled
+    torch.jit.script(energy_score_empirical)

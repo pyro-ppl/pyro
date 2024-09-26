@@ -570,13 +570,13 @@ def energy_score_empirical(
             pred = pred[..., pred_batch_size:, :]
         # Calculate predictions distance to truth
         retval = (
-            torch.cat(
+            torch.stack(
                 [
-                    torch.cdist(pred_batch, truth).sum(dim=-2, keepdim=True)
+                    torch.cdist(pred_batch, truth).sum(dim=-2)
                     for pred_batch in pred_batches
                 ],
-                dim=-2,
-            ).sum(dim=-2)
+                dim=0,
+            ).sum(dim=0)
             / pred_len
         )
         # Calculate predictions self distance
@@ -584,12 +584,13 @@ def energy_score_empirical(
             retval = (
                 retval
                 - 0.5
-                * sum(  # type: ignore[index]
+                * torch.stack(
                     [
                         torch.cdist(pred_batch, aux_pred_batch).sum(dim=[-1, -2])
                         for pred_batch in pred_batches
-                    ]
-                )[..., None]
+                    ],
+                    dim=0,
+                ).sum(dim=0)[..., None]
                 / pred_len
                 / pred_len
             )
