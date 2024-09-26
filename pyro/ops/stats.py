@@ -3,7 +3,7 @@
 
 import math
 import numbers
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import torch
 from torch.fft import irfft, rfft
@@ -510,7 +510,9 @@ def crps_empirical(pred, truth):
     return (pred - truth).abs().mean(0) - (diff * weight).sum(0) / num_samples**2
 
 
-def energy_score_empirical(pred: torch.Tensor, truth: torch.Tensor) -> torch.Tensor:
+def energy_score_empirical(
+    pred: torch.Tensor, truth: torch.Tensor, pred_batch_size: Optional[int] = None
+) -> torch.Tensor:
     r"""
     Computes negative Energy Score ES* (see equation 22 in [1]) between a
     set of multivariate samples ``pred`` and a true data vector ``truth``. Running time
@@ -538,6 +540,8 @@ def energy_score_empirical(pred: torch.Tensor, truth: torch.Tensor) -> torch.Ten
         The leftmost dim is that of the multivariate sample.
     :param torch.Tensor truth: A tensor of true observations with same shape as ``pred`` except
         for the second leftmost dim which can have any value or be omitted.
+    :param int pred_batch_size: If specified the predictions will be batched before calculation
+        according to the specified batch size in order to reduce memory consumption.
     :return: A tensor of shape ``truth.shape``.
     :rtype: torch.Tensor
     """
@@ -552,10 +556,44 @@ def energy_score_empirical(pred: torch.Tensor, truth: torch.Tensor) -> torch.Ten
             "Actual shapes: {} versus {}".format(pred.shape, truth.shape)
         )
 
-    retval = (
-        torch.cdist(pred, truth).mean(dim=-2)
-        - 0.5 * torch.cdist(pred, pred).mean(dim=[-1, -2])[..., None]
-    )
+    if pred_batch_size is None:
+        retval = (
+            torch.cdist(pred, truth).mean(dim=-2)
+            - 0.5 * torch.cdist(pred, pred).mean(dim=[-1, -2])[..., None]
+        )
+    else:
+        # Divide predictions into batches
+        pred_len = pred.shape[-2]
+        pred_batches = []
+        while pred.numel() > 0:
+            pred_batches.append(pred[..., :pred_batch_size, :])
+            pred = pred[..., pred_batch_size:, :]
+        # Calculate predictions distance to truth
+        retval = (
+            torch.stack(
+                [
+                    torch.cdist(pred_batch, truth).sum(dim=-2)
+                    for pred_batch in pred_batches
+                ],
+                dim=0,
+            ).sum(dim=0)
+            / pred_len
+        )
+        # Calculate predictions self distance
+        for aux_pred_batch in pred_batches:
+            retval = (
+                retval
+                - 0.5
+                * torch.stack(
+                    [
+                        torch.cdist(pred_batch, aux_pred_batch).sum(dim=[-1, -2])
+                        for pred_batch in pred_batches
+                    ],
+                    dim=0,
+                ).sum(dim=0)[..., None]
+                / pred_len
+                / pred_len
+            )
 
     if remove_leftmost_dim:
         retval = retval[..., 0]

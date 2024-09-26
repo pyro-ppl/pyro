@@ -355,3 +355,26 @@ def test_multivariate_energy_score(sample_dim, num_samples=10000):
         rtol=0.02,
     )
     assert energy_score * 1.02 < energy_score_uncorrelated
+
+
+@pytest.mark.parametrize("batch_shape", [(), (4,), (3, 2)])
+@pytest.mark.parametrize("sample_dim", [30, 100])
+@pytest.mark.parametrize(
+    "num_samples, pred_batch_size", [(100, 10), (100, 30), (100, 100), (100, 200)]
+)
+def test_energy_score_empirical_batched_calculation(
+    batch_shape, sample_dim, num_samples, pred_batch_size
+):
+    # Generate data
+    truth = torch.randn(batch_shape + (sample_dim,))
+    pred = torch.randn(batch_shape + (num_samples, sample_dim))
+    # Do batched and regular calculation
+    expected = energy_score_empirical(pred, truth)
+    actual = energy_score_empirical(pred, truth, pred_batch_size=pred_batch_size)
+    # Check accuracy
+    assert_close(actual, expected)
+
+
+def test_jit_compilation():
+    # Test that functions can be JIT compiled
+    torch.jit.script(energy_score_empirical)
