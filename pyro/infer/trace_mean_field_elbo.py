@@ -108,7 +108,7 @@ class TraceMeanField_ELBO(Trace_ELBO):
             if model_site["type"] == "sample":
                 if model_site["is_observed"]:
                     elbo_particle = elbo_particle + model_site["log_prob_sum"]
-                else:
+                elif name in guide_trace.nodes:
                     guide_site = guide_trace.nodes[name]
                     if is_validation_enabled():
                         check_fully_reparametrized(guide_site)
