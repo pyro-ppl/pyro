@@ -43,12 +43,12 @@ class ConditionalTransformModule(ConditionalTransform, torch.nn.Module):
 
 
 class _ConditionalInverseTransformModule(ConditionalTransformModule):
-    def __init__(self, transform: ConditionalTransform):
+    def __init__(self, transform: ConditionalTransformModule):
         super().__init__()
         self._transform = transform
 
     @property
-    def inv(self) -> ConditionalTransform:
+    def inv(self) -> ConditionalTransformModule:
         return self._transform
 
     def condition(self, context: torch.Tensor):

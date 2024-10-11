@@ -4,12 +4,13 @@
 import functools
 import inspect
 from abc import ABCMeta, abstractmethod
+from typing import Any, Callable, List
 
 import torch
 
 from pyro.distributions.score_parts import ScoreParts
 
-COERCIONS = []
+COERCIONS: List = []
 
 
 class DistributionMeta(ABCMeta):
@@ -51,6 +52,7 @@ class Distribution(metaclass=DistributionMeta):
 
     has_rsample = False
     has_enumerate_support = False
+    rsample: Callable[..., torch.Tensor]
 
     def __call__(self, *args, **kwargs):
         """
@@ -65,7 +67,7 @@ class Distribution(metaclass=DistributionMeta):
         return self.sample(*args, **kwargs)
 
     @abstractmethod
-    def sample(self, *args, **kwargs):
+    def sample(self, *args, **kwargs) -> torch.Tensor:
         """
         Samples a random value.
 
@@ -82,7 +84,7 @@ class Distribution(metaclass=DistributionMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def log_prob(self, x, *args, **kwargs):
+    def log_prob(self, *args: Any, **kwargs: Any) -> torch.Tensor:
         """
         Evaluates log probability densities for each of a batch of samples.
 

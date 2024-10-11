@@ -249,7 +249,7 @@ class CoalescentRateLikelihood:
     def __init__(self, leaf_times, coal_times, duration, *, validate_args=None):
         assert leaf_times.size(-1) == 1 + coal_times.size(-1)
         assert isinstance(duration, int) and duration >= 2
-        if validate_args is True or validate_args is None and is_validation_enabled:
+        if validate_args is True or validate_args is None and is_validation_enabled():
             constraint = CoalescentTimesConstraint(leaf_times, ordered=False)
             if not constraint.check(coal_times).all():
                 raise ValueError("Invalid (leaf_times, coal_times)")

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
+from typing import Callable, Dict
 
 import torch
 
@@ -51,7 +52,9 @@ class ProjectedNormal(TorchDistribution):
     arg_constraints = {"concentration": constraints.real_vector}
     support = constraints.sphere
     has_rsample = True
-    _log_prob_impls = {}  # maps dim -> function(concentration, value)
+    _log_prob_impls: Dict[int, Callable] = (
+        {}
+    )  # maps dim -> function(concentration, value)
 
     def __init__(self, concentration, *, validate_args=None):
         assert concentration.dim() >= 1
