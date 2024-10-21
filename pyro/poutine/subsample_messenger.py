@@ -45,7 +45,7 @@ class _Subsample(Distribution):
                     )
                 )
         with ignore_jit_warnings(["torch.Tensor results are registered as constants"]):
-            self.device = device or torch.Tensor().device
+            self.device = device or torch.tensor(tuple()).device
 
     @ignore_jit_warnings(["Converting a tensor to a Python boolean"])
     def sample(self, sample_shape: torch.Size = torch.Size()) -> torch.Tensor:
