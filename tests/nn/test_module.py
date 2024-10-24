@@ -1084,3 +1084,46 @@ def test_render_constrained_param(use_module_local_params):
     with pyro.settings.context(module_local_params=use_module_local_params):
         model = Model()
         pyro.render_model(model)
+
+
+def test_pyrosample_platescope():
+
+    class Model(pyro.nn.PyroModule):
+        def __init__(self, num_inputs, num_outputs):
+            super().__init__()
+            self.num_inputs = num_inputs
+            self.num_outputs = num_outputs
+            self.linear = pyro.nn.PyroModule[torch.nn.Linear](num_inputs, num_outputs)
+            self.linear.weight = pyro.nn.PyroSample(
+                dist.Normal(0, 1).expand([num_outputs, num_inputs]).to_event(2)
+            )
+            self.linear.bias = pyro.nn.PyroSample(
+                dist.Normal(0, 1).expand([num_outputs]).to_event(1)
+            )
+
+        @pyro.nn.PyroSample
+        def scale(self):
+            return (
+                pyro.distributions.LogNormal(0, 1)
+                .expand([self.num_outputs])
+                .to_event(1)
+            )
+
+        @pyro.nn.PyroSamplePlateScope()
+        def forward(self, x):
+            with pyro.plate("data", x.shape[-2], dim=-1):
+                assert (
+                    len(self.linear.weight.shape) == 2
+                    or self.linear.weight.shape[-3] != 1
+                )  # sampled outside data plate
+                loc = self.linear(x)
+                assert (
+                    len(self.scale.shape) == 1 or self.scale.shape[-2] == 1
+                )  # sampled outside data plate
+                y = pyro.sample("y", dist.Normal(loc, self.scale).to_event(1))
+                assert y.shape[-2] == x.shape[-2]  # ordinary pyro.sample statement
+                return y
+
+    model = Model(3, 2)
+    x = torch.randn(4, 3)
+    assert model(x).shape == (4, 2)
