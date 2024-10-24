@@ -118,15 +118,18 @@ def test_enumerate_sequential_guide():
 
 
 def test_enumerate_sequential_model():
+    values = []
+
     def model():
-        pyro.sample("x", dist.Bernoulli(0.5), infer={"enumerate": "sequential"})
+        x = pyro.sample("x", dist.Bernoulli(0.5), infer={"enumerate": "sequential"})
+        values.append(x)
 
     def guide():
         pass
 
-    with pytest.raises(NotImplementedError):
-        elbo = TraceEnum_ELBO(max_plate_nesting=0)
-        elbo.loss(model, guide)
+    elbo = TraceEnum_ELBO(max_plate_nesting=0)
+    elbo.loss(model, guide)
+    assert len(values) == 1, values
 
 
 # The usual dist.Bernoulli avoids NANs by clamping log prob. This unsafe version
