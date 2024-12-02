@@ -55,6 +55,8 @@ class SineBivariateVonMises(TorchDistribution):
     .. note:: In the context of :class:`~pyro.infer.SVI`, this distribution can be used as a likelihood but not for
         latent variables.
 
+    .. note:: Normalization remains accurate up to concentrations of 10,000.
+
     ** References: **
       1. Probabilistic model for two dependent circular variables Singh, H., Hnizdo, V., and Demchuck, E. (2002)
       2. Protein Bioinformatics and Mixtures of Bivariate von Mises Distributions for Angular Data,
@@ -108,6 +110,16 @@ class SineBivariateVonMises(TorchDistribution):
         ) = broadcast_all(
             phi_loc, psi_loc, phi_concentration, psi_concentration, correlation
         )
+
+        max_conc = torch.maximum(
+            torch.max(phi_concentration), torch.max(psi_concentration)
+        )
+        assrt_hstr = (
+            "Normalization of SineBiviateVonMises is inaccurate for"
+            f"current max concentration ({max_conc} > 10,000)."
+        )
+        assert max_conc <= torch.tensor(10_000.0), assrt_hstr
+
         self.phi_loc = phi_loc
         self.psi_loc = psi_loc
         self.phi_concentration = phi_concentration
