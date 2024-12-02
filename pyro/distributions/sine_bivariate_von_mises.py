@@ -45,9 +45,9 @@ class SineBivariateVonMises(TorchDistribution):
 
             \frac{\rho^2}{\kappa_1\kappa_2} \rightarrow 1
 
-        because the distribution becomes increasingly bimodal. To avoid inefficient sampling use the 
-        `weighted_correlation` parameter with a skew away from one (e.g., 
-        `TransformedDistribution(Beta(5,5), AffineTransform(loc=-1, scale=2))`). The `weighted_correlation` 
+        because the distribution becomes increasingly bimodal. To avoid inefficient sampling use the
+        `weighted_correlation` parameter with a skew away from one (e.g.,
+        `TransformedDistribution(Beta(5,5), AffineTransform(loc=-1, scale=2))`). The `weighted_correlation`
         should be in [-1,1].
 
     .. note:: The correlation and weighted_correlation params are mutually exclusive.
@@ -141,7 +141,8 @@ class SineBivariateVonMises(TorchDistribution):
             - m * torch.log(4 * torch.prod(conc, dim=-1))
         )
         num_I1terms = torch.maximum(
-            torch.tensor(501), torch.max(self.phi_concentration) + torch.max(self.psi_concentration)
+            torch.tensor(501),
+            torch.max(self.phi_concentration) + torch.max(self.psi_concentration),
         ).int()
 
         fs += log_I1(m.max(), conc, num_I1terms).sum(-1)

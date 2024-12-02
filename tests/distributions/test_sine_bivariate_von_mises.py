@@ -131,13 +131,14 @@ def test_mle_bvm():
 
         assert_equal(expected[k].squeeze(), actual.squeeze(), 9e-2)
 
+
 @pytest.mark.parametrize("conc", [1.0, 10.0, 1000.0, 10000.0])
 def test_sine_bivariate_von_mises_norm(conc):
     dist = SineBivariateVonMises(0, 0, conc, conc, 0.0)
     num_samples = 500
     x = torch.linspace(-torch.pi, torch.pi, num_samples)
     y = torch.linspace(-torch.pi, torch.pi, num_samples)
-    mesh = torch.stack(torch.meshgrid(x, y, indexing='ij'), axis=-1)
+    mesh = torch.stack(torch.meshgrid(x, y, indexing="ij"), axis=-1)
     integral_torus = (
         torch.exp(dist.log_prob(mesh)) * (2 * torch.pi) ** 2 / num_samples**2
     ).sum()
