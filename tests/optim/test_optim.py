@@ -435,3 +435,86 @@ def test_checkpoint(Optim, config):
         actual.append(step(svi, optimizer))
 
     assert_equal(actual, expected)
+
+
+def test_centered_clipped_adam(plot_results=False):
+    w = torch.Tensor([1, 500])
+
+    def loss_fn(p):
+        return (1 + w * p * p).sqrt().sum() - len(w)
+
+    def fit(lr, centered_variance, num_iter=5000):
+        loss_vec = []
+        p = torch.nn.Parameter(torch.Tensor([10, 1]))
+        optim = pyro.optim.clipped_adam.ClippedAdam(
+            lr=lr, params=[p], centered_variance=centered_variance
+        )
+        for count in range(num_iter):
+            optim.zero_grad()
+            loss = loss_fn(p)
+            loss.backward()
+            optim.step()
+            loss_vec.append(loss)
+        return torch.Tensor(loss_vec)
+
+    def calc_convergence(loss_vec, tail_len=100, threshold=0.01):
+        ultimate_loss = loss_vec[-tail_len:].mean()
+        idx = (loss_vec < (ultimate_loss + threshold)).nonzero().min()
+        convergence_vec = loss_vec[:idx] - ultimate_loss
+        convergence_rate = (convergence_vec[:-1] / convergence_vec[1:]).log().mean()
+        return ultimate_loss, convergence_rate
+
+    def get_convergence_vec(lr_vec, centered_variance):
+        ultimate_loss_vec, convergence_rate_vec = [], []
+        for lr in lr_vec:
+            loss_vec = fit(lr=lr, centered_variance=centered_variance)
+            ultimate_loss, convergence_rate = calc_convergence(loss_vec)
+            ultimate_loss_vec.append(ultimate_loss)
+            convergence_rate_vec.append(convergence_rate)
+            print(lr, centered_variance, ultimate_loss, convergence_rate)
+        return torch.Tensor(ultimate_loss_vec), torch.Tensor(convergence_rate_vec)
+
+    lr_vec = [0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001]
+    centered_ultimate_loss_vec, centered_convergence_rate_vec = get_convergence_vec(
+        lr_vec=lr_vec, centered_variance=True
+    )
+    ultimate_loss_vec, convergence_rate_vec = get_convergence_vec(
+        lr_vec=lr_vec, centered_variance=False
+    )
+
+    # ALl centered variance results should converge
+    assert (centered_ultimate_loss_vec < 0.01).all()
+    # Some uncentered variance results do not converge
+    assert (ultimate_loss_vec > 0.01).any()
+    # Verify convergence rate improvement
+    assert (
+        (centered_convergence_rate_vec / convergence_rate_vec)
+        > (torch.Tensor([1.2] * len(lr_vec)).cumprod(0))
+    ).all()
+
+    if plot_results:
+        from matplotlib import pyplot as plt
+
+        plt.figure()
+        plt.subplot(2, 1, 1)
+        plt.loglog(
+            lr_vec, centered_convergence_rate_vec, "b.-", label="Centered Variance"
+        )
+        plt.loglog(lr_vec, convergence_rate_vec, "r.-", label="Uncentered Variance")
+        plt.xlabel("Learning Rate")
+        plt.ylabel("Convergence Rate")
+        plt.title("Convergence Rate vs Learning Rate")
+        plt.grid()
+        plt.legend(loc="best")
+        plt.subplot(2, 1, 2)
+        plt.semilogx(
+            lr_vec, centered_ultimate_loss_vec, "b.-", label="Centered Variance"
+        )
+        plt.semilogx(lr_vec, ultimate_loss_vec, "r.-", label="Uncentered Variance")
+        plt.xlabel("Learning Rate")
+        plt.ylabel("Ultimate Loss")
+        plt.title("Ultimate Loss vs Learning Rate")
+        plt.grid()
+        plt.legend(loc="best")
+        plt.tight_layout()
+        plt.savefig("test_centered_variance.png")
