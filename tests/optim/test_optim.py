@@ -459,26 +459,35 @@ def test_centered_clipped_adam(plot_results=False):
 
     def calc_convergence(loss_vec, tail_len=100, threshold=0.01):
         ultimate_loss = loss_vec[-tail_len:].mean()
-        idx = (loss_vec < (ultimate_loss + threshold)).nonzero().min()
-        convergence_vec = loss_vec[:idx] - ultimate_loss
+        convergence_iter = (loss_vec < (ultimate_loss + threshold)).nonzero().min()
+        convergence_vec = loss_vec[:convergence_iter] - ultimate_loss
         convergence_rate = (convergence_vec[:-1] / convergence_vec[1:]).log().mean()
-        return ultimate_loss, convergence_rate
+        return ultimate_loss, convergence_rate, convergence_iter
 
     def get_convergence_vec(lr_vec, centered_variance):
-        ultimate_loss_vec, convergence_rate_vec = [], []
+        ultimate_loss_vec, convergence_rate_vec, convergence_iter_vec = [], [], []
         for lr in lr_vec:
             loss_vec = fit(lr=lr, centered_variance=centered_variance)
-            ultimate_loss, convergence_rate = calc_convergence(loss_vec)
+            ultimate_loss, convergence_rate, convergence_iter = calc_convergence(
+                loss_vec
+            )
             ultimate_loss_vec.append(ultimate_loss)
             convergence_rate_vec.append(convergence_rate)
+            convergence_iter_vec.append(convergence_iter)
             print(lr, centered_variance, ultimate_loss, convergence_rate)
-        return torch.Tensor(ultimate_loss_vec), torch.Tensor(convergence_rate_vec)
+        return (
+            torch.Tensor(ultimate_loss_vec),
+            torch.Tensor(convergence_rate_vec),
+            convergence_iter_vec,
+        )
 
     lr_vec = [0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001]
-    centered_ultimate_loss_vec, centered_convergence_rate_vec = get_convergence_vec(
-        lr_vec=lr_vec, centered_variance=True
-    )
-    ultimate_loss_vec, convergence_rate_vec = get_convergence_vec(
+    (
+        centered_ultimate_loss_vec,
+        centered_convergence_rate_vec,
+        centered_convergence_iter_vec,
+    ) = get_convergence_vec(lr_vec=lr_vec, centered_variance=True)
+    ultimate_loss_vec, convergence_rate_vec, convergence_iter_vec = get_convergence_vec(
         lr_vec=lr_vec, centered_variance=False
     )
 
@@ -495,8 +504,18 @@ def test_centered_clipped_adam(plot_results=False):
     if plot_results:
         from matplotlib import pyplot as plt
 
-        plt.figure()
-        plt.subplot(2, 1, 1)
+        plt.figure(figsize=(6, 8))
+        plt.subplot(3, 1, 1)
+        plt.loglog(
+            lr_vec, centered_convergence_iter_vec, "b.-", label="Centered Variance"
+        )
+        plt.loglog(lr_vec, convergence_iter_vec, "r.-", label="Uncentered Variance")
+        plt.xlabel("Learning Rate")
+        plt.ylabel("Convergence Iteration")
+        plt.title("Convergence Iteration vs Learning Rate")
+        plt.grid()
+        plt.legend(loc="best")
+        plt.subplot(3, 1, 2)
         plt.loglog(
             lr_vec, centered_convergence_rate_vec, "b.-", label="Centered Variance"
         )
@@ -506,7 +525,7 @@ def test_centered_clipped_adam(plot_results=False):
         plt.title("Convergence Rate vs Learning Rate")
         plt.grid()
         plt.legend(loc="best")
-        plt.subplot(2, 1, 2)
+        plt.subplot(3, 1, 3)
         plt.semilogx(
             lr_vec, centered_ultimate_loss_vec, "b.-", label="Centered Variance"
         )
