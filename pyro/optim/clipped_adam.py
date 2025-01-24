@@ -22,12 +22,18 @@ class ClippedAdam(Optimizer):
     :param centered_variance: use centered variance (default: False)
 
     Small modification to the Adam algorithm implemented in torch.optim.Adam
-    to include gradient clipping and learning rate decay.
+    to include gradient clipping and learning rate decay and an option to use
+    the centered variance.
 
-    Reference
+    References
 
     `A Method for Stochastic Optimization`, Diederik P. Kingma, Jimmy Ba
     https://arxiv.org/abs/1412.6980
+
+    `A Two-Step Machine Learning Method for Predicting the Formation Energy of Ternary Compounds`,
+    Varadarajan Rengaraj, Sebastian Jost, Franz Bethke, Christian Plessl,
+    Hossein Mirhosseini, Andrea Walther, Thomas D. Kühne
+    https://doi.org/10.3390/computation11050095
     """
 
     def __init__(
