@@ -458,6 +458,12 @@ def test_centered_clipped_adam(plot_results=False):
         return torch.Tensor(loss_vec)
 
     def calc_convergence(loss_vec, tail_len=100, threshold=0.01):
+        """
+        Calculate the number of iterations needed in order to reach the
+        ultimate loss plus a small threshold, and the convergence rate
+        which is the mean per iteration improvement of the gap between
+        the loss and the ultimate loss.
+        """
         ultimate_loss = loss_vec[-tail_len:].mean()
         convergence_iter = (loss_vec < (ultimate_loss + threshold)).nonzero().min()
         convergence_vec = loss_vec[:convergence_iter] - ultimate_loss
@@ -465,6 +471,10 @@ def test_centered_clipped_adam(plot_results=False):
         return ultimate_loss, convergence_rate, convergence_iter
 
     def get_convergence_vec(lr_vec, centered_variance):
+        """
+        Fit parameters for a vector of learning rates, with or without centered variance,
+        and calculate the convergence properties for each learning rate.
+        """
         ultimate_loss_vec, convergence_rate_vec, convergence_iter_vec = [], [], []
         for lr in lr_vec:
             loss_vec = fit(lr=lr, centered_variance=centered_variance)

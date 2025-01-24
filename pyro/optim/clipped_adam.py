@@ -23,17 +23,17 @@ class ClippedAdam(Optimizer):
 
     Small modification to the Adam algorithm implemented in torch.optim.Adam
     to include gradient clipping and learning rate decay and an option to use
-    the centered variance.
+    the centered variance (see equation 2 in [2]).
 
-    References
+    **References**
 
-    `A Method for Stochastic Optimization`, Diederik P. Kingma, Jimmy Ba
-    https://arxiv.org/abs/1412.6980
+    [1] `A Method for Stochastic Optimization`, Diederik P. Kingma, Jimmy Ba
+        https://arxiv.org/abs/1412.6980
 
-    `A Two-Step Machine Learning Method for Predicting the Formation Energy of Ternary Compounds`,
-    Varadarajan Rengaraj, Sebastian Jost, Franz Bethke, Christian Plessl,
-    Hossein Mirhosseini, Andrea Walther, Thomas D. Kühne
-    https://doi.org/10.3390/computation11050095
+    [2] `A Two-Step Machine Learning Method for Predicting the Formation Energy of Ternary Compounds`,
+        Varadarajan Rengaraj, Sebastian Jost, Franz Bethke, Christian Plessl,
+        Hossein Mirhosseini, Andrea Walther, Thomas D. Kühne
+        https://doi.org/10.3390/computation11050095
     """
 
     def __init__(
