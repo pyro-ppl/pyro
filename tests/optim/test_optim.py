@@ -437,7 +437,20 @@ def test_checkpoint(Optim, config):
     assert_equal(actual, expected)
 
 
-def test_centered_clipped_adam(plot_results=False):
+def test_centered_clipped_adam(plot):
+    """
+    Test the centered variance option of the ClippedAdam optimizer.
+    In order to create plots run pytest with the plot command line
+    option set to True, i.e. by executing
+
+        'pytest tests/optim/test_optim.py::test_centered_clipped_adam --plot True'
+
+    """
+    if not plot:
+        lr_vec = [0.1, 0.001]
+    else:
+        lr_vec = [0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001]
+
     w = torch.Tensor([1, 500])
 
     def loss_fn(p):
@@ -484,14 +497,12 @@ def test_centered_clipped_adam(plot_results=False):
             ultimate_loss_vec.append(ultimate_loss)
             convergence_rate_vec.append(convergence_rate)
             convergence_iter_vec.append(convergence_iter)
-            print(lr, centered_variance, ultimate_loss, convergence_rate)
         return (
             torch.Tensor(ultimate_loss_vec),
             torch.Tensor(convergence_rate_vec),
             convergence_iter_vec,
         )
 
-    lr_vec = [0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001]
     (
         centered_ultimate_loss_vec,
         centered_convergence_rate_vec,
@@ -508,10 +519,10 @@ def test_centered_clipped_adam(plot_results=False):
     # Verify convergence rate improvement
     assert (
         (centered_convergence_rate_vec / convergence_rate_vec)
-        > (torch.Tensor([1.2] * len(lr_vec)).cumprod(0))
+        > ((0.12 / torch.Tensor(lr_vec)).log() * 1.08)
     ).all()
 
-    if plot_results:
+    if plot:
         from matplotlib import pyplot as plt
 
         plt.figure(figsize=(6, 8))
