@@ -1,3 +1,8 @@
+---
+name: General Issue
+about: Report a bug or request a feature
+---
+
 <!--
 Copyright Contributors to the Pyro project.
 
