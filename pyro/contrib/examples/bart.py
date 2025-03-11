@@ -32,7 +32,9 @@ SOURCE_FILES = [
     "date-hour-soo-dest-2018.csv.gz",
     "date-hour-soo-dest-2019.csv.gz",
 ]
-CACHE_URL = "https://github.com/pyro-ppl/datasets/blob/master/bart_full.pkl.bz2?raw=true"
+CACHE_URL = (
+    "https://github.com/pyro-ppl/datasets/blob/master/bart_full.pkl.bz2?raw=true"
+)
 
 
 def _load_hourly_od(basename):
