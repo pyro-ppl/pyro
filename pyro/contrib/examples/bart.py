@@ -32,7 +32,7 @@ SOURCE_FILES = [
     "date-hour-soo-dest-2018.csv.gz",
     "date-hour-soo-dest-2019.csv.gz",
 ]
-CACHE_URL = "https://d2hg8soec8ck9v.cloudfront.net/datasets/bart_full.pkl.bz2"
+CACHE_URL = "https://github.com/pyro-ppl/datasets/blob/master/bart_full.pkl.bz2?raw=true"
 
 
 def _load_hourly_od(basename):
@@ -123,9 +123,7 @@ def load_bart_od():
     if os.path.exists(pkl_file):
         return torch.load(pkl_file, weights_only=False)
 
-    filenames = multiprocessing.Pool(len(SOURCE_FILES)).map(
-        _load_hourly_od, SOURCE_FILES
-    )
+    filenames = multiprocessing.Pool(len(SOURCE_FILES)).map(_load_hourly_od, SOURCE_FILES)
     datasets = list(map(partial(torch.load, weights_only=False), filenames))
 
     stations = sorted(set().union(*(d["stations"].keys() for d in datasets)))
@@ -133,9 +131,7 @@ def load_bart_od():
     max_time = max(int(d["rows"][:, 0].max()) for d in datasets)
     num_rows = max_time - min_time + 1
     start_date = (datasets[0]["start_date"] + datetime.timedelta(hours=min_time),)
-    logging.info(
-        "Loaded data from {} stations, {} hours".format(len(stations), num_rows)
-    )
+    logging.info("Loaded data from {} stations, {} hours".format(len(stations), num_rows))
 
     result = torch.zeros(num_rows, len(stations), len(stations))
     for dataset in datasets:
@@ -147,9 +143,7 @@ def load_bart_od():
         count = dataset["rows"][:, 3].float()
         result[time, origin, destin] = count
         dataset.clear()
-    logging.info(
-        "Loaded {} shaped data of mean {:0.3g}".format(result.shape, result.mean())
-    )
+    logging.info("Loaded {} shaped data of mean {:0.3g}".format(result.shape, result.mean()))
 
     dataset = {
         "stations": stations,
