@@ -26,8 +26,8 @@ class CholeskyTransform(Transform):
     """
 
     bijective = True
-    domain = constraints.positive_definite
-    codomain = constraints.lower_cholesky
+    domain: constraints.Constraint = constraints.positive_definite
+    codomain: constraints.Constraint = constraints.lower_cholesky
 
     def __eq__(self, other):
         return isinstance(other, CholeskyTransform)
@@ -55,8 +55,7 @@ class CorrMatrixCholeskyTransform(CholeskyTransform):
 
     bijective = True
     domain = constraints.corr_matrix
-    # TODO: change corr_cholesky_constraint to corr_cholesky when the latter is availabler
-    codomain = constraints.corr_cholesky_constraint
+    codomain = constraints.corr_cholesky
 
     def __eq__(self, other):
         return isinstance(other, CorrMatrixCholeskyTransform)

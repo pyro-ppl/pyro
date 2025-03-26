@@ -14,6 +14,38 @@ from pyro.ops.special import log_binomial
 from .. import settings
 from . import constraints
 
+# Additionally try to import explicitly to help mypy static analysis.
+try:
+    from torch.distributions import (
+        Bernoulli,
+        Cauchy,
+        Chi2,
+        ContinuousBernoulli,
+        Exponential,
+        ExponentialFamily,
+        FisherSnedecor,
+        Gumbel,
+        HalfCauchy,
+        HalfNormal,
+        Kumaraswamy,
+        Laplace,
+        LKJCholesky,
+        LogisticNormal,
+        MixtureSameFamily,
+        NegativeBinomial,
+        OneHotCategoricalStraightThrough,
+        Pareto,
+        RelaxedBernoulli,
+        RelaxedOneHotCategorical,
+        StudentT,
+        TransformedDistribution,
+        VonMises,
+        Weibull,
+        Wishart,
+    )
+except ImportError:
+    pass
+
 
 def _clamp_by_zero(x):
     # works like clamp(x, min=0) but has grad at 0 is 0.5
@@ -202,7 +234,7 @@ class Geometric(torch.distributions.Geometric, TorchDistributionMixin):
         return (-value - 1) * torch.nn.functional.softplus(self.logits) + self.logits
 
 
-class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):
+class LogNormal(torch.distributions.LogNormal, TorchDistributionMixin):  # type: ignore
     def __init__(self, loc, scale, validate_args=None):
         base_dist = Normal(loc, scale)
         # This differs from torch.distributions.LogNormal only in that base_dist is
@@ -294,7 +326,7 @@ class Poisson(torch.distributions.Poisson, TorchDistributionMixin):
         )
 
 
-class Independent(torch.distributions.Independent, TorchDistributionMixin):
+class Independent(torch.distributions.Independent, TorchDistributionMixin):  # type: ignore
     @staticmethod
     def infer_shapes(**kwargs):
         raise NotImplementedError
