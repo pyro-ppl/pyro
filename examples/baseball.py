@@ -52,7 +52,7 @@ hyper-parameters) of running HMC on different problems.
 """
 
 logging.basicConfig(format="%(message)s", level=logging.INFO)
-DATA_URL = "https://d2hg8soec8ck9v.cloudfront.net/datasets/EfronMorrisBB.txt"
+DATA_URL = "https://github.com/pyro-ppl/datasets/blob/master/EfronMorrisBB.txt?raw=true"
 
 
 # ===================================

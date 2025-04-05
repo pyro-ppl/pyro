@@ -216,7 +216,7 @@ def main(args):
                 raise
             pass
         wget.download(
-            "https://d2hg8soec8ck9v.cloudfront.net/datasets/faces_training.csv",
+            "https://github.com/pyro-ppl/datasets/blob/master/faces_training.csv?raw=true",
             dataset_path,
         )
     data = torch.tensor(np.loadtxt(dataset_path, delimiter=",")).float()
