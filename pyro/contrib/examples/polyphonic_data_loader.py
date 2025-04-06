@@ -31,25 +31,25 @@ dset = namedtuple("dset", ["name", "url", "filename"])
 
 JSB_CHORALES = dset(
     "jsb_chorales",
-    "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/jsb_chorales.pickle",
+    "https://github.com/pyro-ppl/datasets/blob/master/polyphonic/jsb_chorales.pickle?raw=true",
     "jsb_chorales.pkl",
 )
 
 PIANO_MIDI = dset(
     "piano_midi",
-    "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/piano_midi.pickle",
+    "https://github.com/pyro-ppl/datasets/blob/master/polyphonic/piano_midi.pickle?raw=true",
     "piano_midi.pkl",
 )
 
 MUSE_DATA = dset(
     "muse_data",
-    "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/muse_data.pickle",
+    "https://github.com/pyro-ppl/datasets/blob/master/polyphonic/muse_data.pickle?raw=true",
     "muse_data.pkl",
 )
 
 NOTTINGHAM = dset(
     "nottingham",
-    "https://d2hg8soec8ck9v.cloudfront.net/datasets/polyphonic/nottingham.pickle",
+    "https://github.com/pyro-ppl/datasets/blob/master/polyphonic/nottingham.pickle?raw=true",
     "nottingham.pkl",
 )
 
