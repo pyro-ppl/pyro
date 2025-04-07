@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-sphinx==7.3.7
-sphinx-rtd-theme==3.0.0
+sphinx==8.2.3
+sphinx-rtd-theme==1.0.0
 graphviz>=0.8
 numpy>=1.7
 observations>=0.1.4
@@ -12,4 +12,10 @@ pyro-api>=0.1.1
 tqdm>=4.36
 funsor[torch]
 setuptools
-sphinx_copybutton
+sphinx_copybutton==0.5.2
+sphinxcontrib-applehelp==1.0.7
+sphinxcontrib-devhelp==2.0.0
+sphinxcontrib-htmlhelp==2.1.0
+sphinxcontrib-jsmath==1.0.1
+sphinxcontrib-qthelp==2.0.0
+sphinxcontrib-serializinghtml==2.0.0
