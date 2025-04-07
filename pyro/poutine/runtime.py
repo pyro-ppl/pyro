@@ -431,11 +431,12 @@ def effectful(
     @functools.wraps(fn)
     def _fn(
         *args: _P.args,
-        name: Optional[str] = None,
-        infer: Optional[InferDict] = None,
-        obs: Optional[_T] = None,
         **kwargs: _P.kwargs,
     ) -> _T:
+        name = kwargs.pop("name", None)
+        infer = kwargs.Pop("infer", None)
+        obs = kwargs.pop("obs", None)
+
         is_observed = obs is not None
 
         if not am_i_wrapped():
