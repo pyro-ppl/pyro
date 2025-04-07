@@ -57,6 +57,7 @@ jobs:
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install .[test]
           pip install -r docs/requirements.txt
+          pip install --upgrade sphinx docutils sphinx-rtd-theme
           pip freeze
       - name: Build docs and run doctest
         run: |
