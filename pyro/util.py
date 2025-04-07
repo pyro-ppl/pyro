@@ -719,6 +719,6 @@ def torch_float(x: Union[float, int]) -> float: ...
 @overload
 def torch_float(x: torch.Tensor) -> torch.Tensor: ...
 def torch_float(
-    x: Union[torch.Tensor, Union[float, int]]
+    x: Union[torch.Tensor, Union[float, int]],
 ) -> Union[torch.Tensor, float]:
     return x.float() if isinstance(x, torch.Tensor) else float(x)
