@@ -295,7 +295,7 @@ def main(args):
         with torch.no_grad():
             init_losses.append(loss_fn(model, guide, X, Y, hypers).item())
 
-    pyro.set_rng_seed(np.argmin(init_losses))
+    pyro.set_rng_seed(int(np.argmin(init_losses)))
     pyro.clear_param_store()
     guide = AutoDelta(model, init_loc_fn=init_loc_fn)
 
