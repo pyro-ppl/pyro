@@ -40,6 +40,7 @@ scrub: FORCE
 doctest: FORCE
 	# We skip testing pyro.distributions.torch wrapper classes because
 	# they include torch docstrings which are tested upstream.
+	pip list
 	python -m pytest -p tests.doctest_fixtures --doctest-modules -o filterwarnings=ignore pyro --ignore=pyro/distributions/torch.py
 
 perf-test: FORCE
