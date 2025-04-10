@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-from functools import partial
 
 import pytest
 import torch
