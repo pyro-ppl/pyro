@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
+from functools import partial
 
 import pytest
 import torch
@@ -377,4 +378,4 @@ def test_energy_score_empirical_batched_calculation(
 
 def test_jit_compilation():
     # Test that functions can be JIT compiled
-    torch.jit.script(energy_score_empirical)
+    torch.jit.script(partial(energy_score_empirical, cdist=torch.cdist))
