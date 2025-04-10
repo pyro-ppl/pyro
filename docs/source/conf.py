@@ -4,8 +4,6 @@
 import os
 import sys
 
-import sphinx_rtd_theme
-
 # import pkg_resources
 
 # -*- coding: utf-8 -*-
@@ -82,7 +80,7 @@ version = ""
 
 if "READTHEDOCS" not in os.environ:
     # if developing locally, use pyro.__version__ as version
-    from pyro import __version__  # noqaE402
+    from pyro import __version__  # noqa: E402
 
     version = __version__
 
@@ -122,7 +120,6 @@ html_favicon = "_static/img/favicon/favicon.ico"
 # a list of builtin themes.
 #
 html_theme = "sphinx_rtd_theme"
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the

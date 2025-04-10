@@ -486,7 +486,7 @@ def evaluate(args, samples):
         mean = samples[key].mean().item()
         std = samples[key].std().item()
         logging.info(
-            "{}: truth = {:0.3g}, estimate = {:0.3g} \u00B1 {:0.3g}".format(
+            "{}: truth = {:0.3g}, estimate = {:0.3g} \u00b1 {:0.3g}".format(
                 key, getattr(args, name), mean, std
             )
         )

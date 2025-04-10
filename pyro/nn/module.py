@@ -824,7 +824,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
 
 
 def pyro_method(
-    fn: Callable[Concatenate[_PyroModule, _P], _T]
+    fn: Callable[Concatenate[_PyroModule, _P], _T],
 ) -> Callable[Concatenate[_PyroModule, _P], _T]:
     """
     Decorator for top-level methods of a :class:`PyroModule` to enable pyro

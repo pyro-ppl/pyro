@@ -262,7 +262,7 @@ class Messenger:
 
 @contextmanager
 def block_messengers(
-    predicate: Callable[[Messenger], bool]
+    predicate: Callable[[Messenger], bool],
 ) -> Iterator[List[Messenger]]:
     """
     EXPERIMENTAL Context manager to temporarily remove matching messengers from
