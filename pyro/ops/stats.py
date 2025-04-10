@@ -3,7 +3,7 @@
 
 import math
 import numbers
-from typing import List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 import torch
 from torch.fft import irfft, rfft
@@ -511,7 +511,10 @@ def crps_empirical(pred, truth):
 
 
 def energy_score_empirical(
-    pred: torch.Tensor, truth: torch.Tensor, pred_batch_size: Optional[int] = None
+    pred: torch.Tensor,
+    truth: torch.Tensor,
+    pred_batch_size: Optional[int] = None,
+    cdist: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = torch.cdist,
 ) -> torch.Tensor:
     r"""
     Computes negative Energy Score ES* (see equation 22 in [1]) between a
@@ -542,6 +545,10 @@ def energy_score_empirical(
         for the second leftmost dim which can have any value or be omitted.
     :param int pred_batch_size: If specified the predictions will be batched before calculation
         according to the specified batch size in order to reduce memory consumption.
+    :param callable cdist: Function for calculating an euclidean distance (see
+        https://github.com/pytorch/pytorch/issues/42479 for why you might need to change this in order to
+        balance speed versus accuracy). Default is :any:`torch.cdist`.
+
     :return: A tensor of shape ``truth.shape``.
     :rtype: torch.Tensor
     """
@@ -558,8 +565,8 @@ def energy_score_empirical(
 
     if pred_batch_size is None:
         retval = (
-            torch.cdist(pred, truth).mean(dim=-2)
-            - 0.5 * torch.cdist(pred, pred).mean(dim=[-1, -2])[..., None]
+            cdist(pred, truth).mean(dim=-2)
+            - 0.5 * cdist(pred, pred).mean(dim=[-1, -2])[..., None]
         )
     else:
         # Divide predictions into batches
@@ -571,10 +578,7 @@ def energy_score_empirical(
         # Calculate predictions distance to truth
         retval = (
             torch.stack(
-                [
-                    torch.cdist(pred_batch, truth).sum(dim=-2)
-                    for pred_batch in pred_batches
-                ],
+                [cdist(pred_batch, truth).sum(dim=-2) for pred_batch in pred_batches],
                 dim=0,
             ).sum(dim=0)
             / pred_len
@@ -586,7 +590,7 @@ def energy_score_empirical(
                 - 0.5
                 * torch.stack(
                     [
-                        torch.cdist(pred_batch, aux_pred_batch).sum(dim=[-1, -2])
+                        cdist(pred_batch, aux_pred_batch).sum(dim=[-1, -2])
                         for pred_batch in pred_batches
                     ],
                     dim=0,
