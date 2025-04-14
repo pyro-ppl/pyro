@@ -6,6 +6,7 @@
 
 DOCKER_FILE=Dockerfile
 BASE_IMG=ubuntu:24.04
+BASE_CUDA_IMG=nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
 DOCKER_CMD=docker
 HOST_WORK_DIR=${HOME}/pyro_docker
 UID=999
@@ -72,11 +73,11 @@ build-gpu: ##
 	##     default - latest pyro-ppl wheel on pypi
 	##
 	${DOCKER_CMD} build -t ${IMG_NAME} \
-	--build-arg base_img=${BASE_IMG} \
+	--build-arg base_img=${BASE_CUDA_IMG} \
 	--build-arg uid=${UID} \
 	--build-arg gid=${GID} \
 	--build-arg ostype=${OSTYPE} \
-	--build-arg pytorch_whl=cu118 \
+	--build-arg pytorch_whl=cu126 \
 	--build-arg python_version=${python_version} \
 	--build-arg pytorch_branch=${pytorch_branch} \
 	--build-arg pyro_git_url=${pyro_git_url} \
@@ -107,7 +108,7 @@ run-gpu: ##
 	##   cmd: command invoked on running a docker instance.
 	##     default - bash
 	##
-	docker run --init --runtime=nvidia -it --user ${USER} \
+	docker run --init --gpus=all -it --user ${USER} \
 	-v ${HOST_WORK_DIR}:${DOCKER_WORK_DIR} \
 	${IMG_NAME} ${cmd}
 
@@ -127,7 +128,7 @@ notebook-gpu: ##
 	## Args:
 	##   img: use image name given by `img`.
 	##
-	docker run --runtime=nvidia --init -it -p 8888:8888 --user ${USER} \
+	docker run --gpus=all --init -it -p 8888:8888 --user ${USER} \
 	-v ${HOST_WORK_DIR}:${DOCKER_WORK_DIR} \
 	${IMG_NAME}
 
@@ -147,7 +148,7 @@ lab-gpu: ##
 	## Args:
 	##   img: use image name given by `img`.
 	##
-	docker run --runtime=nvidia --init -it -p 8888:8888 --user ${USER} \
+	docker run --gpus=all --init -it -p 8888:8888 --user ${USER} \
 	-v ${HOST_WORK_DIR}:${DOCKER_WORK_DIR} \
 	${IMG_NAME} jupyter lab --port=8888 --no-browser --ip=0.0.0.0
 
