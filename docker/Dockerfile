@@ -2,13 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-ARG base_img=ubuntu:18.04
+ARG base_img=ubuntu:24.04
 FROM ${base_img}
 
 # Optional args
-ARG cuda=0
 ARG python_version=3
 ARG pyro_branch=release
+ARG pytorch_whl=cpu
 ARG pytorch_branch=release
 ARG uid=1000
 ARG gid=1000
@@ -38,7 +38,7 @@ USER ${USER_NAME}
 
 # Install conda
 RUN wget -O ~/miniconda.sh \
-    https://repo.continuum.io/miniconda/Miniconda${python_version%%.*}-latest-Linux-x86_64.sh && \
+    https://repo.anaconda.com/miniconda/Miniconda${python_version%%.*}-latest-Linux-x86_64.sh && \
     bash ~/miniconda.sh -f -b -p ${CONDA_DIR} && \
     rm ~/miniconda.sh && \
     conda install python=${python_version}
