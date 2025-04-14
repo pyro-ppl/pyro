@@ -79,7 +79,6 @@ class PickleGuide(EasyGuide):
             self.group(match="state_[0-9]*").map_estimate()
 
 
-@pytest.mark.xfail(reason="https://github.com/pyro-ppl/pyro/issues/3430")
 def test_serialize():
     guide = PickleGuide(model)
     check_guide(guide)
