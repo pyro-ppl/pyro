@@ -14,6 +14,7 @@ ARG uid=1000
 ARG gid=1000
 ARG ostype=Linux
 ARG pyro_git_url=https://github.com/pyro-ppl/pyro.git
+ARG trust_hosts=no
 
 # Configurable settings
 ENV USER_NAME pyromancer
@@ -37,11 +38,19 @@ RUN bash -c 'if [ ${ostype} == Linux ]; then groupadd -r --gid ${gid} ${USER_NAM
 USER ${USER_NAME}
 
 # Install conda
-RUN wget -O ~/miniconda.sh \
+RUN if [ ${trust_hosts} = yes ] ; then WGET_ARGS="--no-check-certificate" ; fi && \
+    wget ${WGET_ARGS} -O ~/miniconda.sh \
     https://repo.anaconda.com/miniconda/Miniconda${python_version%%.*}-latest-Linux-x86_64.sh && \
     bash ~/miniconda.sh -f -b -p ${CONDA_DIR} && \
     rm ~/miniconda.sh && \
     conda install python=${python_version}
+
+# Trust conda and pip hosts if needed
+RUN if [ ${trust_hosts} = yes ] ; \
+    then \
+        pip config set global.trusted-host "pypi.org files.pythonhosted.org download.pytorch.org" && \
+        conda config --set ssl_verify False ; \
+    fi
 
 # Move to home directory; and copy the install script
 WORKDIR ${WORK_DIR}
