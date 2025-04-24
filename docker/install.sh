@@ -18,7 +18,14 @@ if [ ${pytorch_branch} != "release" ]
 then
     git clone --recursive https://github.com/pytorch/pytorch.git
     pushd pytorch && git checkout ${pytorch_branch}
-    pip uninstall torch
+    pip uninstall -y torch
+    conda install cmake ninja
+    pip install -r requirements.txt
+    pip install mkl-static mkl-include
+    if [ ${pytorch_whl} != "cpu" ]
+    then
+        conda install -c pytorch magma-cuda${pytorch_whl:2}
+    fi
     pip install -e .
     popd
 fi

@@ -21,6 +21,7 @@ python_version?=3.12
 pytorch_branch?=release
 pyro_branch?=release
 cmd?=bash
+trust_hosts?="no"
 
 # Determine name of docker image
 build run notebook: img_prefix=pyro-cpu
@@ -29,11 +30,10 @@ build run lab: img_prefix=pyro-cpu
 build-gpu run-gpu lab-gpu: img_prefix=pyro-gpu
 
 ifeq ($(img), )
-	IMG_NAME=${img_prefix}-${pyro_branch}-${python_version}
+	IMG_NAME=${img_prefix}-${pyro_branch}-${pytorch_branch}-${python_version}
 else
 	IMG_NAME=${img}
 endif
-
 
 help:
 	@fgrep -h "##" ${MAKEFILE_LIST} | fgrep -v fgrep | sed -e 's/##//'
@@ -51,6 +51,9 @@ build: ##
 	##     default - latest pytorch version on the torch python package index
 	##   pyro_branch: whether to use the released Pyro wheel or a git branch.
 	##     default - latest pyro-ppl wheel on pypi
+	##   trust_hosts: If set to yes hosts SSL ceritificates will be trusted
+	##   (might be needed when running begind a firewall)
+	##     default - Verify hosts SSL certificates
 	##
 	${DOCKER_CMD} build -t ${IMG_NAME} \
 	--build-arg base_img=${BASE_IMG} \
@@ -60,7 +63,8 @@ build: ##
 	--build-arg python_version=${python_version} \
 	--build-arg pytorch_branch=${pytorch_branch} \
 	--build-arg pyro_git_url=${pyro_git_url} \
-	--build-arg pyro_branch=${pyro_branch} -f ${DOCKER_FILE} .
+	--build-arg pyro_branch=${pyro_branch} \
+	--build-arg trust_hosts=${trust_hosts} -f ${DOCKER_FILE} .
 
 build-gpu: ##
 	## Build a docker image for running Pyro on a GPU.
@@ -71,6 +75,9 @@ build-gpu: ##
 	##     default - latest pytorch version on the torch python package index
 	##   pyro_branch: whether to use the released Pyro wheel or a git branch.
 	##     default - latest pyro-ppl wheel on pypi
+	##   trust_hosts: If set to yes hosts SSL ceritificates will be trusted
+	##   (might be needed when running begind a firewall)
+	##     default - Verify hosts SSL certificates
 	##
 	${DOCKER_CMD} build -t ${IMG_NAME} \
 	--build-arg base_img=${BASE_CUDA_IMG} \
@@ -81,7 +88,8 @@ build-gpu: ##
 	--build-arg python_version=${python_version} \
 	--build-arg pytorch_branch=${pytorch_branch} \
 	--build-arg pyro_git_url=${pyro_git_url} \
-	--build-arg pyro_branch=${pyro_branch} -f ${DOCKER_FILE} .
+	--build-arg pyro_branch=${pyro_branch} \
+	--build-arg trust_hosts=${trust_hosts} -f ${DOCKER_FILE} .
 
 create-host-workspace: ##
 	## Create shared volume on the host for sharing files with the container.
