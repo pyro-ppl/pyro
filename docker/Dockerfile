@@ -42,8 +42,7 @@ RUN if [ ${trust_hosts} = yes ] ; then WGET_ARGS="--no-check-certificate" ; fi &
     wget ${WGET_ARGS} -O ~/miniconda.sh \
     https://repo.anaconda.com/miniconda/Miniconda${python_version%%.*}-latest-Linux-x86_64.sh && \
     bash ~/miniconda.sh -f -b -p ${CONDA_DIR} && \
-    rm ~/miniconda.sh && \
-    conda install python=${python_version}
+    rm ~/miniconda.sh
 
 # Trust conda and pip hosts if needed
 RUN if [ ${trust_hosts} = yes ] ; \
@@ -51,6 +50,9 @@ RUN if [ ${trust_hosts} = yes ] ; \
         pip config set global.trusted-host "pypi.org files.pythonhosted.org download.pytorch.org" && \
         conda config --set ssl_verify False ; \
     fi
+
+# Update python version
+RUN conda install python=${python_version}
 
 # Move to home directory; and copy the install script
 WORKDIR ${WORK_DIR}
