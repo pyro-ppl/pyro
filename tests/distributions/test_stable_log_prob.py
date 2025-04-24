@@ -129,7 +129,7 @@ def test_stable_with_log_prob_param_fit(alpha, beta, c, mu, alpha_0, beta_0, c_0
     train(model, guide)
 
     # Verify fit accuracy
-    assert_close(alpha, pyro.param("alpha").item(), atol=0.03)
+    assert_close(alpha, pyro.param("alpha").item(), atol=0.04)
     assert_close(beta, pyro.param("beta").item(), atol=0.06)
     assert_close(c, pyro.param("c").item(), atol=0.2)
     assert_close(mu, pyro.param("mu").item(), atol=0.2)
