@@ -16,7 +16,7 @@ from .score_parts import ScoreParts
 from .util import broadcast_shape, scale_and_mask
 
 
-class TorchDistributionMixin(Distribution, Callable):
+class TorchDistributionMixin(Distribution):
     """
     Mixin to provide Pyro compatibility for PyTorch distributions.
 
