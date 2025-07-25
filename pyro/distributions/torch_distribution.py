@@ -3,7 +3,6 @@
 
 import warnings
 from collections import OrderedDict
-from typing import Callable
 
 import torch
 from torch.distributions.kl import kl_divergence, register_kl
