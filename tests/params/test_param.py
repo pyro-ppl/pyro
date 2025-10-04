@@ -266,7 +266,9 @@ def test_get_param_behaviour():
 
     # with init and a positive constraint: param is created and returns the constrained value
     init = 2.0 * torch.ones(2, 3)
-    p = param_store.get_param("p_with_init", init_tensor=init, constraint=constraints.positive)
+    p = param_store.get_param(
+        "p_with_init", init_tensor=init, constraint=constraints.positive
+    )
     assert "p_with_init" in param_store
     # returned constrained value should equal the init
     assert_equal(p, init)

@@ -253,7 +253,11 @@ class ParamStoreDict:
         # Apply parametrization if requested
         if parametrization == "orthogonal":
             import torch.nn.utils.parametrizations as parametrizations
-            if not hasattr(param, "parametrizations") or "orthogonal" not in param.parametrizations:
+
+            if (
+                not hasattr(param, "parametrizations")
+                or "orthogonal" not in param.parametrizations
+            ):
                 param = parametrizations.orthogonal(param)
         return param
 
