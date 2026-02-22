@@ -5,23 +5,23 @@
 .PHONY: help create-host-workspace build build-gpu run run-gpu notebook notebook-gpu
 
 DOCKER_FILE=Dockerfile
-BASE_IMG=ubuntu:18.04
-BASE_CUDA_IMG=nvidia/cuda:11.5.0-cudnn8-runtime-ubuntu18.04
+BASE_IMG=ubuntu:24.04
+BASE_CUDA_IMG=nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
 DOCKER_CMD=docker
-DOCKER_GPU_CMD=nvidia-docker
 HOST_WORK_DIR=${HOME}/pyro_docker
-UID=$(shell id -u)
-GID=$(shell id -g)
+UID=999
+GID=999
 OSTYPE=$(shell uname)
 USER=pyromancer
 DOCKER_WORK_DIR=/home/${USER}/workspace/shared
 pyro_git_url=https://github.com/pyro-ppl/pyro.git
 
 # Optional args
-python_version?=3.6
+python_version?=3.12
 pytorch_branch?=release
 pyro_branch?=release
 cmd?=bash
+trust_hosts?="no"
 
 # Determine name of docker image
 build run notebook: img_prefix=pyro-cpu
@@ -30,11 +30,10 @@ build run lab: img_prefix=pyro-cpu
 build-gpu run-gpu lab-gpu: img_prefix=pyro-gpu
 
 ifeq ($(img), )
-	IMG_NAME=${img_prefix}-${pyro_branch}-${python_version}
+	IMG_NAME=${img_prefix}-${pyro_branch}-${pytorch_branch}-${python_version}
 else
 	IMG_NAME=${img}
 endif
-
 
 help:
 	@fgrep -h "##" ${MAKEFILE_LIST} | fgrep -v fgrep | sed -e 's/##//'
@@ -45,14 +44,16 @@ help:
 
 build: ##
 	## Build a docker image for running Pyro on a CPU.
-	## Requires nvidia-docker (https://github.com/NVIDIA/nvidia-docker).
 	## Args:
-	##   python_version: version of python to use. default - python 3.6
+	##   python_version: version of python to use. default - python 3.12
 	##   pytorch_branch: whether to build PyTorch from conda or from source
 	##   (git branch specified by pytorch_branch)
-	##     default - latest pytorch version on conda
+	##     default - latest pytorch version on the torch python package index
 	##   pyro_branch: whether to use the released Pyro wheel or a git branch.
 	##     default - latest pyro-ppl wheel on pypi
+	##   trust_hosts: If set to yes hosts SSL ceritificates will be trusted
+	##   (might be needed when running begind a firewall)
+	##     default - Verify hosts SSL certificates
 	##
 	${DOCKER_CMD} build -t ${IMG_NAME} \
 	--build-arg base_img=${BASE_IMG} \
@@ -62,29 +63,33 @@ build: ##
 	--build-arg python_version=${python_version} \
 	--build-arg pytorch_branch=${pytorch_branch} \
 	--build-arg pyro_git_url=${pyro_git_url} \
-	--build-arg pyro_branch=${pyro_branch} -f ${DOCKER_FILE} .
+	--build-arg pyro_branch=${pyro_branch} \
+	--build-arg trust_hosts=${trust_hosts} -f ${DOCKER_FILE} .
 
 build-gpu: ##
 	## Build a docker image for running Pyro on a GPU.
-	## Requires nvidia-docker (https://github.com/NVIDIA/nvidia-docker).
 	## Args:
-	##   python_version: version of python to use. default - python 3.6
+	##   python_version: version of python to use. default - python 3.12
 	##   pytorch_branch: whether to build PyTorch from conda or from source
 	##   (git branch specified by pytorch_branch)
-	##     default - latest pytorch version on conda
+	##     default - latest pytorch version on the torch python package index
 	##   pyro_branch: whether to use the released Pyro wheel or a git branch.
 	##     default - latest pyro-ppl wheel on pypi
+	##   trust_hosts: If set to yes hosts SSL ceritificates will be trusted
+	##   (might be needed when running begind a firewall)
+	##     default - Verify hosts SSL certificates
 	##
-	${DOCKER_GPU_CMD} build -t ${IMG_NAME} \
+	${DOCKER_CMD} build -t ${IMG_NAME} \
 	--build-arg base_img=${BASE_CUDA_IMG} \
 	--build-arg uid=${UID} \
 	--build-arg gid=${GID} \
 	--build-arg ostype=${OSTYPE} \
-	--build-arg cuda=1 \
+	--build-arg pytorch_whl=cu126 \
 	--build-arg python_version=${python_version} \
 	--build-arg pytorch_branch=${pytorch_branch} \
 	--build-arg pyro_git_url=${pyro_git_url} \
-	--build-arg pyro_branch=${pyro_branch} -f ${DOCKER_FILE} .
+	--build-arg pyro_branch=${pyro_branch} \
+	--build-arg trust_hosts=${trust_hosts} -f ${DOCKER_FILE} .
 
 create-host-workspace: ##
 	## Create shared volume on the host for sharing files with the container.
@@ -111,7 +116,7 @@ run-gpu: ##
 	##   cmd: command invoked on running a docker instance.
 	##     default - bash
 	##
-	docker run --init --runtime=nvidia -it --user ${USER} \
+	docker run --init --gpus=all -it --user ${USER} \
 	-v ${HOST_WORK_DIR}:${DOCKER_WORK_DIR} \
 	${IMG_NAME} ${cmd}
 
@@ -131,7 +136,7 @@ notebook-gpu: ##
 	## Args:
 	##   img: use image name given by `img`.
 	##
-	docker run --runtime=nvidia --init -it -p 8888:8888 --user ${USER} \
+	docker run --gpus=all --init -it -p 8888:8888 --user ${USER} \
 	-v ${HOST_WORK_DIR}:${DOCKER_WORK_DIR} \
 	${IMG_NAME}
 
@@ -151,7 +156,7 @@ lab-gpu: ##
 	## Args:
 	##   img: use image name given by `img`.
 	##
-	docker run --runtime=nvidia --init -it -p 8888:8888 --user ${USER} \
+	docker run --gpus=all --init -it -p 8888:8888 --user ${USER} \
 	-v ${HOST_WORK_DIR}:${DOCKER_WORK_DIR} \
 	${IMG_NAME} jupyter lab --port=8888 --no-browser --ip=0.0.0.0
 

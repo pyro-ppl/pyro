@@ -470,3 +470,35 @@ def safe_normalize(x, *, p=2):
     x = x / norm.clamp(min=torch.finfo(x.dtype).tiny)
     x.data[..., 0][x.data.eq(0).all(dim=-1)] = 1  # Avoid the singularity.
     return x
+
+
+def broadcast_tensors_without_dim(tensors, dim):
+    """
+    Broadcast tensors to the same shape without changing the size of
+    dimension ``dim`` of each tensor.
+
+    The broadcasting is performed in the same way as done in
+    :func:`torch.broadcast_tensors`, while leaving the size of
+    dimension ``dim`` of each tensor unchanged.
+
+    The returned tensors can be concatenated along the dimension ``dim``.
+
+    :param list tensors: List of `torch.Tensor` objects.
+    :param int dim: Dimension to leave out of broadcasting.
+    :returns: List of `torch.Tensor` objects.
+    """
+    if dim >= 0:
+        shape_len = len(tensors[0].shape)
+        for tensor in tensors[1:]:
+            if len(tensor.shape) != shape_len:
+                raise ValueError(
+                    "Dimension dim must be negative for different dimension tensors"
+                )
+    shapes = [list(tensor.shape) for tensor in tensors]
+    for shape in shapes:
+        shape[dim] = 1
+    shape = torch.broadcast_shapes(*shapes)
+    shapes = [list(shape) for count in range(len(tensors))]
+    for shape, tensor in zip(shapes, tensors):
+        shape[dim] = tensor.shape[dim]
+    return [tensor.expand(shape) for shape, tensor in zip(shapes, tensors)]

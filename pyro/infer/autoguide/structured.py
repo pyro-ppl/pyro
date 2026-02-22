@@ -3,6 +3,7 @@
 
 from collections import OrderedDict, defaultdict
 from contextlib import ExitStack
+from operator import attrgetter
 from types import SimpleNamespace
 from typing import Callable, Dict, Optional, Union
 
@@ -19,7 +20,7 @@ from pyro.nn.module import PyroModule, PyroParam
 
 from .guides import AutoGuide
 from .initialization import InitMessenger, init_to_feasible
-from .utils import deep_getattr, deep_setattr, helpful_support_errors
+from .utils import deep_setattr, helpful_support_errors
 
 
 def _config_auxiliary(msg):
@@ -274,11 +275,11 @@ class AutoStructured(AutoGuide):
 
             # Sample zero-mean blockwise independent Delta/Normal/MVN.
             log_density = 0.0
-            loc = deep_getattr(self.locs, name)
+            loc = attrgetter(name)(self.locs)
             zero = torch.zeros_like(loc)
             conditional = self.conditionals[name]
             if callable(conditional):
-                aux_value = deep_getattr(self.conds, name)()
+                aux_value = attrgetter(name)(self.conds)()
             elif conditional == "delta":
                 aux_value = zero
             elif conditional == "normal":
@@ -287,7 +288,7 @@ class AutoStructured(AutoGuide):
                     dist.Normal(zero, 1).to_event(1),
                     infer={"is_auxiliary": True},
                 )
-                scale = deep_getattr(self.scales, name)
+                scale = attrgetter(name)(self.scales)
                 aux_value = aux_value * scale
                 if compute_density:
                     log_density = (-scale.log()).expand_as(aux_value)
@@ -299,8 +300,8 @@ class AutoStructured(AutoGuide):
                     dist.Normal(zero, 1).to_event(1),
                     infer={"is_auxiliary": True},
                 )
-                scale = deep_getattr(self.scales, name)
-                scale_tril = deep_getattr(self.scale_trils, name)
+                scale = attrgetter(name)(self.scales)
+                scale_tril = attrgetter(name)(self.scale_trils)
                 aux_value = aux_value @ scale_tril.T * scale
                 if compute_density:
                     log_density = (
@@ -318,9 +319,9 @@ class AutoStructured(AutoGuide):
             # Note: these shear transforms have no effect on the Jacobian
             # determinant, and can therefore be excluded from the log_density
             # computation below, even for nonlinear dep().
-            deps = deep_getattr(self.deps, name)
+            deps = attrgetter(name)(self.deps)
             for upstream in self.dependencies.get(name, {}):
-                dep = deep_getattr(deps, upstream)
+                dep = attrgetter(upstream)(deps)
                 aux_value = aux_value + dep(aux_values[upstream])
             aux_values[name] = aux_value
 
@@ -368,7 +369,7 @@ class AutoStructured(AutoGuide):
     def median(self, *args, **kwargs):
         result = {}
         for name, site in self._sorted_sites:
-            loc = deep_getattr(self.locs, name).detach()
+            loc = attrgetter(name)(self.locs).detach()
             shape = self._batch_shapes[name] + self._unconstrained_event_shapes[name]
             loc = loc.reshape(shape)
             result[name] = biject_to(site["fn"].support)(loc)

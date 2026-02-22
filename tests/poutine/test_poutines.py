@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 def eq(x, y, prec=1e-10):
-    return torch.norm(x - y).item() < prec
+    return torch.linalg.norm(x - y).item() < prec
 
 
 # XXX name is a bit silly
@@ -803,6 +803,50 @@ class EqualizeHandlerTests(TestCase):
         pyro.clear_param_store()
         model = poutine.equalize(self.model, ".+_std")
         pyro.render_model(model)
+
+
+@pytest.mark.parametrize("keep_dist", [False, True])
+@pytest.mark.parametrize(
+    "loc_x, scale_x, loc_y, scale_y", [(0.0, 1.0, 5.0, 2.0), (5.0, 2.0, 0.0, 1.0)]
+)
+def test_condition_by_equalize(loc_x, scale_x, loc_y, scale_y, keep_dist):
+    # Create model and equalize it.
+    def model():
+        x = pyro.sample("x", dist.Normal(loc_x, scale_x))
+        y = pyro.sample("y", dist.Normal(loc_y, scale_y))
+        return x, y
+
+    equalized_model = pyro.poutine.equalize(model, ["x", "y"], keep_dist=keep_dist)
+
+    # Fit guide to model
+    guide = pyro.infer.autoguide.AutoNormal(equalized_model)
+    optim = pyro.optim.Adam(dict(lr=0.1))
+    svi = pyro.infer.SVI(
+        equalized_model,
+        guide,
+        optim,
+        loss=pyro.infer.TraceGraph_ELBO(num_particles=1000, vectorize_particles=True),
+    )
+    for step_num in range(100):
+        svi.step()
+
+    # Get guide distribution parameters
+    loc, scale = guide._get_loc_and_scale("x")
+    loc = float(loc.detach().numpy())
+    scale = float(scale.detach().numpy())
+
+    # Verify against expected distribution parameters
+    if keep_dist:
+        # Both 'x' and 'y' are sampled and the model is conditioned on 'x' and 'y' having the same value.
+        expected_var = 1 / (1 / scale_x**2 + 1 / scale_y**2)
+        expected_loc = (loc_x / scale_x**2 + loc_y / scale_y**2) * expected_var
+        expected_scale = expected_var**0.5
+    else:
+        # The random variable 'x' is sampled and its value is assigned to 'y'.
+        expected_loc = loc_x
+        expected_scale = scale_x
+    assert_close(loc, expected_loc, atol=0.05)
+    assert_close(scale, expected_scale, atol=0.05)
 
 
 @pytest.mark.parametrize("first_available_dim", [-1, -2, -3])

@@ -158,6 +158,7 @@ List of Tutorials
    stable
    forecast_simple
    timeseries
+   reconciling_experts
 
 .. toctree::
    :maxdepth: 1

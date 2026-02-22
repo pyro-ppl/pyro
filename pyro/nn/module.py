@@ -138,7 +138,7 @@ class PyroParam(NamedTuple):
         if name not in obj.__dict__["_pyro_params"]:
             init_value, constraint, event_dim = self
             # bind method's self arg
-            init_value = functools.partial(init_value, obj)  # type: ignore[arg-type,misc,operator]
+            init_value = functools.partial(init_value, obj)  # type: ignore[arg-type,call-arg,misc,operator]
             setattr(obj, name, PyroParam(init_value, constraint, event_dim))
         value: PyroParam = obj.__getattr__(name)
         return value
@@ -824,7 +824,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
 
 
 def pyro_method(
-    fn: Callable[Concatenate[_PyroModule, _P], _T]
+    fn: Callable[Concatenate[_PyroModule, _P], _T],
 ) -> Callable[Concatenate[_PyroModule, _P], _T]:
     """
     Decorator for top-level methods of a :class:`PyroModule` to enable pyro

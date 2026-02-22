@@ -18,12 +18,6 @@ def _product(shape):
     return result
 
 
-def deep_getattr(obj, key):
-    for part in key.split("."):
-        obj = getattr(obj, part)
-    return obj
-
-
 def deep_setattr(obj, key, val):
     """
     Set an attribute `key` on the object. If any of the prefix attributes do

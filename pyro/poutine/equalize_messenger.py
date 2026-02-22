@@ -38,18 +38,42 @@ class EqualizeMessenger(Messenger):
 
         >>> equal_std_param_model = pyro.poutine.equalize(equal_std_model, '.+_shift', 'param')
 
+    Alternatively, the ``equalize``  messenger can be used to condition a model on primitive statements
+    having the same value by setting `keep_dist` to True. Consider the below model:
+
+        >>> def model():
+        ...     x = pyro.sample('x', pyro.distributions.Normal(0, 1))
+        ...     y = pyro.sample('y', pyro.distributions.Normal(5, 3))
+        ...     return x, y
+
+    The model can be conditioned on 'x' and 'y' having the same value by
+
+        >>> conditioned_model = pyro.poutine.equalize(model, ['x', 'y'], keep_dist=True)
+
+    Note that the conditioned model defined above calculates the correct unnormalized log-probablity
+    density, but in order to correctly sample from it one must use SVI or MCMC techniques.
+
     :param fn: a stochastic function (callable containing Pyro primitive calls)
     :param sites: a string or list of strings to match site names (the strings can be regular expressions)
     :param type: a string specifying the site type (default is 'sample')
+    :param bool keep_dist: Whether to keep the distributions of the second and subsequent
+        matching primitive statements. If kept this is equivalent to conditioning the model
+        on all matching primitive statements having the same value, as opposed to having the
+        second and subsequent matching primitive statements replaced by delta sampling functions.
+        Defaults to False.
     :returns: stochastic function decorated with a :class:`~pyro.poutine.equalize_messenger.EqualizeMessenger`
     """
 
     def __init__(
-        self, sites: Union[str, List[str]], type: Optional[str] = "sample"
+        self,
+        sites: Union[str, List[str]],
+        type: Optional[str] = "sample",
+        keep_dist: Optional[bool] = False,
     ) -> None:
         super().__init__()
         self.sites = [sites] if isinstance(sites, str) else sites
         self.type = type
+        self.keep_dist = keep_dist
 
     def __enter__(self) -> Self:
         self.value = None
@@ -72,6 +96,9 @@ class EqualizeMessenger(Messenger):
         if self.value is not None and self._is_matching(msg):  # type: ignore[unreachable]
             msg["value"] = self.value  # type: ignore[unreachable]
             if msg["type"] == "sample":
-                msg["fn"] = Delta(self.value, event_dim=msg["fn"].event_dim).mask(False)
-                msg["infer"] = {"_deterministic": True}
                 msg["is_observed"] = True
+                if not self.keep_dist:
+                    msg["infer"] = {"_deterministic": True}
+                    msg["fn"] = Delta(self.value, event_dim=msg["fn"].event_dim).mask(
+                        False
+                    )

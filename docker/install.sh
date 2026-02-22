@@ -13,17 +13,20 @@ pip install notebook ipywidgets matplotlib
 # Use conda package if pytorch_branch = 'release'.
 # Else, install from source, using git branch `pytorch_branch`
 
-if [ ${pytorch_branch} = "release" ]
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/${pytorch_whl}
+if [ ${pytorch_branch} != "release" ]
 then
-    conda install -y pytorch torchvision -c pytorch
-    if [ ${cuda} = 1 ]; then conda install -y cuda90 -c pytorch; fi
-else
-    conda install -y numpy pyyaml mkl mkl-include setuptools cmake cffi typing
-    conda install -c mingfeima mkldnn
-    if [ ${cuda} = 1 ]; then conda install -y cuda90 -c pytorch; fi
     git clone --recursive https://github.com/pytorch/pytorch.git
     pushd pytorch && git checkout ${pytorch_branch}
-    python setup.py install
+    pip uninstall -y torch
+    conda install cmake ninja
+    pip install -r requirements.txt
+    pip install mkl-static mkl-include
+    if [ ${pytorch_whl} != "cpu" ]
+    then
+        conda install -c pytorch magma-cuda${pytorch_whl:2}
+    fi
+    pip install -e .
     popd
 fi
 
@@ -36,5 +39,5 @@ then
     pip install pyro-ppl
 else
     git clone ${pyro_git_url}
-    (cd pyro && git checkout ${pyro_branch} && pip install .[dev])
+    (cd pyro && git checkout ${pyro_branch} && pip install -e .[dev])
 fi

@@ -12,3 +12,4 @@ pyro-api>=0.1.1
 tqdm>=4.36
 funsor[torch]
 setuptools
+sphinx_copybutton

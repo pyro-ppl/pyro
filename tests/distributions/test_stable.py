@@ -35,16 +35,14 @@ def test_shape(sample_shape, batch_shape):
 def test_sample(alpha, beta):
     num_samples = 100
     d = dist.Stable(alpha, beta, coords="S")
-
-    def sampler(size):
-        # Temporarily increase radius to test hole-patching logic.
-        # Scipy doesn't handle values of alpha very close to 1.
-        try:
-            old = pyro.distributions.stable.RADIUS
-            pyro.distributions.stable.RADIUS = 0.02
-            return d.sample([size])
-        finally:
-            pyro.distributions.stable.RADIUS = old
+    # Temporarily increase radius to test hole-patching logic.
+    # Scipy doesn't handle values of alpha very close to 1.
+    try:
+        old = pyro.distributions.stable.RADIUS
+        pyro.distributions.stable.RADIUS = 0.02
+        samples = d.sample((num_samples,))
+    finally:
+        pyro.distributions.stable.RADIUS = old
 
     def cdf(x):
         with warnings.catch_warnings(record=True) as w:
@@ -56,7 +54,7 @@ def test_sample(alpha, beta):
             pytest.xfail(reason="scipy.stats.levy_stable.cdf is unstable")
         return result
 
-    assert kstest(sampler, cdf, N=num_samples).pvalue > 0.1
+    assert kstest(samples, cdf).pvalue > 0.1
 
 
 @pytest.mark.parametrize("beta", [-1.0, -0.5, 0.0, 0.5, 1.0])
