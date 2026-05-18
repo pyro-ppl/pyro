@@ -151,21 +151,34 @@ class _GSMSample(Function):
         epsilons_sqr = torch.pow(epsilons, 2.0)  # l i
         r_sqr = epsilons_sqr.sum(-1, keepdim=True)  # l
         r_sqr_j = r_sqr / component_scale_sqr  # l j
-        coord_scale_product = coord_scale.prod()
-        component_scale_power = torch.pow(component_scale, float(dim))
+        log_coord_scale_product = coord_scale.log().sum()
+        log_component_scale_power = component_scale.log() * float(dim)
 
-        q_j = torch.exp(-0.5 * r_sqr_j) / math.pow(
-            2.0 * math.pi, 0.5 * float(dim)
-        )  # l j
-        q_j /= coord_scale_product * component_scale_power  # l j
-        q_tot = (pis * q_j).sum(-1, keepdim=True)  # l
+        log_q_j = (
+            -0.5 * r_sqr_j
+            - 0.5 * math.log(2.0 * math.pi) * float(dim)
+            - log_coord_scale_product
+            - log_component_scale_power
+        )
+        log_q_tot = torch.logsumexp(pis.log() + log_q_j, dim=-1, keepdim=True)
+        q_j_over_q_tot = torch.exp(log_q_j - log_q_tot)
 
-        Phi_j = torch.exp(-0.5 * r_sqr_j)  # l j
-        exponents = -torch.arange(1.0, int(dim / 2) + 1.0, 1.0)
+        log_normalizer = (
+            -0.5 * math.log(2.0 * math.pi) * float(dim)
+            - log_component_scale_power
+            - log_coord_scale_product
+            - log_q_tot
+        )
+
+        Phi_j = torch.exp(-0.5 * r_sqr_j + log_normalizer)
+
+        exponents = -torch.arange(
+            1.0, int(dim / 2) + 1.0, 1.0, device=z.device, dtype=z.dtype
+        )
         if z.dim() > 1:
-            r_j_poly = r_sqr_j.unsqueeze(-1).expand(-1, -1, int(dim / 2))  # l j d/2
+            r_j_poly = r_sqr_j.unsqueeze(-1).expand(-1, -1, int(dim / 2))
         else:
-            r_j_poly = r_sqr_j.unsqueeze(-1).expand(-1, int(dim / 2))  # l j d/2
+            r_j_poly = r_sqr_j.unsqueeze(-1).expand(-1, int(dim / 2))
         r_j_poly = coeffs * torch.pow(r_j_poly, exponents)
         Phi_j *= r_j_poly.sum(-1)
         if dim % 2 == 1:
@@ -174,20 +187,19 @@ class _GSMSample(Function):
                 coeffs[-1]
                 * math.sqrt(0.5 * math.pi)
                 * (1.0 - torch.erf(r_sqr_j.sqrt() / root_two))
-            )  # l j
-            Phi_j += extra_term * torch.pow(r_sqr_j, -0.5 * float(dim))
+            )
+            Phi_j += (
+                extra_term
+                * torch.pow(r_sqr_j, -0.5 * float(dim))
+                * torch.exp(log_normalizer)
+            )
 
-        logits_grad = (z.unsqueeze(-2) * Phi_j.unsqueeze(-1) * g).sum(-1)  # l j
-        logits_grad /= q_tot
-        logits_grad = sum_leftmost(logits_grad, -1) * math.pow(
-            2.0 * math.pi, -0.5 * float(dim)
-        )
-        logits_grad = pis * logits_grad / (component_scale_power * coord_scale_product)
+        logits_grad = (z.unsqueeze(-2) * Phi_j.unsqueeze(-1) * g).sum(-1)
+        logits_grad = sum_leftmost(logits_grad, -1)
+        logits_grad = pis * logits_grad
         logits_grad = logits_grad - logits_grad.sum() * pis
 
-        prefactor = (
-            pis.unsqueeze(-1) * q_j.unsqueeze(-1) * g / q_tot.unsqueeze(-1)
-        )  # l j i
+        prefactor = pis.unsqueeze(-1) * q_j_over_q_tot.unsqueeze(-1) * g # l j i
         coord_scale_grad = sum_leftmost(prefactor * epsilons.unsqueeze(-2), -1)
         component_scale_grad = sum_leftmost(
             (prefactor * z.unsqueeze(-2)).sum(-1) / component_scale, -1

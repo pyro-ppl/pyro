@@ -176,9 +176,7 @@ class _MixDiagNormalSharedCovarianceSample(Function):
         log_q_j = log_qs.sum(-1, keepdim=True)  # l b j 1
         log_q_j_max = torch.max(log_q_j, -2, keepdim=True)[0]
         q_j_prime = torch.exp(log_q_j - log_q_j_max)  # l b j 1
-        q_j = torch.exp(log_q_j)  # l b j 1
 
-        q_tot = (pis.unsqueeze(-1) * q_j).sum(-2)  # l b 1
         q_tot_prime = (pis.unsqueeze(-1) * q_j_prime).sum(-2).unsqueeze(-1)  # l b 1 1
 
         root_two = math.sqrt(2.0)
@@ -186,7 +184,8 @@ class _MixDiagNormalSharedCovarianceSample(Function):
         logits_grad = torch.erf((z_ll_ab - mu_ll_ab) / root_two) - torch.erf(
             (z_ll_ab + mu_ll_ba) / root_two
         )
-        logits_grad *= torch.exp(-0.5 * z_perp_ab_sqr)  # l b k j
+        log_q_j_max = log_q_j_max.squeeze(-1).unsqueeze(-1)  # l b 1 1
+        logits_grad *= torch.exp(-0.5 * z_perp_ab_sqr - log_q_j_max)  # l b k j
 
         #                 bi      lbi                               bkji
         mu_ab_sigma_g = ((coord_scale * g).unsqueeze(-2).unsqueeze(-2) * mu_ab).sum(
@@ -194,7 +193,7 @@ class _MixDiagNormalSharedCovarianceSample(Function):
         )  # l b k j
         logits_grad *= -mu_ab_sigma_g * pis.unsqueeze(-2)  # l b k j
         logits_grad = pis * sum_leftmost(
-            logits_grad.sum(-1) / q_tot, -(1 + batch_dims)
+            logits_grad.sum(-1) / q_tot_prime.squeeze(-1), -(1 + batch_dims)
         )  # b k
         logits_grad *= math.sqrt(0.5 * math.pi)
 
