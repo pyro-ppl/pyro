@@ -9,6 +9,7 @@ This module offers a modified interface for MCMC inference with the following ob
     code that works with different backends.
   - minimal memory consumption with multiprocessing and CUDA.
 """
+
 import copy
 import json
 import logging

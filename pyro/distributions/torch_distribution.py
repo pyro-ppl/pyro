@@ -154,11 +154,9 @@ class TorchDistributionMixin(Distribution, Callable):
         return expanded_dist
 
     def reshape(self, sample_shape=None, extra_event_dims=None):
-        raise Exception(
-            """
+        raise Exception("""
             .reshape(sample_shape=s, extra_event_dims=n) was renamed and split into
-            .expand_by(sample_shape=s).to_event(reinterpreted_batch_ndims=n)."""
-        )
+            .expand_by(sample_shape=s).to_event(reinterpreted_batch_ndims=n).""")
 
     def to_event(self, reinterpreted_batch_ndims=None):
         """

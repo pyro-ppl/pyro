@@ -11,6 +11,7 @@ by recursively reasoning about one another.
 
 Taken from: http://forestdb.org/models/schelling-falsebelief.html
 """
+
 import argparse
 
 import torch

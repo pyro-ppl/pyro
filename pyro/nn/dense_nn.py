@@ -1,7 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import List, Sequence, Union
+from typing import List, Sequence, Union, cast
 
 import torch
 
@@ -83,16 +83,16 @@ class ConditionalDenseNN(torch.nn.Module):
         h = x
         for layer in self.layers[:-1]:
             h = self.f(layer(h))
-        h = self.layers[-1](h)
+        h = cast(torch.Tensor, self.layers[-1](h))
 
         # Shape the output, squeezing the parameter dimension if all ones
         if self.output_multiplier == 1:
-            return h
+            return cast(torch.Tensor, h)
         else:
             h = h.reshape(list(x.size()[:-1]) + [self.output_multiplier])
 
             if self.count_params == 1:
-                return h
+                return cast(torch.Tensor, h)
 
             else:
                 return tuple([h[..., s] for s in self.param_slices])

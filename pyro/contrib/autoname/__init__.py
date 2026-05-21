@@ -5,6 +5,7 @@
 The :mod:`pyro.contrib.autoname` module provides tools for automatically
 generating unique, semantically meaningful names for sample sites.
 """
+
 from pyro.contrib.autoname import named
 from pyro.contrib.autoname.autoname import autoname, sample
 from pyro.contrib.autoname.scoping import name_count, scope

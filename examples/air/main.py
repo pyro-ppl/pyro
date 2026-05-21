@@ -9,7 +9,6 @@ understanding with generative models." Advances in Neural Information
 Processing Systems. 2016.
 """
 
-
 import argparse
 import math
 import os

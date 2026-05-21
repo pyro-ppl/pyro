@@ -12,6 +12,7 @@ the :class:`PyroSample` struct::
     my_module.y = PyroSample(dist.Normal(0, 1))
 
 """
+
 import functools
 import inspect
 import warnings
@@ -25,7 +26,7 @@ except ImportError:
     )
 
     # Fall back to trivial decorator.
-    def _copy_to_script_wrapper(fn):
+    def _copy_to_script_wrapper(fn):  # type: ignore[misc]
         return fn
 
 
@@ -45,6 +46,7 @@ from typing import (
     Type,
     TypeVar,
     Union,
+    overload,
 )
 
 import torch
@@ -954,10 +956,16 @@ class PyroModuleList(torch.nn.ModuleList, PyroModule):
     def __init__(self, modules):
         super().__init__(modules)
 
+    @overload
+    def __getitem__(self, idx: slice) -> torch.nn.ModuleList: ...
+
+    @overload
+    def __getitem__(self, idx: int) -> torch.nn.Module: ...
+
     @_copy_to_script_wrapper
     def __getitem__(
         self, idx: Union[int, slice]
-    ) -> Union[torch.nn.Module, "PyroModuleList"]:
+    ) -> Union[torch.nn.Module, torch.nn.ModuleList]:
         if isinstance(idx, slice):
             # return self.__class__(list(self._modules.values())[idx])
             return torch.nn.ModuleList(list(self._modules.values())[idx])

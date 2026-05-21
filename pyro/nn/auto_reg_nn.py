@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import List, Optional, Sequence, Tuple, Union, cast
 
 import torch
 import torch.nn as nn
@@ -118,6 +118,7 @@ class MaskedLinear(nn.Linear):
         self, in_features: int, out_features: int, mask: torch.Tensor, bias: bool = True
     ) -> None:
         super().__init__(in_features, out_features, bias)
+        self.mask: torch.Tensor
         self.register_buffer("mask", mask.data)
 
     def forward(self, _input: torch.Tensor) -> torch.Tensor:
@@ -263,7 +264,7 @@ class ConditionalAutoRegressiveNN(nn.Module):
     ) -> Union[Sequence[torch.Tensor], torch.Tensor]:
         # We must be able to broadcast the size of the context over the input
         if context is None:
-            context = self.context
+            context = cast(torch.Tensor, self.context)
 
         context = context.expand(x.size()[:-1] + (context.size(-1),))
         x = torch.cat([context, x], dim=-1)
@@ -273,14 +274,14 @@ class ConditionalAutoRegressiveNN(nn.Module):
         h = x
         for layer in self.layers[:-1]:
             h = self.f(layer(h))
-        h = self.layers[-1](h)
+        h = cast(torch.Tensor, self.layers[-1](h))
 
         if self.skip_layer is not None:
             h = h + self.skip_layer(x)
 
         # Shape the output, squeezing the parameter dimension if all ones
         if self.output_multiplier == 1:
-            return h
+            return cast(torch.Tensor, h)
         else:
             h = h.reshape(
                 list(x.size()[:-1]) + [self.output_multiplier, self.input_dim]
@@ -288,7 +289,7 @@ class ConditionalAutoRegressiveNN(nn.Module):
 
             # Squeeze dimension if all parameters are one dimensional
             if self.count_params == 1:
-                return h
+                return cast(torch.Tensor, h)
 
             elif self.all_ones:
                 return torch.unbind(h, dim=-2)

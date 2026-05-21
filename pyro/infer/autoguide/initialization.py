@@ -9,6 +9,7 @@ The standard interface for initialization is a function that inputs a Pyro
 trace ``site`` dict and returns an appropriately sized ``value`` to serve
 as an initial constrained value for a guide estimate.
 """
+
 import functools
 from typing import Callable, Optional
 

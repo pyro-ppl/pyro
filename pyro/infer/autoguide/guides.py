@@ -15,6 +15,7 @@ For example to generate a mean field Gaussian guide::
 Automatic guides can also be combined using :func:`pyro.poutine.block` and
 :class:`AutoGuideList`.
 """
+
 import functools
 import operator
 import warnings

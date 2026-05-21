@@ -246,10 +246,10 @@ def run_inference_for_epoch(data_loaders, losses, periodic_interval_batches):
 
         # extract the corresponding batch
         if is_supervised:
-            (xs, ys) = next(sup_iter)
+            xs, ys = next(sup_iter)
             ctr_sup += 1
         else:
-            (xs, ys) = next(unsup_iter)
+            xs, ys = next(unsup_iter)
 
         # run the inference for each loss with supervised or un-supervised
         # data as arguments
