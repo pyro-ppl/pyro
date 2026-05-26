@@ -70,7 +70,7 @@ EXTRAS_REQUIRE = [
     "graphviz>=0.8",
     "matplotlib>=1.3",
     "torchvision>=0.15.0",
-    "visdom>=0.1.4,<0.2.2",  # FIXME visdom.utils is unavailable >=0.2.2
+    "visdom>=0.2.3",
     "pandas",
     "pillow>=8.3.1",  # https://github.com/pytorch/pytorch/issues/61125
     "scikit-learn",
