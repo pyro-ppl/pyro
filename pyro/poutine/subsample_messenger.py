@@ -12,6 +12,11 @@ from pyro.poutine.util import is_validation_enabled
 from pyro.util import ignore_jit_warnings
 
 
+_TORCH_TENSOR_CONSTANT_WARNING = (
+    "torch\\.[Tt]ensor results are registered as constants"
+)
+
+
 class _Subsample(Distribution):
     """
     Randomly select a subsample of a range of indices.
@@ -44,7 +49,7 @@ class _Subsample(Distribution):
                         use_cuda, device
                     )
                 )
-        with ignore_jit_warnings(["torch.Tensor results are registered as constants"]):
+        with ignore_jit_warnings([_TORCH_TENSOR_CONSTANT_WARNING]):
             self.device = device or torch.tensor(tuple()).device
 
     @ignore_jit_warnings(["Converting a tensor to a Python boolean"])
@@ -67,7 +72,8 @@ class _Subsample(Distribution):
     def log_prob(self, x: torch.Tensor) -> torch.Tensor:
         # This is zero so that plate can provide an unbiased estimate of
         # the non-subsampled log_prob.
-        result = torch.tensor(0.0, device=self.device)
+        with ignore_jit_warnings([_TORCH_TENSOR_CONSTANT_WARNING]):
+            result = torch.tensor(0.0, device=self.device)
         return result.cuda() if self.use_cuda else result
 
 
