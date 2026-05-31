@@ -86,10 +86,4 @@ def _CorrCholesky_check(self, value):
     return torch.distributions.constraints.lower_cholesky.check(value) & unit_row_norm
 
 
-# This adds a __call__ method to satisfy sphinx.
-@patch_dependency("torch.distributions.utils.lazy_property.__call__")
-def _lazy_property__call__(self):
-    raise NotImplementedError
-
-
 __all__ = []

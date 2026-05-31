@@ -84,7 +84,7 @@ test-jit: FORCE
 		-k JIT=True | tee -a jit.log
 
 test-funsor: lint FORCE
-	pytest -vx -n auto --stage funsor
+	pytest -vx -n auto -p no:benchmark --stage funsor
 
 clean: FORCE
 	git clean -dfx -e pyro_ppl.egg-info
