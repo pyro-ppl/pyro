@@ -10,6 +10,6 @@ observations>=0.1.4
 opt_einsum>=2.3.2
 pyro-api>=0.1.1
 tqdm>=4.36
-funsor[torch]
+funsor[torch] @ git+https://github.com/pyro-ppl/funsor.git@8a8ca81fcc61733ad82e163028c7ff78420df9f0
 setuptools
 sphinx_copybutton
