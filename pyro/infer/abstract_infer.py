@@ -247,7 +247,7 @@ class TracePosterior(object, metaclass=ABCMeta):
         :param kwargs: optional keywords args taken by `self._traces`.
         """
         self._reset()
-        with torch.no_grad(), poutine.block():
+        with poutine.block():
             for i, vals in enumerate(self._traces(*args, **kwargs)):
                 if len(vals) == 2:
                     chain_id = 0
