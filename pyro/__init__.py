@@ -32,7 +32,7 @@ version_prefix = "1.9.1"
 
 # Get the __version__ string from the auto-generated _version.py file, if exists.
 try:
-    from pyro._version import __version__  # type: ignore
+    from pyro._version import __version__
 except ImportError:
     __version__ = version_prefix
 

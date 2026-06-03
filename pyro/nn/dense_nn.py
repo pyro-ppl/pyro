@@ -83,7 +83,7 @@ class ConditionalDenseNN(torch.nn.Module):
         h = x
         for layer in self.layers[:-1]:
             h = self.f(layer(h))
-        h = self.layers[-1](h)  # type: ignore[no-any-return]
+        h = self.layers[-1](h)
 
         # Shape the output, squeezing the parameter dimension if all ones
         if self.output_multiplier == 1:

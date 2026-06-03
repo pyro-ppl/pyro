@@ -21,7 +21,7 @@ lint: FORCE
 	ruff check .
 	black --check *.py pyro examples tests scripts profiler
 	python scripts/update_headers.py --check
-	mypy --install-types --non-interactive pyro scripts tests
+	mypy --install-types --non-interactive --warn-unused-ignores pyro scripts tests
 
 license: FORCE
 	python scripts/update_headers.py

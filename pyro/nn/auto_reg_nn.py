@@ -271,7 +271,7 @@ class ConditionalAutoRegressiveNN(nn.Module):
         h = x
         for layer in self.layers[:-1]:
             h = self.f(layer(h))
-        h = self.layers[-1](h)  # type: ignore[no-any-return]
+        h = self.layers[-1](h)
 
         if self.skip_layer is not None:
             h = h + self.skip_layer(x)
