@@ -424,13 +424,13 @@ class WeighedPredictive(Predictive):
             guide_log_prob = plate_log_prob_sum(guide_trace, plate_symbol)
             model_log_prob = plate_log_prob_sum(model_trace, plate_symbol)
         else:
-            guide_log_prob = torch.Tensor(
+            guide_log_prob = torch.stack(
                 [
                     trace_element.log_prob_sum()
                     for trace_element in guide_predictive.trace
                 ]
             )
-            model_log_prob = torch.Tensor(
+            model_log_prob = torch.stack(
                 [
                     trace_element.log_prob_sum()
                     for trace_element in model_predictive.trace
