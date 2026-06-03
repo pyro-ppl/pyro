@@ -8,7 +8,6 @@ import torch.nn as nn
 from utils.custom_mlp import MLP, Exp
 from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
 from utils.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
-from visdom import Visdom
 
 import pyro
 import pyro.distributions as dist
@@ -306,6 +305,8 @@ def main(args):
 
     viz = None
     if args.visualize:
+        from visdom import Visdom
+
         viz = Visdom()
         mkdir_p("./vae_results")
 

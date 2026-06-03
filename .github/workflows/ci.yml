@@ -53,7 +53,6 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          bash scripts/install_visdom.sh
           pip install .[test]
           pip install -r docs/requirements.txt
           pip install --upgrade sphinx docutils sphinx-rtd-theme
@@ -83,7 +82,6 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          bash scripts/install_visdom.sh
           pip install .[test]
           pip install -r docs/requirements.txt
           # requirements for tutorials (from .[dev])
@@ -118,7 +116,6 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          bash scripts/install_visdom.sh
           pip install .[test]
           pip install --upgrade coveralls
           pip freeze
@@ -153,7 +150,6 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          bash scripts/install_visdom.sh
           pip install .[test]
           pip install --upgrade coveralls
           pip freeze
@@ -188,7 +184,6 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          bash scripts/install_visdom.sh
           pip install .[test]
           pip install --upgrade coveralls
           pip freeze
@@ -221,7 +216,6 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          bash scripts/install_visdom.sh
           pip install .[test]
           pip install --upgrade coveralls
           pip freeze
@@ -254,7 +248,6 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          bash scripts/install_visdom.sh
           pip install .[test]
           pip install -e .[funsor]
           pip install --upgrade coveralls

@@ -3,7 +3,6 @@
 all: docs test
 
 install: FORCE
-	bash scripts/install_visdom.sh
 	pip install -e .[dev,profile] --config-settings editable_mode=strict
 
 uninstall: FORCE
