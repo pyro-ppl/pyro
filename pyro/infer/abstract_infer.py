@@ -256,7 +256,7 @@ class TracePosterior(object, metaclass=ABCMeta):
                     tr, logit, chain_id = vals
                     assert chain_id < self.num_chains
                 self.exec_traces.append(tr)
-                self.log_weights.append(logit)
+                self.log_weights.append(torch.as_tensor(logit).detach())
                 self.chain_ids.append(chain_id)
                 self._idx_by_chain[chain_id].append(i)
         self._categorical = Categorical(logits=torch.stack(self.log_weights))
