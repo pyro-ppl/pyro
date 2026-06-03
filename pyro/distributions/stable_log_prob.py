@@ -27,10 +27,10 @@ def create_integrator(num_points):
 
     def integrate(fn, domain):
         sl = [slice(None)] + (len(domain.shape) - 1) * [None]
-        half_roots_sl = half_roots[sl]
+        half_roots_sl = half_roots[tuple(sl)]
         value = domain[0] * (0.5 - half_roots_sl) + domain[1] * (0.5 + half_roots_sl)
         return (
-            torch.logsumexp(fn(value) + log_weights[sl], dim=0)
+            torch.logsumexp(fn(value) + log_weights[tuple(sl)], dim=0)
             + ((domain[1] - domain[0]) / 2).log()
         )
 

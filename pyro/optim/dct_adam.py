@@ -47,7 +47,7 @@ def _get_mask(x, indices):
         idx = []
         for dim in range(-x.dim(), 0):
             if dim in indices:
-                mask[idx + [indices[dim]]] += 1
+                mask[tuple(idx + [indices[dim]])] += 1
             idx.append(slice(None))
     return mask == len(indices)
 

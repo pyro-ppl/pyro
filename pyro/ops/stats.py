@@ -316,7 +316,7 @@ def weighed_quantile(
     probs_shape = [None] * dim + [slice(None)] + [None] * (len(input.shape) - dim - 1)
     expanded_probs_shape = list(input.shape)
     expanded_probs_shape[dim] = len(probs)
-    probs = probs[probs_shape].expand(*expanded_probs_shape)
+    probs = probs[tuple(probs_shape)].expand(*expanded_probs_shape)
     weights_below = weights.gather(dim, indices_below)
     weights_above = weights.gather(dim, indices_above)
     weights_below = (weights_above - probs) / (weights_above - weights_below)
