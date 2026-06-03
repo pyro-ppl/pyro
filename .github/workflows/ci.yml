@@ -29,6 +29,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip wheel setuptools
         pip install ruff black mypy nbstripout nbformat
+        pip install -e .
     - name: Lint
       run: |
         make lint
