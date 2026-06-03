@@ -526,7 +526,7 @@ def test_get_model_relations(include_deterministic):
                 "f": ["e"],
                 "g": ["e"],
                 "h": ["e"],
-                "i": ["e"],
+                "i": ["e", "f", "g", "h"],
             },
             "sample_param": {
                 "a": [],
