@@ -247,7 +247,7 @@ class TracePosterior(object, metaclass=ABCMeta):
         :param kwargs: optional keywords args taken by `self._traces`.
         """
         self._reset()
-        with poutine.block():
+        with torch.no_grad(), poutine.block():
             for i, vals in enumerate(self._traces(*args, **kwargs)):
                 if len(vals) == 2:
                     chain_id = 0
@@ -259,7 +259,7 @@ class TracePosterior(object, metaclass=ABCMeta):
                 self.log_weights.append(logit)
                 self.chain_ids.append(chain_id)
                 self._idx_by_chain[chain_id].append(i)
-        self._categorical = Categorical(logits=torch.tensor(self.log_weights))
+        self._categorical = Categorical(logits=torch.stack(self.log_weights))
         return self
 
     def information_criterion(self, pointwise=False):

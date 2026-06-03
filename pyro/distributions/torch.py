@@ -331,6 +331,10 @@ class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
         new._unbroadcasted_high = self._unbroadcasted_high
         return new
 
+    @staticmethod
+    def infer_shapes(low, high):
+        return torch.Size(broadcast_shape(low, high)), torch.Size()
+
     @constraints.dependent_property(is_discrete=False, event_dim=0)
     def support(self):
         return constraints.interval(self._unbroadcasted_low, self._unbroadcasted_high)
