@@ -20,8 +20,8 @@ def create_integrator(num_points):
     from scipy.special import roots_legendre
 
     roots, weights = roots_legendre(num_points)
-    roots = torch.as_tensor(roots)
-    weights = torch.as_tensor(weights)
+    roots = torch.as_tensor(roots).double()
+    weights = torch.as_tensor(weights).double()
     log_weights = weights.log()
     half_roots = roots * 0.5
 
