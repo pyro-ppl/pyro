@@ -46,7 +46,7 @@ class AutoRegressiveNNTests(TestCase):
                             arn(x + 0.5 * epsilon_vector)
                             - arn(x - 0.5 * epsilon_vector)
                         ) / self.epsilon
-                    jacobian[j, k] = float(delta[0, output_index, k])
+                    jacobian[j, k] = float(delta[0, output_index, k].detach())
 
             permutation = arn.get_permutation()
             permuted_jacobian = jacobian.clone()
