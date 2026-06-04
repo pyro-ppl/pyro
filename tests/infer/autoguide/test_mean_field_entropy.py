@@ -28,8 +28,8 @@ def h(p):
     [
         (
             mean_field_guide,
-            (torch.Tensor([0.0]), None),
-            torch.Tensor([h(0.2) + h(0.5)]),
+            (torch.tensor([0.0]), None),
+            torch.tensor([h(0.2) + h(0.5)]),
         ),
         (mean_field_guide, (torch.eye(2), None), (h(0.2) + h(0.5)) * torch.ones(2, 2)),
     ],

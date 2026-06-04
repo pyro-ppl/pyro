@@ -82,7 +82,7 @@ class Polynomial(TransformModule):
         self.count_sum = count_sum
         self._cached_logDetJ = None
 
-        self.c = nn.Parameter(torch.Tensor(input_dim))
+        self.c = nn.Parameter(torch.empty(input_dim))
         self.reset_parameters()
 
         # Vector of powers of input dimension

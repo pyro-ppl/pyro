@@ -62,11 +62,11 @@ def test_quantile():
 @pytest.mark.init(rng_seed=3)
 def test_weighed_quantile():
     # Fixed values test
-    input = torch.Tensor([[10, 50, 40], [20, 30, 0]])
+    input = torch.tensor([[10.0, 50.0, 40.0], [20.0, 30.0, 0.0]])
     probs = [0.2, 0.8]
-    log_weights = torch.Tensor([0.4, 0.5, 0.1]).log()
+    log_weights = torch.tensor([0.4, 0.5, 0.1]).log()
     result = weighed_quantile(input, probs, log_weights, -1)
-    assert_equal(result, torch.Tensor([[40.4, 47.6], [9.0, 26.4]]))
+    assert_equal(result, torch.tensor([[40.4, 47.6], [9.0, 26.4]]))
 
     # Random values test
     dist = torch.distributions.normal.Normal(0, 1)
@@ -75,7 +75,7 @@ def test_weighed_quantile():
     log_weights = dist.log_prob(input)
     result = weighed_quantile(input, probs, log_weights)
     result_dist = torch.distributions.normal.Normal(0, torch.tensor(0.5).sqrt())
-    assert_equal(result, result_dist.icdf(torch.Tensor(probs)), prec=0.01)
+    assert_equal(result, result_dist.icdf(torch.tensor(probs)), prec=0.01)
 
 
 def test_pi():

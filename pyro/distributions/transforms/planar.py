@@ -138,17 +138,17 @@ class Planar(ConditionedPlanar, TransformModule):
         super().__init__(self._params)
 
         self.bias = nn.Parameter(
-            torch.Tensor(
+            torch.empty(
                 1,
             )
         )
         self.u = nn.Parameter(
-            torch.Tensor(
+            torch.empty(
                 input_dim,
             )
         )
         self.w = nn.Parameter(
-            torch.Tensor(
+            torch.empty(
                 input_dim,
             )
         )

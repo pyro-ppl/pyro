@@ -109,7 +109,7 @@ def load_data(dataset):
                 torch.Tensor
             )
             dset[k]["sequence_lengths"] = v["sequence_lengths"].to(
-                device=torch.Tensor().device
+                device=torch.get_default_device()
             )
     return dset
 

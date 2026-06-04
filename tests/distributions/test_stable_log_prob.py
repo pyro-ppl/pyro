@@ -42,7 +42,7 @@ def test_stable_gof(stability, skew):
         f"Calculating log-probability of (stablity={stability}, "
         f"skew={skew}) for {len(samples_scipy)} samples with scipy"
     )
-    probs_scipy = torch.Tensor(dist_scipy.pdf(samples_scipy))
+    probs_scipy = torch.as_tensor(dist_scipy.pdf(samples_scipy))
     gof_scipy = auto_goodness_of_fit(samples_scipy, probs_scipy)
     assert gof_scipy > TEST_FAILURE_RATE
     logging.info(

@@ -269,9 +269,7 @@ class ConditionalGeneralizedChannelPermute(ConditionalTransformModule):
         self.nn = nn
         self.channels = channels
         if permutation is None:
-            permutation = torch.randperm(channels, device="cpu").to(
-                torch.Tensor().device
-            )
+            permutation = torch.randperm(channels)
         P = torch.eye(len(permutation), len(permutation))[
             permutation.type(dtype=torch.int64)
         ]

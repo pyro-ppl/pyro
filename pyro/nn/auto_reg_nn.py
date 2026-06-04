@@ -210,7 +210,7 @@ class ConditionalAutoRegressiveNN(nn.Module):
 
         if permutation is None:
             # By default set a random permutation of variables, which is important for performance with multiple steps
-            P = torch.randperm(input_dim, device="cpu").to(torch.Tensor().device)
+            P = torch.randperm(input_dim)
         else:
             # The permutation is chosen by the user
             P = permutation.type(dtype=torch.int64)

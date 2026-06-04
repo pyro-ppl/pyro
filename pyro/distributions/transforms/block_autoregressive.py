@@ -121,7 +121,7 @@ class BlockAutoregressive(TransformModule):
         self._cached_logDetJ = None
 
         if residual == "gated":
-            self.gate = torch.nn.Parameter(torch.nn.init.normal_(torch.Tensor(1)))
+            self.gate = torch.nn.Parameter(torch.nn.init.normal_(torch.empty(1)))
 
     def _call(self, x):
         """
@@ -219,18 +219,18 @@ class MaskedBlockLinear(torch.nn.Module):
                 i * out_features // dim : (i + 1) * out_features // dim,
                 0 : (i + 1) * in_features // dim,
             ] = torch.nn.init.xavier_uniform_(
-                torch.Tensor(out_features // dim, (i + 1) * in_features // dim)
+                torch.empty(out_features // dim, (i + 1) * in_features // dim)
             )
 
         self._weight = torch.nn.Parameter(weight)
         self._diag_weight = torch.nn.Parameter(
-            torch.nn.init.uniform_(torch.Tensor(out_features, 1)).log()
+            torch.nn.init.uniform_(torch.empty(out_features, 1)).log()
         )
 
         self.bias = (
             torch.nn.Parameter(
                 torch.nn.init.uniform_(
-                    torch.Tensor(out_features),
+                    torch.empty(out_features),
                     -1 / math.sqrt(out_features),
                     1 / math.sqrt(out_features),
                 )

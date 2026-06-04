@@ -371,7 +371,7 @@ def test_gaussian_hmm(num_steps):
 
     def _generate_data():
         transition_probs = torch.rand(dim, dim)
-        emissions_loc = torch.arange(dim, dtype=torch.Tensor().dtype)
+        emissions_loc = torch.arange(dim, dtype=torch.get_default_dtype())
         emissions_scale = 1.0
         state = torch.tensor(1)
         obs = [dist.Normal(emissions_loc[state], emissions_scale).sample()]
