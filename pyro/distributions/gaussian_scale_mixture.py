@@ -199,7 +199,7 @@ class _GSMSample(Function):
         logits_grad = pis * logits_grad
         logits_grad = logits_grad - logits_grad.sum() * pis
 
-        prefactor = pis.unsqueeze(-1) * q_j_over_q_tot.unsqueeze(-1) * g # l j i
+        prefactor = pis.unsqueeze(-1) * q_j_over_q_tot.unsqueeze(-1) * g  # l j i
         coord_scale_grad = sum_leftmost(prefactor * epsilons.unsqueeze(-2), -1)
         component_scale_grad = sum_leftmost(
             (prefactor * z.unsqueeze(-2)).sum(-1) / component_scale, -1

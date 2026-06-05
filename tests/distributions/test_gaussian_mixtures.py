@@ -209,8 +209,8 @@ def test_gsm_log_prob():
     assert_equal(
         log_prob, correct_log_prob, msg="bad log prob for GaussianScaleMixture"
     )
-    
-    
+
+
 def test_mix_of_diag_normals_backward_small_scales_finite_grads():
     torch.manual_seed(0)
 
@@ -234,7 +234,8 @@ def test_mix_of_diag_normals_backward_small_scales_finite_grads():
     assert torch.isfinite(locs.grad).all()
     assert torch.isfinite(coord_scale.grad).all()
     assert torch.isfinite(component_logits.grad).all()
-    
+
+
 def test_gsm_backward_small_coord_scale_finite_grads():
     torch.manual_seed(0)
 
@@ -258,7 +259,8 @@ def test_gsm_backward_small_coord_scale_finite_grads():
     assert torch.isfinite(coord_scale.grad).all()
     assert torch.isfinite(component_logits.grad).all()
     assert torch.isfinite(component_scale.grad).all()
-    
+
+
 def test_mix_of_diag_normals_shared_cov_backward_high_dim_finite_grads():
     torch.manual_seed(0)
 
@@ -269,9 +271,7 @@ def test_mix_of_diag_normals_shared_cov_backward_high_dim_finite_grads():
     coord_scale = torch.ones(D, dtype=torch.float32, requires_grad=True)
     component_logits = torch.zeros(K, requires_grad=True)
 
-    dist = MixtureOfDiagNormalsSharedCovariance(
-        locs, coord_scale, component_logits
-    )
+    dist = MixtureOfDiagNormalsSharedCovariance(locs, coord_scale, component_logits)
     z = dist.rsample(sample_shape=(4,))
 
     assert torch.isfinite(z).all()
