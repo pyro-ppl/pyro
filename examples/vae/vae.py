@@ -6,7 +6,6 @@ import argparse
 import numpy as np
 import torch
 import torch.nn as nn
-import visdom
 from utils.mnist_cached import MNISTCached as MNIST
 from utils.mnist_cached import setup_data_loaders
 from utils.vae_plots import mnist_test_tsne, plot_llk, plot_vae_samples
@@ -145,6 +144,8 @@ def main(args):
 
     # setup visdom for visualization
     if args.visdom_flag:
+        import visdom
+
         vis = visdom.Visdom()
 
     train_elbo = {}

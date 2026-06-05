@@ -135,17 +135,17 @@ class Radial(ConditionedRadial, TransformModule):
         super().__init__(self._params)
 
         self.x0 = nn.Parameter(
-            torch.Tensor(
+            torch.empty(
                 input_dim,
             )
         )
         self.alpha_prime = nn.Parameter(
-            torch.Tensor(
+            torch.empty(
                 1,
             )
         )
         self.beta_prime = nn.Parameter(
-            torch.Tensor(
+            torch.empty(
                 1,
             )
         )

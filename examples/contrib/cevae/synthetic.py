@@ -13,6 +13,7 @@ http://docs.pyro.ai/en/latest/contrib.cevae.html
     http://papers.nips.cc/paper/7223-causal-effect-inference-with-deep-latent-variable-models.pdf
     https://github.com/AMLab-Amsterdam/CEVAE
 """
+
 import argparse
 import logging
 

@@ -5,6 +5,7 @@
 This file contains reimplementations of some of Pyro's core enumeration machinery,
 which should eventually be drop-in replacements for the current versions.
 """
+
 import functools
 import math
 from collections import OrderedDict

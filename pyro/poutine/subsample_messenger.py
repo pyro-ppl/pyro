@@ -205,13 +205,13 @@ class SubsampleMessenger(IndepMessenger):
                         )
                         if msg["type"] == "param":
                             if hasattr(value, "_pyro_unconstrained_param"):
-                                param = value._pyro_unconstrained_param  # type: ignore[attr-defined]
+                                param = value._pyro_unconstrained_param
                             else:
-                                param = value.unconstrained()  # type: ignore[attr-defined]
+                                param = value.unconstrained()
 
                             if not hasattr(param, "_pyro_subsample"):
                                 param._pyro_subsample = {}
 
                             param._pyro_subsample[dim] = self._indices
-                            new_value._pyro_unconstrained_param = param  # type: ignore[attr-defined]
+                            new_value._pyro_unconstrained_param = param
                         msg["value"] = new_value

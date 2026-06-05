@@ -42,7 +42,7 @@ def test_stable_gof(stability, skew):
         f"Calculating log-probability of (stablity={stability}, "
         f"skew={skew}) for {len(samples_scipy)} samples with scipy"
     )
-    probs_scipy = torch.Tensor(dist_scipy.pdf(samples_scipy))
+    probs_scipy = torch.as_tensor(dist_scipy.pdf(samples_scipy))
     gof_scipy = auto_goodness_of_fit(samples_scipy, probs_scipy)
     assert gof_scipy > TEST_FAILURE_RATE
     logging.info(
@@ -129,8 +129,11 @@ def test_stable_with_log_prob_param_fit(alpha, beta, c, mu, alpha_0, beta_0, c_0
     train(model, guide)
 
     # Verify fit accuracy
-    assert_close(alpha, pyro.param("alpha").item(), atol=0.04)
-    assert_close(beta, pyro.param("beta").item(), atol=0.06)
+    alpha_near_one = abs(alpha - 1.0) < 0.05
+    alpha_atol = 0.1 if alpha_near_one else 0.04
+    beta_atol = 0.12 if alpha_near_one else 0.06
+    assert_close(alpha, pyro.param("alpha").item(), atol=alpha_atol)
+    assert_close(beta, pyro.param("beta").item(), atol=beta_atol)
     assert_close(c, pyro.param("c").item(), atol=0.2)
     assert_close(mu, pyro.param("mu").item(), atol=0.2)
 

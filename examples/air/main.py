@@ -9,7 +9,6 @@ understanding with generative models." Advances in Neural Information
 Processing Systems. 2016.
 """
 
-
 import argparse
 import math
 import os
@@ -18,7 +17,6 @@ from functools import partial
 
 import numpy as np
 import torch
-import visdom
 from air import AIR, latents_to_tensor
 from viz import draw_many, tensor_to_objs
 
@@ -204,6 +202,8 @@ def main(**kwargs):
 
     # Viz sample from prior.
     if args.viz:
+        import visdom
+
         vis = visdom.Visdom(env=args.visdom_env)
         z, x = air.prior(5, z_pres_prior_p=partial(z_pres_prior_p, 0))
         vis.images(draw_many(x, tensor_to_objs(latents_to_tensor(z))))

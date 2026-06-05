@@ -49,6 +49,7 @@ examples.
 
 Authors: Fritz Obermeyer, Alexander Rush
 """
+
 import functools
 
 import pyro

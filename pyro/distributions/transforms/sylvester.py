@@ -61,11 +61,11 @@ class Sylvester(Householder):
         super().__init__(input_dim, count_transforms)
 
         # Create parameters for Sylvester transform
-        self.R_dense = nn.Parameter(torch.Tensor(input_dim, input_dim))
-        self.S_dense = nn.Parameter(torch.Tensor(input_dim, input_dim))
-        self.R_diag = nn.Parameter(torch.Tensor(input_dim))
-        self.S_diag = nn.Parameter(torch.Tensor(input_dim))
-        self.b = nn.Parameter(torch.Tensor(input_dim))
+        self.R_dense = nn.Parameter(torch.empty(input_dim, input_dim))
+        self.S_dense = nn.Parameter(torch.empty(input_dim, input_dim))
+        self.R_diag = nn.Parameter(torch.empty(input_dim))
+        self.S_diag = nn.Parameter(torch.empty(input_dim))
+        self.b = nn.Parameter(torch.empty(input_dim))
 
         # Register masks and indices
         triangular_mask = torch.triu(torch.ones(input_dim, input_dim), diagonal=1)

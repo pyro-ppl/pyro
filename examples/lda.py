@@ -19,6 +19,7 @@ Dirichlet distributions [2], avoiding the need for Laplace approximations as in
     "Pathwise gradients beyond the reparametrization trick"
     https://arxiv.org/pdf/1806.01851.pdf
 """
+
 import argparse
 import functools
 import logging

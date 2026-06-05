@@ -87,12 +87,12 @@ class ConditionalDenseNN(torch.nn.Module):
 
         # Shape the output, squeezing the parameter dimension if all ones
         if self.output_multiplier == 1:
-            return h
+            return h  # type: ignore[no-any-return]
         else:
             h = h.reshape(list(x.size()[:-1]) + [self.output_multiplier])
 
             if self.count_params == 1:
-                return h
+                return h  # type: ignore[no-any-return]
 
             else:
                 return tuple([h[..., s] for s in self.param_slices])

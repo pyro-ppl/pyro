@@ -70,7 +70,6 @@ EXTRAS_REQUIRE = [
     "graphviz>=0.8",
     "matplotlib>=1.3",
     "torchvision>=0.15.0",
-    "visdom>=0.1.4,<0.2.2",  # FIXME visdom.utils is unavailable >=0.2.2
     "pandas",
     "pillow>=8.3.1",  # https://github.com/pytorch/pytorch/issues/61125
     "scikit-learn",
@@ -141,7 +140,7 @@ setup(
         "horovod": ["horovod[pytorch]>=0.19"],
         "lightning": ["lightning"],
         "funsor": [
-            "funsor[torch]==0.4.4",
+            "funsor[torch] @ git+https://github.com/pyro-ppl/funsor.git@8a8ca81fcc61733ad82e163028c7ff78420df9f0",
         ],
     },
     python_requires=">=3.8",

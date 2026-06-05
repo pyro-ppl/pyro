@@ -52,9 +52,7 @@ __all__ = [
 ]
 
 # Create sphinx documentation.
-__doc__ = "\n\n".join(
-    [
-        """
+__doc__ = "\n\n".join(["""
     {0}
     ----------------------------------------------------------------
     .. autoclass:: pyro.contrib.gp.kernels.{0}
@@ -63,9 +61,4 @@ __doc__ = "\n\n".join(
         :special-members: __call__
         :show-inheritance:
         :member-order: bysource
-    """.format(
-            _name
-        )
-        for _name in __all__
-    ]
-)
+    """.format(_name) for _name in __all__])

@@ -7,8 +7,6 @@ on:
     branches: [dev, master]
 
 env:
-  CXX: g++-9
-  CC: gcc-9
   # See coveralls-python - Github Actions support:
   # https://github.com/TheKevJames/coveralls-python/blob/master/docs/usage/configuration.rst#github-actions-support
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -31,6 +29,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip wheel setuptools
         pip install ruff black mypy nbstripout nbformat
+        pip install -e .
     - name: Lint
       run: |
         make lint

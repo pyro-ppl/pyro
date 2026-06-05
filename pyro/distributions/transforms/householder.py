@@ -145,7 +145,7 @@ over-parametrization!".format(
                     count_transforms, input_dim
                 )
             )
-        self.u_unnormed = nn.Parameter(torch.Tensor(count_transforms, input_dim))
+        self.u_unnormed = nn.Parameter(torch.empty(count_transforms, input_dim))
         self.reset_parameters()
 
     def reset_parameters(self):

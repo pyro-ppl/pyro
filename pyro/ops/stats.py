@@ -283,11 +283,11 @@ def weighed_quantile(
 
         >>> from pyro.ops.stats import weighed_quantile
         >>> import torch
-        >>> input = torch.Tensor([[10, 50, 40], [20, 30, 0]])
-        >>> probs = torch.Tensor([0.2, 0.8])
-        >>> log_weights = torch.Tensor([0.4, 0.5, 0.1]).log()
+        >>> input = torch.tensor([[10.0, 50.0, 40.0], [20.0, 30.0, 0.0]])
+        >>> probs = torch.tensor([0.2, 0.8])
+        >>> log_weights = torch.tensor([0.4, 0.5, 0.1]).log()
         >>> result = weighed_quantile(input, probs, log_weights, -1)
-        >>> torch.testing.assert_close(result, torch.Tensor([[40.4, 47.6], [9.0, 26.4]]))
+        >>> torch.testing.assert_close(result, torch.tensor([[40.4, 47.6], [9.0, 26.4]]))
     """
     dim = dim if dim >= 0 else (len(input.shape) + dim)
     if isinstance(probs, (list, tuple)):
@@ -316,7 +316,7 @@ def weighed_quantile(
     probs_shape = [None] * dim + [slice(None)] + [None] * (len(input.shape) - dim - 1)
     expanded_probs_shape = list(input.shape)
     expanded_probs_shape[dim] = len(probs)
-    probs = probs[probs_shape].expand(*expanded_probs_shape)
+    probs = probs[tuple(probs_shape)].expand(*expanded_probs_shape)
     weights_below = weights.gather(dim, indices_below)
     weights_above = weights.gather(dim, indices_above)
     weights_below = (weights_above - probs) / (weights_above - weights_below)

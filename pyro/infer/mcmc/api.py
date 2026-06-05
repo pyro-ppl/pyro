@@ -9,6 +9,7 @@ This module offers a modified interface for MCMC inference with the following ob
     code that works with different backends.
   - minimal memory consumption with multiprocessing and CUDA.
 """
+
 import copy
 import json
 import logging
@@ -107,8 +108,8 @@ class _Worker:
         self.rng_seed = (torch.initial_seed() + chain_id) % MAX_SEED
         self.log_queue = log_queue
         self.result_queue = result_queue
-        self.default_dtype = torch.Tensor().dtype
-        self.default_device = torch.Tensor().device
+        self.default_dtype = torch.get_default_dtype()
+        self.default_device = torch.get_default_device()
         self.hook = hook
         self.event = event
 

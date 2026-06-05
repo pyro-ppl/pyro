@@ -21,7 +21,7 @@ lint: FORCE
 	ruff check .
 	black --check *.py pyro examples tests scripts profiler
 	python scripts/update_headers.py --check
-	mypy --install-types --non-interactive pyro scripts tests
+	mypy --install-types --non-interactive --warn-unused-ignores pyro scripts tests
 
 license: FORCE
 	python scripts/update_headers.py
@@ -83,7 +83,7 @@ test-jit: FORCE
 		-k JIT=True | tee -a jit.log
 
 test-funsor: lint FORCE
-	pytest -vx -n auto --stage funsor
+	pytest -vx -n auto -p no:benchmark --stage funsor
 
 clean: FORCE
 	git clean -dfx -e pyro_ppl.egg-info

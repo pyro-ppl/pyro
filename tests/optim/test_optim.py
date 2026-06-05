@@ -451,14 +451,14 @@ def test_centered_clipped_adam(plot):
     else:
         lr_vec = [0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001]
 
-    w = torch.Tensor([1, 500])
+    w = torch.tensor([1.0, 500.0])
 
     def loss_fn(p):
         return (1 + w * p * p).sqrt().sum() - len(w)
 
     def fit(lr, centered_variance, num_iter=5000):
         loss_vec = []
-        p = torch.nn.Parameter(torch.Tensor([10, 1]))
+        p = torch.nn.Parameter(torch.tensor([10.0, 1.0]))
         optim = pyro.optim.clipped_adam.ClippedAdam(
             lr=lr, params=[p], centered_variance=centered_variance
         )
@@ -468,7 +468,7 @@ def test_centered_clipped_adam(plot):
             loss.backward()
             optim.step()
             loss_vec.append(loss)
-        return torch.Tensor(loss_vec)
+        return torch.stack([loss.detach() for loss in loss_vec])
 
     def calc_convergence(loss_vec, tail_len=100, threshold=0.01):
         """
@@ -498,8 +498,8 @@ def test_centered_clipped_adam(plot):
             convergence_rate_vec.append(convergence_rate)
             convergence_iter_vec.append(convergence_iter)
         return (
-            torch.Tensor(ultimate_loss_vec),
-            torch.Tensor(convergence_rate_vec),
+            torch.stack(ultimate_loss_vec),
+            torch.stack(convergence_rate_vec),
             convergence_iter_vec,
         )
 
@@ -519,7 +519,7 @@ def test_centered_clipped_adam(plot):
     # Verify convergence rate improvement
     assert (
         (centered_convergence_rate_vec / convergence_rate_vec)
-        > ((0.12 / torch.Tensor(lr_vec)).log() * 1.08)
+        > ((0.12 / torch.tensor(lr_vec)).log() * 1.08)
     ).all()
 
     if plot:
