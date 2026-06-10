@@ -212,8 +212,6 @@ def test_gsm_log_prob():
 
 
 def test_mix_of_diag_normals_backward_small_scales_finite_grads():
-    torch.manual_seed(0)
-
     K = 5
     D = 50
 
@@ -237,8 +235,6 @@ def test_mix_of_diag_normals_backward_small_scales_finite_grads():
 
 
 def test_gsm_backward_small_coord_scale_finite_grads():
-    torch.manual_seed(0)
-
     K = 5
     D = 50
 
@@ -262,8 +258,6 @@ def test_gsm_backward_small_coord_scale_finite_grads():
 
 
 def test_mix_of_diag_normals_shared_cov_backward_high_dim_finite_grads():
-    torch.manual_seed(0)
-
     K = 3
     D = 300
 
