@@ -153,14 +153,15 @@ class _GSMSample(Function):
         r_sqr_j = r_sqr / component_scale_sqr  # l j
         log_coord_scale_product = coord_scale.log().sum()
         log_component_scale_power = component_scale.log() * float(dim)
-        
+
         log_gaussian_normalizer = (
             0.5 * math.log(2.0 * math.pi) * float(dim)
             + log_coord_scale_product
             + log_component_scale_power
-        ).unsqueeze(0)  # 1 j
+        )
+        log_gaussian_normalizer = log_gaussian_normalizer.unsqueeze(0)  # 1 j
 
-        log_q_j = -0.5 * r_sqr_j - log_gaussian_normalizer # l j
+        log_q_j = -0.5 * r_sqr_j - log_gaussian_normalizer  # l j
         log_q_tot = torch.logsumexp(pis.log() + log_q_j, dim=-1, keepdim=True)  # l 1
         posterior_j = torch.exp(pis.log() + log_q_j - log_q_tot)  # l j
         Phi_j = torch.exp(-0.5 * r_sqr_j)  # l j
@@ -179,12 +180,13 @@ class _GSMSample(Function):
             extra_term = (
                 coeffs[-1]
                 * math.sqrt(0.5 * math.pi)
-                * torch.erfc(r_sqr_j.sqrt() / root_two))  # l j
+                * torch.erfc(r_sqr_j.sqrt() / root_two)
+            )  # l j
             Phi_j += extra_term * torch.pow(r_sqr_j, -0.5 * float(dim))
 
         logits_grad = (z.unsqueeze(-2) * Phi_j.unsqueeze(-1) * g).sum(-1)  # l j
-        
-        log_logits_scale = -log_gaussian_normalizer - log_q_tot # l j
+
+        log_logits_scale = -log_gaussian_normalizer - log_q_tot  # l j
         logits_grad = logits_grad * torch.exp(log_logits_scale)  # l j
         logits_grad = sum_leftmost(logits_grad, -1)
         logits_grad = pis * logits_grad
