@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
     [MixtureOfDiagNormals, MixtureOfDiagNormalsSharedCovariance, GaussianScaleMixture],
 )
 @pytest.mark.parametrize("K", [3])
-@pytest.mark.parametrize("D", [2, 4])
+@pytest.mark.parametrize("D", [2, 3, 4])
 @pytest.mark.parametrize("batch_mode", [True, False])
 @pytest.mark.parametrize("flat_logits", [True, False])
 @pytest.mark.parametrize("cost_function", ["quadratic"])
