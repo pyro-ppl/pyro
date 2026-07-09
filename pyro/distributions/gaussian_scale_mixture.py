@@ -175,6 +175,8 @@ class _GSMSample(Function):
             r_j_poly = r_sqr_j.unsqueeze(-1).expand(-1, int(dim / 2))  # l j d/2
         r_j_poly = coeffs * torch.pow(r_j_poly, exponents)
         Phi_j *= r_j_poly.sum(-1)
+        # Eq. 43 odd-D tail term, written with r_sqr_j = r_j**2
+        # Power -D/2 appears because Phi_j is later multiplied by z, not r_hat.
         if dim % 2 == 1:
             root_two = math.sqrt(2.0)
             extra_term = (
