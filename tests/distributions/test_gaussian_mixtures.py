@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
     [MixtureOfDiagNormals, MixtureOfDiagNormalsSharedCovariance, GaussianScaleMixture],
 )
 @pytest.mark.parametrize("K", [3])
-@pytest.mark.parametrize("D", [2, 4])
+@pytest.mark.parametrize("D", [2, 3, 4])
 @pytest.mark.parametrize("batch_mode", [True, False])
 @pytest.mark.parametrize("flat_logits", [True, False])
 @pytest.mark.parametrize("cost_function", ["quadratic"])
@@ -209,6 +209,75 @@ def test_gsm_log_prob():
     assert_equal(
         log_prob, correct_log_prob, msg="bad log prob for GaussianScaleMixture"
     )
+
+
+def test_mix_of_diag_normals_backward_small_scales_finite_grads():
+    K = 5
+    D = 50
+
+    locs = torch.randn(K, D, requires_grad=True)
+    coord_scale = torch.full((K, D), 0.1, dtype=torch.float32, requires_grad=True)
+    component_logits = torch.zeros(K, requires_grad=True)
+
+    dist = MixtureOfDiagNormals(locs, coord_scale, component_logits)
+    z = dist.rsample(sample_shape=(32,))
+
+    assert torch.isfinite(z).all()
+
+    loss = z.pow(2).sum()
+    assert torch.isfinite(loss)
+
+    loss.backward()
+
+    assert torch.isfinite(locs.grad).all()
+    assert torch.isfinite(coord_scale.grad).all()
+    assert torch.isfinite(component_logits.grad).all()
+
+
+def test_gsm_backward_small_coord_scale_finite_grads():
+    K = 5
+    D = 50
+
+    coord_scale = torch.full((D,), 0.1, requires_grad=True)
+    component_logits = torch.zeros(K, requires_grad=True)
+    component_scale = torch.ones(K, dtype=torch.float32, requires_grad=True)
+
+    dist = GaussianScaleMixture(coord_scale, component_logits, component_scale)
+    z = dist.rsample(sample_shape=(32,))
+
+    assert torch.isfinite(z).all()
+
+    loss = z.pow(2).sum()
+    assert torch.isfinite(loss)
+
+    loss.backward()
+
+    assert torch.isfinite(coord_scale.grad).all()
+    assert torch.isfinite(component_logits.grad).all()
+    assert torch.isfinite(component_scale.grad).all()
+
+
+def test_mix_of_diag_normals_shared_cov_backward_high_dim_finite_grads():
+    K = 3
+    D = 300
+
+    locs = torch.randn(K, D, requires_grad=True)
+    coord_scale = torch.ones(D, dtype=torch.float32, requires_grad=True)
+    component_logits = torch.zeros(K, requires_grad=True)
+
+    dist = MixtureOfDiagNormalsSharedCovariance(locs, coord_scale, component_logits)
+    z = dist.rsample(sample_shape=(4,))
+
+    assert torch.isfinite(z).all()
+
+    loss = z.pow(2).sum()
+    assert torch.isfinite(loss)
+
+    loss.backward()
+
+    assert torch.isfinite(locs.grad).all()
+    assert torch.isfinite(coord_scale.grad).all()
+    assert torch.isfinite(component_logits.grad).all()
 
 
 @pytest.mark.parametrize("batch_size", [1, 3])

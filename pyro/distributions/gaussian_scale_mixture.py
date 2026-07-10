@@ -149,45 +149,52 @@ class _GSMSample(Function):
         component_scale_sqr = torch.pow(component_scale, 2.0)  # j
         epsilons = z / coord_scale  # l i
         epsilons_sqr = torch.pow(epsilons, 2.0)  # l i
-        r_sqr = epsilons_sqr.sum(-1, keepdim=True)  # l
+        r_sqr = epsilons_sqr.sum(-1, keepdim=True)  # l 1
         r_sqr_j = r_sqr / component_scale_sqr  # l j
-        coord_scale_product = coord_scale.prod()
-        component_scale_power = torch.pow(component_scale, float(dim))
+        log_coord_scale_product = coord_scale.log().sum()
+        log_component_scale_power = component_scale.log() * float(dim)
 
-        q_j = torch.exp(-0.5 * r_sqr_j) / math.pow(
-            2.0 * math.pi, 0.5 * float(dim)
-        )  # l j
-        q_j /= coord_scale_product * component_scale_power  # l j
-        q_tot = (pis * q_j).sum(-1, keepdim=True)  # l
+        log_gaussian_normalizer = (
+            0.5 * math.log(2.0 * math.pi) * float(dim)
+            + log_coord_scale_product
+            + log_component_scale_power
+        )
+        log_gaussian_normalizer = log_gaussian_normalizer.unsqueeze(0)  # 1 j
 
+        log_q_j = -0.5 * r_sqr_j - log_gaussian_normalizer  # l j
+        log_q_tot = torch.logsumexp(pis.log() + log_q_j, dim=-1, keepdim=True)  # l 1
+        posterior_j = torch.exp(pis.log() + log_q_j - log_q_tot)  # l j
         Phi_j = torch.exp(-0.5 * r_sqr_j)  # l j
-        exponents = -torch.arange(1.0, int(dim / 2) + 1.0, 1.0)
+
+        exponents = -torch.arange(
+            1.0, int(dim / 2) + 1.0, 1.0, device=z.device, dtype=z.dtype
+        )
         if z.dim() > 1:
             r_j_poly = r_sqr_j.unsqueeze(-1).expand(-1, -1, int(dim / 2))  # l j d/2
         else:
             r_j_poly = r_sqr_j.unsqueeze(-1).expand(-1, int(dim / 2))  # l j d/2
         r_j_poly = coeffs * torch.pow(r_j_poly, exponents)
         Phi_j *= r_j_poly.sum(-1)
+        # Eq. 43 odd-D tail term, written with r_sqr_j = r_j**2
+        # Power -D/2 appears because Phi_j is later multiplied by z, not r_hat.
         if dim % 2 == 1:
             root_two = math.sqrt(2.0)
             extra_term = (
                 coeffs[-1]
                 * math.sqrt(0.5 * math.pi)
-                * (1.0 - torch.erf(r_sqr_j.sqrt() / root_two))
+                * torch.erfc(r_sqr_j.sqrt() / root_two)
             )  # l j
             Phi_j += extra_term * torch.pow(r_sqr_j, -0.5 * float(dim))
 
         logits_grad = (z.unsqueeze(-2) * Phi_j.unsqueeze(-1) * g).sum(-1)  # l j
-        logits_grad /= q_tot
-        logits_grad = sum_leftmost(logits_grad, -1) * math.pow(
-            2.0 * math.pi, -0.5 * float(dim)
-        )
-        logits_grad = pis * logits_grad / (component_scale_power * coord_scale_product)
+
+        log_logits_scale = -log_gaussian_normalizer - log_q_tot  # l j
+        logits_grad = logits_grad * torch.exp(log_logits_scale)  # l j
+        logits_grad = sum_leftmost(logits_grad, -1)
+        logits_grad = pis * logits_grad
         logits_grad = logits_grad - logits_grad.sum() * pis
 
-        prefactor = (
-            pis.unsqueeze(-1) * q_j.unsqueeze(-1) * g / q_tot.unsqueeze(-1)
-        )  # l j i
+        prefactor = posterior_j.unsqueeze(-1) * g  # l j i
         coord_scale_grad = sum_leftmost(prefactor * epsilons.unsqueeze(-2), -1)
         component_scale_grad = sum_leftmost(
             (prefactor * z.unsqueeze(-2)).sum(-1) / component_scale, -1
