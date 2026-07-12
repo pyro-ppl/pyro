@@ -166,7 +166,12 @@ class SplineCoupling(TransformModule):
 
 
 def spline_coupling(
-    input_dim, split_dim=None, hidden_dims=None, count_bins=8, bound=3.0
+    input_dim,
+    split_dim=None,
+    hidden_dims=None,
+    count_bins=8,
+    bound=3.0,
+    order="linear",
 ):
     """
     A helper function to create a
@@ -175,6 +180,9 @@ def spline_coupling(
 
     :param input_dim: Dimension of input variable
     :type input_dim: int
+    :param order: One of ``['linear', 'quadratic']`` specifying the order of the
+        spline.
+    :type order: str
 
     """
 
@@ -195,4 +203,4 @@ def spline_coupling(
         ],
     )
 
-    return SplineCoupling(input_dim, split_dim, nn, count_bins, bound)
+    return SplineCoupling(input_dim, split_dim, nn, count_bins, bound, order)
