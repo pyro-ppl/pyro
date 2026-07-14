@@ -298,7 +298,7 @@ def get_model_relations(
     assert isinstance(model_kwargs, dict)
 
     with torch.random.fork_rng(), torch.no_grad(), pyro.validation_enabled(False):
-        with TrackProvenance(include_deterministic=include_deterministic):
+        with TrackProvenance(include_deterministic=True):
             trace = poutine.trace(model).get_trace(*model_args, **model_kwargs)
 
     sample_sample = {}
