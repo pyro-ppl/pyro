@@ -130,3 +130,25 @@ def test_expand(sample_shape, batch_shape, event_shape):
         d.expand(sample_shape + batch_shape).variance.shape
         == sample_shape + batch_shape + event_shape
     )
+
+
+def test_mixture_same_family_binomial_validation():
+    import pyro
+
+    N, P, K = 10, 5, 2
+    pyro.enable_validation(True)
+
+    total_count = 100
+    y = dist.Binomial(total_count, torch.full([N, P], 0.5)).sample()
+
+    mix = dist.Categorical(torch.rand(K)).expand([N])
+    comp_batch = dist.Binomial(total_count, torch.rand(N, K, P))
+    comp = dist.Independent(comp_batch, reinterpreted_batch_ndims=1)
+    mixture_batch = dist.MixtureSameFamily(mix, comp)
+
+    log_prob = mixture_batch.log_prob(y)
+    assert log_prob.shape == (N,)
+
+    mixture = mixture_batch.to_event(1)
+    log_prob = mixture.log_prob(y)
+    assert log_prob.shape == ()

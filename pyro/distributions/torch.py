@@ -244,6 +244,45 @@ class MultivariateNormal(
         return batch_shape, event_shape
 
 
+class MixtureSameFamily(
+    torch.distributions.MixtureSameFamily, TorchDistributionMixin
+):
+    def _validate_sample(self, value):
+        if not isinstance(value, torch.Tensor):
+            raise ValueError("The value argument to log_prob must be a Tensor")
+
+        event_dim_start = len(value.size()) - len(self._event_shape)
+        if value.size()[event_dim_start:] != self._event_shape:
+            raise ValueError(
+                "The right-most size of value must match event_shape: "
+                f"{value.size()} vs {self._event_shape}."
+            )
+
+        actual_shape = value.size()
+        expected_shape = self._batch_shape + self._event_shape
+        for i, j in zip(reversed(actual_shape), reversed(expected_shape)):
+            if i != 1 and j != 1 and i != j:
+                raise ValueError(
+                    "Value is not broadcastable with batch_shape+event_shape: "
+                    f"{actual_shape} vs {expected_shape}."
+                )
+
+        support = self.component_distribution.support
+        pad_value = value.unsqueeze(-1 - self._event_ndims)
+        valid = support.check(pad_value)
+        if valid.dim() > 0:
+            valid = valid.reshape(valid.shape[: value.dim() - self._event_ndims] + (-1,))
+            valid = valid.all(-1)
+        if not torch._is_all_true(valid):
+            raise ValueError(
+                "Expected value argument "
+                f"({type(value).__name__} of shape {tuple(value.shape)}) "
+                f"to be within the support ({repr(support)}) "
+                f"of the distribution {repr(self)}, "
+                f"but found invalid values:\n{value}"
+            )
+
+
 class Multinomial(torch.distributions.Multinomial, TorchDistributionMixin):
     def infer_shapes(total_count=None, probs=None, logits=None):
         tensor = probs if logits is None else logits
