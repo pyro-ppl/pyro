@@ -140,7 +140,7 @@ setup(
         "horovod": ["horovod[pytorch]>=0.19"],
         "lightning": ["lightning"],
         "funsor": [
-            "funsor[torch] @ git+https://github.com/pyro-ppl/funsor.git@8a8ca81fcc61733ad82e163028c7ff78420df9f0",
+            "funsor[torch]==0.4.8",
         ],
     },
     python_requires=">=3.8",
