@@ -243,3 +243,45 @@ def test_scope():
     assert_equal(pyro.param("z"), z0)
     check_constraint("x0")
     check_constraint("z0")
+
+
+def test_get_param_behaviour():
+    """Tests for ParamStoreDict.get_param: missing/no-init raises, init creates param, parametrization accepted.
+
+    This covers the following behaviors:
+    - calling get_param without init on a missing name raises KeyError
+    - calling get_param with an init tensor registers the parameter and returns the constrained value
+    - requesting parametrization 'orthogonal' returns a tensor of the requested shape and grad enabled
+    """
+    param_store = pyro.get_param_store()
+    param_store.clear()
+
+    # missing without init should raise
+    raised = False
+    try:
+        param_store.get_param("missing_without_init")
+    except KeyError:
+        raised = True
+    assert raised
+
+    # with init and a positive constraint: param is created and returns the constrained value
+    init = 2.0 * torch.ones(2, 3)
+    p = param_store.get_param(
+        "p_with_init", init_tensor=init, constraint=constraints.positive
+    )
+    assert "p_with_init" in param_store
+    # returned constrained value should equal the init
+    assert_equal(p, init)
+    # the stored unconstrained value should equal log(init) for positive constraint
+    stored_unconstrained = param_store._params["p_with_init"]
+    expected_unconstrained = torch.log(init)
+    assert torch.allclose(stored_unconstrained, expected_unconstrained)
+
+    # requesting an orthogonal parametrization should not error and should return a tensor
+    param_store.clear()
+    p2_init = torch.randn(4, 4)
+    p2 = param_store.get_param("p2", init_tensor=p2_init, parametrization="orthogonal")
+    assert isinstance(p2, torch.Tensor)
+    assert p2.shape == p2_init.shape
+    # parametrized tensors should still require grad
+    assert p2.requires_grad

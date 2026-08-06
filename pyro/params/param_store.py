@@ -229,6 +229,7 @@ class ParamStoreDict:
         init_tensor: Optional[torch.Tensor] = None,
         constraint: constraints.Constraint = constraints.real,
         event_dim: Optional[int] = None,
+        parametrization: Optional[str] = None,
     ) -> torch.Tensor:
         """
         Get parameter from its name. If it does not yet exist in the
@@ -246,9 +247,19 @@ class ParamStoreDict:
         :rtype: torch.Tensor
         """
         if init_tensor is None:
-            return self[name]
+            param = self[name]
         else:
-            return self.setdefault(name, init_tensor, constraint)
+            param = self.setdefault(name, init_tensor, constraint)
+        # Apply parametrization if requested
+        if parametrization == "orthogonal":
+            import torch.nn.utils.parametrizations as parametrizations
+
+            if (
+                not hasattr(param, "parametrizations")
+                or "orthogonal" not in param.parametrizations
+            ):
+                param = parametrizations.orthogonal(param)
+        return param
 
     def match(self, name: str) -> Dict[str, torch.Tensor]:
         """
