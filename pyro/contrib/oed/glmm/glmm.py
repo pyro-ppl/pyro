@@ -125,7 +125,7 @@ def normal_inverse_gamma_guide(coef_shape, coef_label="w", **kwargs):
         normal_inv_gamma_family_guide,
         obs_sd=None,
         w_sizes={coef_label: coef_shape},
-        **kwargs
+        **kwargs,
     )
 
 

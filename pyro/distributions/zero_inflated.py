@@ -176,7 +176,7 @@ class ZeroInflatedNegativeBinomial(ZeroInflatedDistribution):
         logits=None,
         gate=None,
         gate_logits=None,
-        validate_args=None
+        validate_args=None,
     ):
         base_dist = NegativeBinomial(
             total_count=total_count,

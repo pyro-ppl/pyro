@@ -29,7 +29,7 @@ class LinearModelPosteriorGuide(nn.Module):
         regressor_init=0.0,
         scale_tril_init=3.0,
         use_softplus=True,
-        **kwargs
+        **kwargs,
     ):
         """
         Guide for linear models. No amortisation happens over designs.
@@ -241,7 +241,7 @@ class NormalInverseGammaGuide(LinearModelPosteriorGuide):
         tau_label="tau",
         alpha_init=100.0,
         b0_init=100.0,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(d, w_sizes, **kwargs)
         self.alpha = nn.Parameter(alpha_init * torch.ones(d))

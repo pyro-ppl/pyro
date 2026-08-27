@@ -281,7 +281,7 @@ class Forecaster(nn.Module):
         num_particles=1,
         vectorize_particles=True,
         warm_start=False,
-        log_every=100
+        log_every=100,
     ):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()
@@ -436,7 +436,7 @@ class HMCForecaster(nn.Module):
         time_reparam=None,
         dense_mass=False,
         jit_compile=False,
-        max_tree_depth=10
+        max_tree_depth=10,
     ):
         assert data.size(-2) == covariates.size(-2)
         super().__init__()

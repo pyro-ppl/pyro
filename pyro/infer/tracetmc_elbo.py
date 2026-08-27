@@ -97,7 +97,7 @@ def _compute_tmc_estimate(model_trace, guide_trace):
         *log_factors,
         plates=plates,
         backend="pyro.ops.einsum.torch_log",
-        modulo_total=False
+        modulo_total=False,
     )
     return tmc
 

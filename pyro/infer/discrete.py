@@ -279,5 +279,5 @@ class TraceEnumSample_ELBO(TraceEnum_ELBO):
             temperature,
             self.strict_enumeration_warning,
             *args,
-            **kwargs
+            **kwargs,
         )
