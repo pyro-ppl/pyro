@@ -8,10 +8,10 @@ import re
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Get new version.
-with open(os.path.join(root, "pyproject.toml")) as f:
-    match = re.search(r'^version = "([^"]+)"', f.read(), re.MULTILINE)
+with open(os.path.join(root, "pyro", "__init__.py")) as f:
+    match = re.search(r'^__version__ = "([^"]+)"', f.read(), re.MULTILINE)
 if not match:
-    raise RuntimeError("Unable to find project.version in pyproject.toml")
+    raise RuntimeError("Unable to find __version__ in pyro/__init__.py")
 new_version = '"{}"'.format(match.group(1))
 
 # Collect potential files.

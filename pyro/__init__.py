@@ -1,10 +1,6 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import os
-import re
-from importlib.metadata import PackageNotFoundError, version
-
 import pyro.poutine as poutine
 from pyro.infer.inspect import render_model
 from pyro.logger import log
@@ -31,25 +27,7 @@ from pyro.util import set_rng_seed
 
 from . import settings
 
-
-def _get_version():
-    pyproject_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "pyproject.toml")
-    try:
-        with open(pyproject_path, encoding="utf-8") as f:
-            match = re.search(r'^version = "([^"]+)"', f.read(), re.MULTILINE)
-    except OSError:
-        match = None
-    if match:
-        return match.group(1)
-
-    try:
-        return version("pyro-ppl")
-    except PackageNotFoundError:
-        pass
-    return "0.0.0"
-
-
-__version__ = _get_version()
+__version__ = "1.9.1"  # used by pyproject.toml
 
 __all__ = [
     "__version__",

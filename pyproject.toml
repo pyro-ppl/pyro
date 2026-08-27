@@ -3,16 +3,17 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [build-system]
-requires = ["setuptools>=64", "wheel"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyro-ppl"
-version = "1.9.1"
 description = "A Python library for probabilistic modeling and inference"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.8"
-license = { text = "Apache 2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE.md"]
+dynamic = ["version"]
 authors = [
     { name = "Uber AI Labs" },
 ]
@@ -28,7 +29,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Education",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS :: MacOS X",
     "Programming Language :: Python :: 3.8",
@@ -126,6 +126,9 @@ funsor = [
 Documentation = "https://docs.pyro.ai"
 Homepage = "http://pyro.ai"
 Source = "https://github.com/pyro-ppl/pyro"
+
+[tool.setuptools.dynamic]
+version = { attr = "pyro.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["pyro", "pyro.*"]
