@@ -19,7 +19,6 @@ examples/mixed_hmm/*csv
 pyro/contrib/examples/processed
 pyro/contrib/examples/results
 pyro/contrib/examples/raw
-pyro/_version.py
 processed
 raw
 *.pkl

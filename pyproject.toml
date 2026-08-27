@@ -2,11 +2,199 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyro-ppl"
+version = "1.9.1"
+description = "A Python library for probabilistic modeling and inference"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.8"
+license = { text = "Apache 2.0" }
+authors = [
+    { name = "Uber AI Labs" },
+]
+keywords = [
+    "bayesian",
+    "machine learning",
+    "modeling",
+    "probabilistic programming",
+    "pytorch",
+    "statistics",
+]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+    # If you add any additional libraries, please also add them to
+    # `docs/requirements.txt`.
+    # numpy is necessary for some functionality of PyTorch.
+    "numpy>=1.7",
+    "opt_einsum>=2.3.2",
+    "pyro-api>=0.1.1",
+    "torch>=2.0",
+    "tqdm>=4.36",
+]
+
+[project.optional-dependencies]
+extras = [
+    "notebook",
+    "ipywidgets",
+    "graphviz>=0.8",
+    "matplotlib>=1.3",
+    "torchvision>=0.15.0",
+    "pandas",
+    "pillow>=8.3.1",
+    "scikit-learn",
+    "seaborn>=0.11.0",
+    "wget",
+    "scipy>=1.1",
+]
+test = [
+    "black>=21.4b0",
+    "graphviz>=0.8",
+    "ipywidgets",
+    "matplotlib>=1.3",
+    "nbval",
+    "notebook",
+    "pandas",
+    "pillow>=8.3.1",
+    "pytest-cov",
+    "pytest-xdist",
+    "pytest>=5.0",
+    "ruff",
+    "scikit-learn",
+    "scipy>=1.1",
+    "seaborn>=0.11.0",
+    "torchvision>=0.15.0",
+    "wget",
+]
+profile = [
+    "prettytable",
+    "pytest-benchmark",
+    "snakeviz",
+]
+dev = [
+    "black>=21.4b0",
+    "graphviz>=0.8",
+    "ipywidgets",
+    "matplotlib>=1.3",
+    "mypy>=0.812",
+    "nbformat",
+    "nbsphinx>=0.3.2",
+    "nbstripout",
+    "nbval",
+    "ninja",
+    "notebook",
+    "pandas",
+    "pillow>=8.3.1",
+    "pypandoc",
+    "pytest-xdist",
+    "pytest>=5.0",
+    "ruff",
+    "scikit-learn",
+    "scipy>=1.1",
+    "seaborn>=0.11.0",
+    "sphinx",
+    "sphinx_rtd_theme",
+    "torchvision>=0.15.0",
+    "wget",
+    "yapf",
+]
+horovod = [
+    "horovod[pytorch]>=0.19",
+]
+lightning = [
+    "lightning",
+]
+funsor = [
+    "funsor[torch]==0.4.8",
+]
+
+[project.urls]
+Documentation = "https://docs.pyro.ai"
+Homepage = "http://pyro.ai"
+Source = "https://github.com/pyro-ppl/pyro"
+
+[tool.setuptools.packages.find]
+include = ["pyro", "pyro.*"]
+
+[tool.setuptools.package-data]
+pyro = ["py.typed"]
+"pyro.distributions" = ["*.cpp"]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "error",
+    "ignore:numpy.ufunc size changed:RuntimeWarning",
+    "ignore:numpy.dtype size changed:RuntimeWarning",
+    "ignore:Mixed memory format inputs detected:UserWarning",
+    "ignore:Setting attributes on ParameterDict:UserWarning",
+    "ignore:Creating a tensor from a list of numpy.ndarrays is extremely slow",
+    "ignore::DeprecationWarning",
+    "ignore:CUDA initialization:UserWarning",
+    "ignore:__floordiv__ is deprecated:UserWarning",
+    "ignore:floor_divide is deprecated:UserWarning",
+    "ignore:torch.tensor results are registered as constants in the trace",
+    "once::DeprecationWarning",
+]
+doctest_optionflags = "ELLIPSIS NORMALIZE_WHITESPACE IGNORE_EXCEPTION_DETAIL"
+markers = [
+    "benchmark",
+]
+
 [tool.ruff]
 extend-exclude = ["*.ipynb"]
 line-length = 120
 
-
 [tool.ruff.lint]
 ignore = ["E741", "E721"]
 select = ["E", "F", "I"]
+
+[tool.yapf]
+based_on_style = "google"
+column_limit = 120
+
+[tool.mypy]
+python_version = "3.12"
+explicit_package_bases = true
+warn_return_any = true
+warn_unused_configs = true
+warn_incomplete_stub = true
+ignore_missing_imports = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = [
+    "pyro.contrib.*",
+    "pyro.distributions.*",
+    "pyro.generic.*",
+    "pyro.infer.*",
+    "pyro.ops.einsum",
+    "pyro.ops.contract",
+    "pyro.ops.tensor_utils",
+    "pyro.optim.*",
+    "tests.test_primitives",
+    "tests.test_generic",
+    "tests.poutine.*",
+    "tests.ops.*",
+    "tests.optim.*",
+    "tests.perf.*",
+    "tests.nn.*",
+    "tests.infer.*",
+    "tests.distributions.*",
+    "tests.contrib.*",
+]
+ignore_errors = true
+warn_unused_ignores = true
