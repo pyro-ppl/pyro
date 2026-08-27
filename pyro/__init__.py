@@ -27,6 +27,7 @@ from pyro.util import set_rng_seed
 
 from . import settings
 
+# After changing this, run scripts/update_version.py
 __version__ = "1.9.1"  # used by pyproject.toml
 
 __all__ = [
