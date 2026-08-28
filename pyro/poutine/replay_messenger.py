@@ -4,6 +4,7 @@
 from typing import TYPE_CHECKING, Dict, Optional
 
 from pyro.poutine.messenger import Messenger
+from pyro.poutine.util import site_is_subsample
 
 if TYPE_CHECKING:
     import torch
@@ -70,6 +71,10 @@ class ReplayMessenger(Messenger):
         """
         assert msg["name"] is not None
         name = msg["name"]
+        # Preserve manually supplied plate indices. Automatically generated
+        # subsamples start with no value and should still be replayed.
+        if site_is_subsample(msg) and msg["value"] is not None:
+            return None
         if self.trace is not None and name in self.trace:
             guide_msg = self.trace.nodes[name]
             if msg["is_observed"]:
