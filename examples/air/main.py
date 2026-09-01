@@ -189,7 +189,7 @@ def main(**kwargs):
         use_baselines=not args.no_baselines,
         z_what_size=args.encoder_latent_size,
         use_cuda=args.cuda,
-        **model_args
+        **model_args,
     )
 
     if args.verbose:

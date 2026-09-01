@@ -615,7 +615,7 @@ class SuperspreadingSEIRModel(CompartmentalModel):
         data,
         *,
         leaf_times=None,
-        coal_times=None
+        coal_times=None,
     ):
         compartments = ("S", "E", "I")  # R is implicit.
         duration = len(data)

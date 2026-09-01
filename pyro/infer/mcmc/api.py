@@ -132,7 +132,7 @@ class _Worker:
                 logging_hook,
                 None,
                 *args,
-                **kwargs
+                **kwargs,
             ):
                 self.result_queue.put_nowait((self.chain_id, sample))
                 self.event.wait()
@@ -230,7 +230,7 @@ class _UnarySampler:
                 hook_w_logging,
                 i if self.num_chains > 1 else None,
                 *args,
-                **kwargs
+                **kwargs,
             ):
                 yield sample, i  # sample, chain_id
             self.kernel.cleanup()

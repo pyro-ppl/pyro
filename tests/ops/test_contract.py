@@ -809,14 +809,14 @@ def test_adjoint_marginal(equation, plates):
         *operands,
         plates=plates,
         modulo_total=True,
-        backend="pyro.ops.einsum.torch_marginal"
+        backend="pyro.ops.einsum.torch_marginal",
     )
     (expected,) = ubersum(
         equation,
         *operands,
         plates=plates,
         modulo_total=True,
-        backend="pyro.ops.einsum.torch_log"
+        backend="pyro.ops.einsum.torch_log",
     )
     assert_equal(expected, actual)
 
@@ -829,7 +829,7 @@ def test_adjoint_marginal(equation, plates):
             *operands,
             plates=plates,
             modulo_total=True,
-            backend="pyro.ops.einsum.torch_log"
+            backend="pyro.ops.einsum.torch_log",
         )
         actual = operand._pyro_backward_result
         assert_equal(expected, actual)

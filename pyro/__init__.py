@@ -28,13 +28,7 @@ from pyro.util import set_rng_seed
 from . import settings
 
 # After changing this, run scripts/update_version.py
-version_prefix = "1.9.1"
-
-# Get the __version__ string from the auto-generated _version.py file, if exists.
-try:
-    from pyro._version import __version__
-except ImportError:
-    __version__ = version_prefix
+__version__ = "1.9.1"  # used by pyproject.toml
 
 __all__ = [
     "__version__",

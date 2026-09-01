@@ -38,7 +38,7 @@ def laplace_eig(
     final_num_samples,
     y_dist=None,
     eig=True,
-    **prior_entropy_kwargs
+    **prior_entropy_kwargs,
 ):
     """
     Estimates the expected information gain (EIG) by making repeated Laplace approximations to the posterior.
@@ -158,7 +158,7 @@ def vi_eig(
     is_parameters,
     y_dist=None,
     eig=True,
-    **prior_entropy_kwargs
+    **prior_entropy_kwargs,
 ):
     """.. deprecated:: 0.4.1
         Use `posterior_eig` instead.
@@ -454,7 +454,7 @@ def posterior_eig(
     eig=True,
     prior_entropy_kwargs={},
     *args,
-    **kwargs
+    **kwargs,
 ):
     """
     Posterior estimate of expected information gain (EIG) computed from the average posterior entropy (APE)
@@ -517,7 +517,7 @@ def posterior_eig(
         final_design=final_design,
         final_num_samples=final_num_samples,
         *args,
-        **kwargs
+        **kwargs,
     )
     return _eig_from_ape(model, design, target_labels, ape, eig, prior_entropy_kwargs)
 
@@ -535,7 +535,7 @@ def _posterior_ape(
     final_design=None,
     final_num_samples=None,
     *args,
-    **kwargs
+    **kwargs,
 ):
     loss = _posterior_loss(
         model, guide, observation_labels, target_labels, *args, **kwargs
