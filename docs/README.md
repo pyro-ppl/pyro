@@ -13,7 +13,7 @@ make docs
 
 ## Installation ##
 ```
-pip install -r requirements.txt
+uv sync --group docs
 ```
 
 Note that you will need to install [graphviz](https://www.graphviz.org/) separately.

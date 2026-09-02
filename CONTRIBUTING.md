@@ -14,15 +14,9 @@ When creating new files please add a license header; this can be done automatica
 
 # Setup
 
-First install [PyTorch](http://pytorch.org/).
-
-Then, install all the dev dependencies for Pyro.
+Install all the development dependencies for Pyro with uv.
 ```sh
-make install
-```
-or explicitly
-```sh
-pip install -e .[dev]
+uv sync --group dev
 ```
 
 # Testing
@@ -42,7 +36,7 @@ make test-cuda         # runs unit tests in cuda mode
 
 To run all tests locally in parallel, use the `pytest-xdist` package
 ```sh
-pip install pytest-xdist
+uv sync --group test
 pytest -vs -n auto
 ```
 
@@ -55,6 +49,7 @@ CUDA_TEST=1 PYRO_DTYPE=float64 PYRO_DEVICE=cuda pytest -vs {path_to_test}::{test
 
 To ensure documentation builds correctly, run
 ```sh
+uv sync --group docs
 make docs
 ```
 
@@ -82,8 +77,8 @@ You can test locally by running `make test-tutorials`.
 The profiler module contains scripts to support profiling different 
 Pyro modules, as well as test for performance regression.
 
-To run the profiling utilities, ensure that all dependencies for profiling are satisfied, 
-by running `make install`, or more specifically, `pip install -e .[profile]`.
+To run the profiling utilities, ensure that all dependencies for profiling are satisfied by
+running `make install` or `uv sync --group profile`.
 
 There are some generic test cases available in the `profiler` module. Currently, this supports 
 only the `distributions` library, but we will be adding test cases for inference methods
@@ -95,6 +90,12 @@ To get help on the parameters that the profiling script takes, run:
 
 ```sh
 python -m profiler.distributions --help
+```
+
+To install the profiling dependencies, run:
+
+```sh
+uv sync --group profile
 ```
 
 To run the profiler on all the distributions, simply run:

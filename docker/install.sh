@@ -6,7 +6,7 @@
 
 set -xe
 
-pip install --upgrade pip
+pip install --upgrade pip uv
 pip install notebook ipywidgets matplotlib
 
 # 1. Install PyTorch
@@ -39,5 +39,5 @@ then
     pip install pyro-ppl
 else
     git clone ${pyro_git_url}
-    (cd pyro && git checkout ${pyro_branch} && pip install -e .[dev])
+    (cd pyro && git checkout ${pyro_branch} && uv pip install --system -e . --group dev)
 fi

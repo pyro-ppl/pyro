@@ -82,6 +82,18 @@ cd pyro
 pip install .  # pip install .[extras] for running models in examples/tutorials
 ```
 
+### Developing with uv
+
+To install Pyro in editable mode with its development dependencies:
+```sh
+uv sync --group dev
+```
+
+To install the optional Funsor integration with the test dependencies:
+```sh
+uv sync --group test --extra funsor
+```
+
 ## Running Pyro from a Docker Container
 
 Refer to the instructions [here](docker/README.md).
