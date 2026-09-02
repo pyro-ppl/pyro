@@ -39,5 +39,5 @@ then
     pip install pyro-ppl
 else
     git clone ${pyro_git_url}
-    (cd pyro && git checkout ${pyro_branch} && pip install -e '.[extras]')
+    (cd pyro && git checkout ${pyro_branch} && pip install -e .[dev])
 fi
