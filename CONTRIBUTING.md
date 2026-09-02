@@ -42,7 +42,7 @@ make test-cuda         # runs unit tests in cuda mode
 
 To run all tests locally in parallel, use the `pytest-xdist` package
 ```sh
-pip install -e . --group test
+pip install pytest-xdist
 pytest -vs -n auto
 ```
 
