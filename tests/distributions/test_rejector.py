@@ -27,15 +27,6 @@ def test_rejection_standard_gamma_sample_shape(sample_shape, batch_shape):
     assert x.shape == sample_shape + batch_shape
 
 
-def test_shape_augmented_gamma_generator():
-    dist = ShapeAugmentedGamma(torch.tensor(0.5), torch.tensor(1.0))
-    generator = torch.Generator().manual_seed(0)
-    actual = dist.rsample((10,), generator=generator)
-    generator.manual_seed(0)
-    expected = dist.rsample((10,), generator=generator)
-    assert_equal(actual, expected)
-
-
 @pytest.mark.parametrize("sample_shape", SIZES)
 @pytest.mark.parametrize("batch_shape", filter(bool, SIZES))
 def test_rejection_exponential_sample_shape(sample_shape, batch_shape):

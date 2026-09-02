@@ -60,13 +60,12 @@ class RejectionStandardGamma(Rejector):
         return new
 
     @weakmethod
-    def propose(self, sample_shape=torch.Size(), *, generator=None):
+    def propose(self, sample_shape=torch.Size()):
         # Marsaglia & Tsang's x == Naesseth's epsilon`
         x = torch.randn(
             sample_shape + self.concentration.shape,
             dtype=self.concentration.dtype,
             device=self.concentration.device,
-            generator=generator,
         )
         y = 1.0 + self._c * x
         v = y * y * y
@@ -113,10 +112,8 @@ class RejectionGamma(Gamma):
         new._validate_args = self._validate_args
         return new
 
-    def rsample(self, sample_shape=torch.Size(), *, generator=None):
-        return (
-            self._standard_gamma.rsample(sample_shape, generator=generator) / self.rate
-        )
+    def rsample(self, sample_shape=torch.Size()):
+        return self._standard_gamma.rsample(sample_shape) / self.rate
 
     def log_prob(self, x):
         return self._standard_gamma.log_prob(x * self.rate) + torch.log(self.rate)
@@ -155,11 +152,11 @@ class ShapeAugmentedGamma(Gamma):
         new._validate_args = self._validate_args
         return new
 
-    def rsample(self, sample_shape=torch.Size(), *, generator=None):
-        x = self._rejection_gamma.rsample(sample_shape, generator=generator)
+    def rsample(self, sample_shape=torch.Size()):
+        x = self._rejection_gamma.rsample(sample_shape)
         boosted_x = x.clone()
         for i in range(self._boost):
-            u = torch.rand(x.shape, dtype=x.dtype, device=x.device, generator=generator)
+            u = torch.rand(x.shape, dtype=x.dtype, device=x.device)
             boosted_x *= (1 - u) ** (1 / (i + self.concentration))
         self._unboost_x_cache = boosted_x, x
         return boosted_x
@@ -199,8 +196,8 @@ class ShapeAugmentedDirichlet(Dirichlet):
         new._validate_args = self._validate_args
         return new
 
-    def rsample(self, sample_shape=torch.Size(), *, generator=None):
-        gammas = self._gamma.rsample(sample_shape, generator=generator)
+    def rsample(self, sample_shape=torch.Size()):
+        gammas = self._gamma.rsample(sample_shape)
         return gammas / gammas.sum(-1, True)
 
 
@@ -230,7 +227,7 @@ class ShapeAugmentedBeta(Beta):
         new._validate_args = self._validate_args
         return new
 
-    def rsample(self, sample_shape=torch.Size(), *, generator=None):
-        gammas = self._gamma.rsample(sample_shape, generator=generator)
+    def rsample(self, sample_shape=torch.Size()):
+        gammas = self._gamma.rsample(sample_shape)
         probs = gammas / gammas.sum(-1, True)
         return probs[..., 0]

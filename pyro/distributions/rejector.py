@@ -48,27 +48,17 @@ class Rejector(TorchDistribution):
             self._propose_log_prob_cache = x, self.propose.log_prob(x)
         return self._propose_log_prob_cache[1]
 
-    def rsample(self, sample_shape=torch.Size(), *, generator=None):
+    def rsample(self, sample_shape=torch.Size()):
         # Implements parallel batched accept-reject sampling.
-        def propose():
-            if generator is None:
-                return self.propose(sample_shape) if sample_shape else self.propose()
-            return self.propose(sample_shape, generator=generator)
-
-        def bernoulli(probs):
-            if generator is None:
-                return torch.bernoulli(probs)
-            return torch.bernoulli(probs, generator=generator)
-
-        x = propose()
+        x = self.propose(sample_shape) if sample_shape else self.propose()
         log_prob_accept = self.log_prob_accept(x)
         probs = torch.exp(log_prob_accept).clamp_(0.0, 1.0)
-        done = bernoulli(probs).bool()
+        done = torch.bernoulli(probs).bool()
         while not done.all():
-            proposed_x = propose()
+            proposed_x = self.propose(sample_shape) if sample_shape else self.propose()
             log_prob_accept = self.log_prob_accept(proposed_x)
             prob_accept = torch.exp(log_prob_accept).clamp_(0.0, 1.0)
-            accept = bernoulli(prob_accept).bool() & ~done
+            accept = torch.bernoulli(prob_accept).bool() & ~done
             if accept.any():
                 x[accept] = proposed_x[accept]
                 done |= accept

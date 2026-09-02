@@ -13,6 +13,7 @@ env:
   COVERALLS_SERVICE_NAME: github
 
 
+# TODO: Remove the torch<2.14 pin before the 1.9.2 release.
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -52,7 +53,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install "torch<2.14" torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install . --group test --group docs
           pip freeze
       - name: Build docs and run doctest
@@ -79,7 +80,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install "torch<2.14" torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install . --group test --group docs --group tutorials
           pip freeze
       - name: Build HTML from tutorials
@@ -105,7 +106,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install "torch<2.14" torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install . --group test
           pip install --upgrade coveralls
           pip freeze
@@ -139,7 +140,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install "torch<2.14" torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install . --group test
           pip install --upgrade coveralls
           pip freeze
@@ -173,7 +174,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install "torch<2.14" torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install . --group test
           pip install --upgrade coveralls
           pip freeze
@@ -205,7 +206,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install "torch<2.14" torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install . --group test
           pip install --upgrade coveralls
           pip freeze
@@ -237,7 +238,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
-          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install "torch<2.14" torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install -e '.[funsor]' --group test
           pip install --upgrade coveralls
           pip freeze
