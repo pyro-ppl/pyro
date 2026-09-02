@@ -9,6 +9,11 @@ build:
   os: ubuntu-20.04
   tools:
     python: "3.10"
+  jobs:
+    install:
+      - pip install --upgrade pip
+      - pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      - pip install . --group docs
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
@@ -16,8 +21,3 @@ sphinx:
 
 # Optionally build your docs in additional formats such as PDF and ePub
 # formats: all
-
-# Optionally set the version of Python and requirements required to build your docs
-python:
-  install:
-    - requirements: docs/requirements.txt

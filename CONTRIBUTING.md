@@ -22,7 +22,7 @@ make install
 ```
 or explicitly
 ```sh
-pip install -e .[dev]
+pip install -e . --group dev
 ```
 
 # Testing
@@ -42,7 +42,7 @@ make test-cuda         # runs unit tests in cuda mode
 
 To run all tests locally in parallel, use the `pytest-xdist` package
 ```sh
-pip install pytest-xdist
+pip install -e . --group test
 pytest -vs -n auto
 ```
 
@@ -83,7 +83,7 @@ The profiler module contains scripts to support profiling different
 Pyro modules, as well as test for performance regression.
 
 To run the profiling utilities, ensure that all dependencies for profiling are satisfied,
-by running `make install`, or more specifically, `pip install -e .[profile]`.
+by running `make install`, or more specifically, `pip install -e . --group profile`.
 
 There are some generic test cases available in the `profiler` module. Currently, this supports 
 only the `distributions` library, but we will be adding test cases for inference methods

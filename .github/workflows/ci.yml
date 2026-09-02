@@ -28,8 +28,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip wheel setuptools
-        pip install ruff black mypy nbstripout nbformat
-        pip install -e .
+        pip install -e . --group lint
     - name: Lint
       run: |
         make lint
@@ -54,8 +53,7 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          pip install .[test]
-          pip install -r docs/requirements.txt
+          pip install . --group test --group docs
           pip freeze
       - name: Build docs and run doctest
         run: |
@@ -82,9 +80,7 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          pip install .[test]
-          pip install -r docs/requirements.txt
-          pip install nbformat nbsphinx>=0.3.2 nbstripout pypandoc ninja
+          pip install . --group test --group docs --group tutorials
           pip freeze
       - name: Build HTML from tutorials
         run: |
@@ -110,7 +106,7 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          pip install .[test]
+          pip install . --group test
           pip install --upgrade coveralls
           pip freeze
       - name: Run unit tests
@@ -144,7 +140,7 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          pip install .[test]
+          pip install . --group test
           pip install --upgrade coveralls
           pip freeze
       - name: Run examples
@@ -178,7 +174,7 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          pip install .[test]
+          pip install . --group test
           pip install --upgrade coveralls
           pip freeze
       - name: Run integration test (batch 1)
@@ -210,7 +206,7 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          pip install .[test]
+          pip install . --group test
           pip install --upgrade coveralls
           pip freeze
       - name: Run integration test (batch 2)
@@ -242,8 +238,7 @@ jobs:
           # Keep track of pyro-api master branch
           pip install https://github.com/pyro-ppl/pyro-api/archive/master.zip
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-          pip install .[test]
-          pip install -e .[funsor]
+          pip install -e '.[funsor]' --group test
           pip install --upgrade coveralls
           pip freeze
       - name: Run funsor tests
