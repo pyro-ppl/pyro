@@ -13,7 +13,7 @@ make docs
 
 ## Installation ##
 ```
-pip install -r requirements.txt
+pip install . --group docs
 ```
 
 Note that you will need to install [graphviz](https://www.graphviz.org/) separately.
