@@ -36,6 +36,11 @@ def test_deterministic_ok():
     assert x.shape == ()
 
 
+def test_plate_negative_size_error():
+    with pytest.raises(ValueError, match="size cannot be negative"):
+        pyro.plate("data", -1)
+
+
 @pytest.mark.parametrize(
     "mask",
     [
