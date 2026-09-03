@@ -22,7 +22,7 @@ make install
 ```
 or explicitly
 ```sh
-pip install -e .[dev]
+pip install -e . --group dev
 ```
 
 # Testing
@@ -82,8 +82,8 @@ You can test locally by running `make test-tutorials`.
 The profiler module contains scripts to support profiling different 
 Pyro modules, as well as test for performance regression.
 
-To run the profiling utilities, ensure that all dependencies for profiling are satisfied, 
-by running `make install`, or more specifically, `pip install -e .[profile]`.
+To run the profiling utilities, ensure that all dependencies for profiling are satisfied,
+by running `make install`, or more specifically, `pip install -e . --group profile`.
 
 There are some generic test cases available in the `profiler` module. Currently, this supports 
 only the `distributions` library, but we will be adding test cases for inference methods

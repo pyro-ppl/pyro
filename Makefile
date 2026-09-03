@@ -3,7 +3,7 @@
 all: docs test
 
 install: FORCE
-	pip install -e .[dev,profile] --config-settings editable_mode=strict
+	pip install -e . --group dev --group profile --config-settings editable_mode=strict
 
 uninstall: FORCE
 	pip uninstall pyro-ppl

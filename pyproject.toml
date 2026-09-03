@@ -37,8 +37,6 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
 ]
 dependencies = [
-    # If you add any additional libraries, please also add them to
-    # `docs/requirements.txt`.
     # numpy is necessary for some functionality of PyTorch.
     "numpy>=1.7",
     "opt_einsum>=2.3.2",
@@ -61,8 +59,23 @@ extras = [
     "wget",
     "scipy>=1.1",
 ]
-test = [
+horovod = [
+    "horovod[pytorch]>=0.19",
+]
+lightning = [
+    "lightning",
+]
+funsor = [
+    "funsor[torch]==0.4.8; python_version >= '3.10'",
+]
+
+[dependency-groups]
+lint = [
     "black>=21.4b0",
+    "mypy>=0.812",
+    "ruff",
+]
+test = [
     "graphviz>=0.8",
     "ipywidgets",
     "matplotlib>=1.3",
@@ -73,12 +86,27 @@ test = [
     "pytest-cov",
     "pytest-xdist",
     "pytest>=5.0",
-    "ruff",
     "scikit-learn",
     "scipy>=1.1",
     "seaborn>=0.11.0",
     "torchvision>=0.15.0",
     "wget",
+]
+docs = [
+    "sphinx>=4.2.0",
+    "sphinx-rtd-theme>=1.0.0",
+    "graphviz>=0.8",
+    "observations>=0.1.4",
+    "setuptools",
+    "sphinx_copybutton",
+    "funsor[torch]==0.4.8; python_version >= '3.10'",
+]
+tutorials = [
+    "nbformat",
+    "nbsphinx>=0.3.2",
+    "nbstripout",
+    "pypandoc",
+    "ninja",
 ]
 profile = [
     "prettytable",
@@ -86,40 +114,10 @@ profile = [
     "snakeviz",
 ]
 dev = [
-    "black>=21.4b0",
-    "graphviz>=0.8",
-    "ipywidgets",
-    "matplotlib>=1.3",
-    "mypy>=0.812",
-    "nbformat",
-    "nbsphinx>=0.3.2",
-    "nbstripout",
-    "nbval",
-    "ninja",
-    "notebook",
-    "pandas",
-    "pillow>=8.3.1",
-    "pypandoc",
-    "pytest-xdist",
-    "pytest>=5.0",
-    "ruff",
-    "scikit-learn",
-    "scipy>=1.1",
-    "seaborn>=0.11.0",
-    "sphinx",
-    "sphinx_rtd_theme",
-    "torchvision>=0.15.0",
-    "wget",
-    "yapf",
-]
-horovod = [
-    "horovod[pytorch]>=0.19",
-]
-lightning = [
-    "lightning",
-]
-funsor = [
-    "funsor[torch]==0.4.8",
+    { include-group = "lint" },
+    { include-group = "test" },
+    { include-group = "docs" },
+    { include-group = "tutorials" },
 ]
 
 [project.urls]
