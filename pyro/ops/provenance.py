@@ -10,6 +10,13 @@ from torch.utils._pytree import tree_flatten, tree_map, tree_unflatten
 _Tensor = TypeVar("_Tensor", bound=torch.Tensor)
 
 
+def _is_size(x: object) -> bool:
+    # ``torch.Size`` subclasses ``tuple``, so the pytree helpers below would
+    # otherwise flatten it and rebuild it as a plain tuple. Treating it as a
+    # leaf keeps the type intact.
+    return isinstance(x, torch.Size)
+
+
 class ProvenanceTensor(torch.Tensor):
     """
     Provenance tracking implementation in Pytorch.
@@ -85,6 +92,13 @@ def track_provenance(x, provenance: frozenset):
 track_provenance.register(torch.Tensor)(ProvenanceTensor)
 
 
+@track_provenance.register(torch.Size)
+def _track_provenance_size(x, provenance: frozenset):
+    # A torch.Size holds plain ints, so there is no provenance to add; return
+    # it unchanged rather than letting the tuple handler rebuild it.
+    return x
+
+
 @track_provenance.register(frozenset)
 @track_provenance.register(set)
 def _track_provenance_set(x, provenance: frozenset):
@@ -95,7 +109,9 @@ def _track_provenance_set(x, provenance: frozenset):
 @track_provenance.register(tuple)
 @track_provenance.register(dict)
 def _track_provenance_pytree(x, provenance: frozenset):
-    return tree_map(partial(track_provenance, provenance=provenance), x)
+    return tree_map(
+        partial(track_provenance, provenance=provenance), x, is_leaf=_is_size
+    )
 
 
 @track_provenance.register
@@ -123,6 +139,11 @@ def _extract_provenance_tensor(x):
     return x._t, x._provenance
 
 
+@extract_provenance.register(torch.Size)
+def _extract_provenance_size(x):
+    return x, frozenset()
+
+
 @extract_provenance.register(frozenset)
 @extract_provenance.register(set)
 def _extract_provenance_set(x):
@@ -140,7 +161,7 @@ def _extract_provenance_set(x):
 @extract_provenance.register(tuple)
 @extract_provenance.register(dict)
 def _extract_provenance_pytree(x):
-    flat_args, spec = tree_flatten(x)
+    flat_args, spec = tree_flatten(x, is_leaf=_is_size)
     xs = []
     provenance = frozenset()
     for x, p in map(extract_provenance, flat_args):
