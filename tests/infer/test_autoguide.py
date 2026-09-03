@@ -1058,6 +1058,24 @@ def test_replay_plates(auto_class, sample_shape):
     assert d.shape == sample_shape + (2, 3)
 
 
+def test_replay_preserves_explicit_subsample():
+    def model(subsample):
+        with pyro.plate("data", 6, dim=-1, subsample=subsample) as batch:
+            pyro.sample("z", dist.Normal(0, 1))
+        return batch
+
+    pyro.set_rng_seed(0)
+    subsample = torch.tensor([4, 0, 1])
+    guide = AutoNormal(model)
+    guide_trace = poutine.trace(guide).get_trace(subsample)
+    model_trace = poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(
+        subsample
+    )
+
+    assert not torch.equal(guide_trace.nodes["data"]["value"], subsample)
+    assert_equal(model_trace.nodes["data"]["value"], subsample)
+
+
 @pytest.mark.parametrize(
     "auto_class",
     [
