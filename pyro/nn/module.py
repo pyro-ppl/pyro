@@ -629,12 +629,14 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         result = super().__getattr__(name)
 
         # Regular nn.Parameters trigger pyro.param statements.
-        if isinstance(result, torch.nn.Parameter) and not name.endswith(
-            "_unconstrained"
+        if (
+            isinstance(result, torch.nn.Parameter)
+            and not name.endswith("_unconstrained")
+            and self._pyro_context.active
         ):
-            if self._pyro_context.active and not _is_module_local_param_enabled():
+            if result.requires_grad and not _is_module_local_param_enabled():
                 pyro.param(self._pyro_get_fullname(name), result)
-            elif self._pyro_context.active and _is_module_local_param_enabled():
+            elif result.requires_grad:
                 # fake param statement to ensure any handlers of pyro.param are applied,
                 # even though we don't use the contents of the local parameter store
                 fullname = self._pyro_get_fullname(name)
@@ -740,7 +742,11 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                 delattr(self, name)
             except AttributeError:
                 pass
-            if self._pyro_context.active and not _is_module_local_param_enabled():
+            if (
+                self._pyro_context.active
+                and value.requires_grad
+                and not _is_module_local_param_enabled()
+            ):
                 fullname = self._pyro_get_fullname(name)
                 value = pyro.param(fullname, value)
                 if not isinstance(value, torch.nn.Parameter):
@@ -748,7 +754,11 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                     value = torch.nn.Parameter(detach_provenance(value))
                     _PYRO_PARAM_STORE._params[fullname] = value
                     _PYRO_PARAM_STORE._param_to_name[value] = fullname
-            elif self._pyro_context.active and _is_module_local_param_enabled():
+            elif (
+                self._pyro_context.active
+                and value.requires_grad
+                and _is_module_local_param_enabled()
+            ):
                 # fake param statement to ensure any handlers of pyro.param are applied,
                 # even though we don't use the contents of the local parameter store
                 fullname = self._pyro_get_fullname(name)
