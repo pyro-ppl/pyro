@@ -109,6 +109,10 @@ class SubsampleMessenger(IndepMessenger):
         """
         Helper function for plate. See its docstrings for details.
         """
+        if size is not None and not torch._C._get_tracing_state() and size < 0:
+            raise ValueError(
+                "size must be a positive integer, got {}".format(size)
+            )
         if size is None:
             assert subsample_size is None
             assert subsample is None
