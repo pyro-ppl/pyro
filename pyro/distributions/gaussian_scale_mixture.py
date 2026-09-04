@@ -61,18 +61,18 @@ class GaussianScaleMixture(TorchDistribution):
         self.dim = coord_scale.size(0)
         if self.dim < 2:
             raise NotImplementedError("This distribution does not support D = 1")
-        assert (
-            coord_scale.dim() == 1
-        ), "The coord_scale parameter in GaussianScaleMixture should be D dimensional"
-        assert (
-            component_scale.dim() == 1
-        ), "The component_scale parameter in GaussianScaleMixture should be K dimensional"
-        assert (
-            component_logits.dim() == 1
-        ), "The component_logits parameter in GaussianScaleMixture should be K dimensional"
-        assert (
-            component_logits.shape == component_scale.shape
-        ), "The component_logits and component_scale parameters in GaussianScaleMixture should be K dimensional"
+        assert coord_scale.dim() == 1, (
+            "The coord_scale parameter in GaussianScaleMixture should be D dimensional"
+        )
+        assert component_scale.dim() == 1, (
+            "The component_scale parameter in GaussianScaleMixture should be K dimensional"
+        )
+        assert component_logits.dim() == 1, (
+            "The component_logits parameter in GaussianScaleMixture should be K dimensional"
+        )
+        assert component_logits.shape == component_scale.shape, (
+            "The component_logits and component_scale parameters in GaussianScaleMixture should be K dimensional"
+        )
         self.coord_scale = coord_scale
         self.component_logits = component_logits
         self.component_scale = component_scale

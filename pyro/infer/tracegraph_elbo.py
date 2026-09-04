@@ -64,9 +64,9 @@ def _construct_baseline(node, guide_site, downstream_cost):
 
     use_baseline = use_nn_baseline or use_decaying_avg_baseline or use_baseline_value
 
-    assert not (
-        use_nn_baseline and use_baseline_value
-    ), "cannot use baseline_value and nn_baseline simultaneously"
+    assert not (use_nn_baseline and use_baseline_value), (
+        "cannot use baseline_value and nn_baseline simultaneously"
+    )
     if use_decaying_avg_baseline:
         dc_shape = downstream_cost.shape
         param_name = "__baseline_avg_downstream_cost_" + node

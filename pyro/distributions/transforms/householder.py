@@ -141,9 +141,7 @@ class Householder(ConditionedHouseholder, TransformModule):
         elif count_transforms > input_dim:
             warnings.warn(
                 "Number of Householder transforms, {}, is greater than input dimension {}, which is an \
-over-parametrization!".format(
-                    count_transforms, input_dim
-                )
+over-parametrization!".format(count_transforms, input_dim)
             )
         self.u_unnormed = nn.Parameter(torch.empty(count_transforms, input_dim))
         self.reset_parameters()
@@ -227,9 +225,7 @@ class ConditionalHouseholder(ConditionalTransformModule):
         elif count_transforms > input_dim:
             warnings.warn(
                 "Number of Householder transforms, {}, is greater than input dimension {}, which is an \
-over-parametrization!".format(
-                    count_transforms, input_dim
-                )
+over-parametrization!".format(count_transforms, input_dim)
             )
         self.count_transforms = count_transforms
 

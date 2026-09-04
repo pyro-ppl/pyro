@@ -83,7 +83,7 @@ class Combination(Kernel):
     def __init__(self, kern0, kern1):
         if not isinstance(kern0, Kernel):
             raise TypeError(
-                "The first component of a combined kernel must be a " "Kernel instance."
+                "The first component of a combined kernel must be a Kernel instance."
             )
         if not (isinstance(kern1, Kernel) or isinstance(kern1, numbers.Number)):
             raise TypeError(
@@ -235,13 +235,11 @@ class Warping(Transforming):
             for coef in owarping_coef:
                 if not isinstance(coef, int) and coef < 0:
                     raise ValueError(
-                        "Coefficients of the polynomial must be a "
-                        "non-negative integer."
+                        "Coefficients of the polynomial must be a non-negative integer."
                     )
             if len(owarping_coef) < 2 and sum(owarping_coef) == 0:
                 raise ValueError(
-                    "The ouput warping polynomial should have a degree "
-                    "of at least 1."
+                    "The ouput warping polynomial should have a degree of at least 1."
                 )
         self.owarping_coef = owarping_coef
 

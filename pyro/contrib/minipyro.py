@@ -77,9 +77,9 @@ class trace(Messenger):
     # trace illustrates why we need postprocess_message in addition to process_message:
     # We only want to record a value after all other effects have been applied
     def postprocess_message(self, msg):
-        assert (
-            msg["type"] != "sample" or msg["name"] not in self.trace
-        ), "sample sites must have unique names"
+        assert msg["type"] != "sample" or msg["name"] not in self.trace, (
+            "sample sites must have unique names"
+        )
         self.trace[msg["name"]] = msg.copy()
 
     def get_trace(self, *args, **kwargs):

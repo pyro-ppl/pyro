@@ -82,9 +82,9 @@ def assert_grads_agree(logits):
     d2 = dist.OneOneMatching(logits, bp_iters=BP_ITERS)
     expected = torch.autograd.grad(d1.log_partition_function, [logits])[0]
     actual = torch.autograd.grad(d2.log_partition_function, [logits])[0]
-    assert torch.allclose(
-        actual, expected, atol=0.2, rtol=1e-3
-    ), f"Expected:\n{expected.numpy()}\nActual:\n{actual.numpy()}"
+    assert torch.allclose(actual, expected, atol=0.2, rtol=1e-3), (
+        f"Expected:\n{expected.numpy()}\nActual:\n{actual.numpy()}"
+    )
 
 
 @pytest.mark.parametrize("num_nodes", [2, 3, 4, 5])

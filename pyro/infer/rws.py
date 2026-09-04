@@ -85,9 +85,9 @@ class ReweightedWakeSleep(ELBO):
         strict_enumeration_warning=True,
     ):
         # force K > 1 otherwise SNIS not possible
-        assert (
-            num_particles > 1
-        ), "Reweighted Wake Sleep needs to be run with more than one particle"
+        assert num_particles > 1, (
+            "Reweighted Wake Sleep needs to be run with more than one particle"
+        )
 
         super().__init__(
             num_particles=num_particles,

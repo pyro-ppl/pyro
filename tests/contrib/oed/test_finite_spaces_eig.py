@@ -67,8 +67,9 @@ def make_lfire_classifier(n_theta_samples):
     def lfire_classifier(design, trace, observation_labels, target_labels):
         y_dict = {l: trace.nodes[l]["value"] for l in observation_labels}
         y = torch.cat(list(y_dict.values()), dim=-1)
-        a, b = pyro.param("a", torch.zeros(n_theta_samples)), pyro.param(
-            "b", torch.zeros(n_theta_samples)
+        a, b = (
+            pyro.param("a", torch.zeros(n_theta_samples)),
+            pyro.param("b", torch.zeros(n_theta_samples)),
         )
 
         return a + b * y

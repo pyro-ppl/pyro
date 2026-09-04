@@ -417,9 +417,11 @@ def test_sample():
         def __init__(self, in_features, out_features):
             super().__init__(in_features, out_features)
             self.weight = PyroSample(
-                lambda self: dist.Normal(0, 1)
-                .expand([self.out_features, self.in_features])
-                .to_event(2)
+                lambda self: (
+                    dist.Normal(0, 1)
+                    .expand([self.out_features, self.in_features])
+                    .to_event(2)
+                )
             )
 
     class Guide(nn.Linear, PyroModule):
@@ -1069,7 +1071,6 @@ def test_module_list() -> None:
 def test_render_constrained_param(use_module_local_params):
 
     class Model(PyroModule):
-
         @PyroParam(constraint=constraints.positive)
         def x(self):
             return torch.tensor(1.234)

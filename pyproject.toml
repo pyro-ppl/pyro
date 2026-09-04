@@ -71,7 +71,6 @@ funsor = [
 
 [dependency-groups]
 lint = [
-    "black>=21.4b0",
     "mypy>=0.812",
     "ruff",
 ]
@@ -157,15 +156,11 @@ markers = [
 
 [tool.ruff]
 extend-exclude = ["*.ipynb"]
-line-length = 120
+line-length = 88
 
 [tool.ruff.lint]
-ignore = ["E741", "E721"]
+ignore = ["E501", "E741", "E721"]
 select = ["E", "F", "I"]
-
-[tool.yapf]
-based_on_style = "google"
-column_limit = 120
 
 [tool.mypy]
 python_version = "3.12"

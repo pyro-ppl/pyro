@@ -50,9 +50,9 @@ class EKFDistribution(TorchDistribution):
         self.dynamic_model = dynamic_model
         self.measurement_cov = measurement_cov
         self.dt = dt
-        assert (
-            not x0.shape[-1] % 2
-        ), "position and velocity vectors must be the same dimension"
+        assert not x0.shape[-1] % 2, (
+            "position and velocity vectors must be the same dimension"
+        )
         batch_shape = x0.shape[:-1]
         event_shape = (time_steps, x0.shape[-1] // 2)
         super().__init__(batch_shape, event_shape, validate_args=validate_args)

@@ -20,8 +20,8 @@ for _name, _Optim in torch.optim.__dict__.items():
         continue
 
     _PyroOptim = (
-        lambda _Optim: lambda optim_args, clip_args=None: PyroOptim(
-            _Optim, optim_args, clip_args
+        lambda _Optim: (
+            lambda optim_args, clip_args=None: PyroOptim(_Optim, optim_args, clip_args)
         )
     )(_Optim)
     _PyroOptim.__name__ = _name
@@ -45,8 +45,10 @@ for _name, _Optim in torch.optim.lr_scheduler.__dict__.items():
         continue
 
     _PyroOptim = (
-        lambda _Optim: lambda optim_args, clip_args=None: PyroLRScheduler(
-            _Optim, optim_args, clip_args
+        lambda _Optim: (
+            lambda optim_args, clip_args=None: PyroLRScheduler(
+                _Optim, optim_args, clip_args
+            )
         )
     )(_Optim)
     _PyroOptim.__name__ = _name

@@ -134,9 +134,9 @@ class AutoGuide(PyroModule):
                 plates = self.create_plates(*args, **kwargs)
                 if isinstance(plates, pyro.plate):
                     plates = [plates]
-                assert all(
-                    isinstance(p, pyro.plate) for p in plates
-                ), "create_plates() returned a non-plate"
+                assert all(isinstance(p, pyro.plate) for p in plates), (
+                    "create_plates() returned a non-plate"
+                )
                 self.plates = {p.name: p for p in plates}
             for name, frame in sorted(self._prototype_frames.items()):
                 if name not in self.plates:
@@ -145,9 +145,9 @@ class AutoGuide(PyroModule):
                         name, full_size, dim=frame.dim, subsample_size=frame.size
                     )
         else:
-            assert (
-                self.create_plates is None
-            ), "Cannot pass create_plates() to non-master guide"
+            assert self.create_plates is None, (
+                "Cannot pass create_plates() to non-master guide"
+            )
             self.plates = self.master().plates
         return self.plates
 

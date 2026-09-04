@@ -260,9 +260,9 @@ def repeated_matmul(M, n):
     :param int n: The order of the largest product :math:`M^n`
     :returns torch.Tensor: A batch of square tensors of shape (n, ..., N, N)
     """
-    assert M.size(-1) == M.size(
-        -2
-    ), "Input tensors must satisfy M.size(-1) == M.size(-2)."
+    assert M.size(-1) == M.size(-2), (
+        "Input tensors must satisfy M.size(-1) == M.size(-2)."
+    )
     assert n > 0, "argument n to repeated_matmul must be 1 or larger"
 
     doubling_rounds = 0 if n <= 2 else math.ceil(math.log(n, 2)) - 1

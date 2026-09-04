@@ -9,7 +9,7 @@ SPDX-License-Identifier: Apache-2.0
 Please follow our established coding style including variable names, module imports, and function definitions.
 The Pyro codebase follows the [PEP8 style guide](https://www.python.org/dev/peps/pep-0008/)
 (which you can check with `make lint`) and follows
-[`isort`](https://github.com/timothycrosley/isort) import order (which you can enforce with `make format`).
+Ruff's import order (which you can enforce with `make format`).
 When creating new files please add a license header; this can be done automatically via `make license` or simply `make format`.
 
 # Setup
@@ -29,7 +29,7 @@ pip install -e . --group dev
 
 Before submitting a pull request, please autoformat code and ensure that unit tests pass locally
 ```sh
-make format            # runs isort
+make format            # runs Ruff
 make test              # linting and unit tests
 ```
 

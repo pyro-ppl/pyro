@@ -100,8 +100,7 @@ class ProjectedNormal(TorchDistribution):
             event_shape = value.shape[-1:]
             if event_shape != self.event_shape:
                 raise ValueError(
-                    f"Expected event shape {self.event_shape}, "
-                    f"but got {event_shape}"
+                    f"Expected event shape {self.event_shape}, but got {event_shape}"
                 )
             self._validate_sample(value)
         dim = int(self.concentration.size(-1))

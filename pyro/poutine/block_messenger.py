@@ -48,9 +48,9 @@ def _make_default_hide_fn(
 ) -> Callable[["Message"], bool]:
     # first, some sanity checks:
     # hide_all and expose_all intersect?
-    assert (hide_all is False and expose_all is False) or (
-        hide_all != expose_all
-    ), "cannot hide and expose a site"
+    assert (hide_all is False and expose_all is False) or (hide_all != expose_all), (
+        "cannot hide and expose a site"
+    )
 
     # hide and expose intersect?
     if hide is None:
@@ -76,9 +76,9 @@ def _make_default_hide_fn(
     else:
         hide_all = True
 
-    assert set(hide_types).isdisjoint(
-        set(expose_types)
-    ), "cannot hide and expose a site type"
+    assert set(hide_types).isdisjoint(set(expose_types)), (
+        "cannot hide and expose a site type"
+    )
 
     return partial(_block_fn, expose, expose_types, hide, hide_types, hide_all)
 

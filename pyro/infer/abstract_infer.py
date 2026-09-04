@@ -31,9 +31,9 @@ class EmpiricalMarginal(Empirical):
     """
 
     def __init__(self, trace_posterior, sites=None, validate_args=None):
-        assert isinstance(
-            trace_posterior, TracePosterior
-        ), "trace_dist must be trace posterior distribution object"
+        assert isinstance(trace_posterior, TracePosterior), (
+            "trace_dist must be trace posterior distribution object"
+        )
         if sites is None:
             sites = "_RETURN"
         self._num_chains = 1
@@ -126,9 +126,9 @@ class Marginals:
     """
 
     def __init__(self, trace_posterior, sites=None, validate_args=None):
-        assert isinstance(
-            trace_posterior, TracePosterior
-        ), "trace_dist must be trace posterior distribution object"
+        assert isinstance(trace_posterior, TracePosterior), (
+            "trace_dist must be trace posterior distribution object"
+        )
         if sites is None:
             sites = ["_RETURN"]
         elif isinstance(sites, str):

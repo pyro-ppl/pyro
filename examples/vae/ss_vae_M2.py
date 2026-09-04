@@ -528,14 +528,14 @@ if __name__ == "__main__":
 
     # some assertions to make sure that batching math assumptions are met
     assert args.sup_num % args.batch_size == 0, "assuming simplicity of batching math"
-    assert (
-        MNISTCached.validation_size % args.batch_size == 0
-    ), "batch size should divide the number of validation examples"
-    assert (
-        MNISTCached.train_data_size % args.batch_size == 0
-    ), "batch size doesn't divide total number of training data examples"
-    assert (
-        MNISTCached.test_size % args.batch_size == 0
-    ), "batch size should divide the number of test examples"
+    assert MNISTCached.validation_size % args.batch_size == 0, (
+        "batch size should divide the number of validation examples"
+    )
+    assert MNISTCached.train_data_size % args.batch_size == 0, (
+        "batch size doesn't divide total number of training data examples"
+    )
+    assert MNISTCached.test_size % args.batch_size == 0, (
+        "batch size should divide the number of test examples"
+    )
 
     main(args)

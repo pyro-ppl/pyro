@@ -627,8 +627,9 @@ def check_if_enumerated(guide_trace: "Trace") -> None:
         warnings.warn(
             "\n".join(
                 [
-                    "Found sample sites configured for enumeration:"
-                    ", ".join(enumerated_sites),
+                    "Found sample sites configured for enumeration:, ".join(
+                        enumerated_sites
+                    ),
                     "If you want to enumerate sites, you need to use TraceEnum_ELBO instead.",
                 ]
             )

@@ -86,9 +86,9 @@ def test_cond_indep_stack(model, subsample_size):
     tr = poutine.trace(model).get_trace(subsample_size)
     for name, node in tr.nodes.items():
         if name.startswith("x"):
-            assert node[
-                "cond_indep_stack"
-            ], "missing cond_indep_stack at node {}".format(name)
+            assert node["cond_indep_stack"], (
+                "missing cond_indep_stack at node {}".format(name)
+            )
 
 
 @pytest.mark.parametrize("subsample_size", [5, 20])
