@@ -19,7 +19,7 @@ tutorial: FORCE
 
 lint: FORCE
 	ruff check .
-	black --check pyro examples tests scripts profiler
+	ruff format --check pyro examples tests scripts profiler
 	python scripts/update_headers.py --check
 	mypy --install-types --non-interactive --warn-unused-ignores pyro scripts tests
 
@@ -28,7 +28,7 @@ license: FORCE
 
 format: license FORCE
 	ruff check --fix .
-	black pyro examples tests scripts profiler
+	ruff format pyro examples tests scripts profiler
 
 version: FORCE
 	python scripts/update_version.py

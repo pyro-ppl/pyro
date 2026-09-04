@@ -455,9 +455,9 @@ def analytic_posterior_cov(prior_cov, x, obs_sd):
     # Use some kernel trick magic
     p = prior_cov.shape[-1]
     SigmaXX = prior_cov.mm(x.t().mm(x))
-    posterior_cov = prior_cov - torch.inverse(
-        SigmaXX + (obs_sd**2) * torch.eye(p)
-    ).mm(SigmaXX.mm(prior_cov))
+    posterior_cov = prior_cov - torch.inverse(SigmaXX + (obs_sd**2) * torch.eye(p)).mm(
+        SigmaXX.mm(prior_cov)
+    )
     return posterior_cov
 
 

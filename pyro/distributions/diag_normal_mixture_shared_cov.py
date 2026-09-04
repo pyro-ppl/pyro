@@ -54,18 +54,18 @@ class MixtureOfDiagNormalsSharedCovariance(TorchDistribution):
             "(or ... x B x K x D in batch mode)"
         )
         if not self.batch_mode:
-            assert (
-                coord_scale.dim() == 1
-            ), "The coord_scale parameter in MixtureOfDiagNormalsSharedCovariance should be D dimensional"
-            assert (
-                component_logits.dim() == 1
-            ), "The component_logits parameter in MixtureOfDiagNormalsSharedCovariance should be K dimensional"
+            assert coord_scale.dim() == 1, (
+                "The coord_scale parameter in MixtureOfDiagNormalsSharedCovariance should be D dimensional"
+            )
+            assert component_logits.dim() == 1, (
+                "The component_logits parameter in MixtureOfDiagNormalsSharedCovariance should be K dimensional"
+            )
             assert component_logits.size(0) == locs.size(0)
             batch_shape = ()
         else:
-            assert (
-                coord_scale.dim() > 1
-            ), "The coord_scale parameter in MixtureOfDiagNormalsSharedCovariance should be ... x B x D dimensional"
+            assert coord_scale.dim() > 1, (
+                "The coord_scale parameter in MixtureOfDiagNormalsSharedCovariance should be ... x B x D dimensional"
+            )
             assert component_logits.dim() > 1, (
                 "The component_logits parameter in MixtureOfDiagNormalsSharedCovariance should be "
                 "... x B x K dimensional"

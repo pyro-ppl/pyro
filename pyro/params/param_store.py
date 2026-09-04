@@ -60,15 +60,15 @@ class ParamStoreDict:
         """
         initialize ParamStore data structures
         """
-        self._params: Dict[str, torch.Tensor] = (
-            {}
-        )  # dictionary from param name to param
-        self._param_to_name: Dict[torch.Tensor, str] = (
-            {}
-        )  # dictionary from unconstrained param to param name
-        self._constraints: Dict[str, constraints.Constraint] = (
-            {}
-        )  # dictionary from param name to constraint object
+        self._params: Dict[
+            str, torch.Tensor
+        ] = {}  # dictionary from param name to param
+        self._param_to_name: Dict[
+            torch.Tensor, str
+        ] = {}  # dictionary from unconstrained param to param name
+        self._constraints: Dict[
+            str, constraints.Constraint
+        ] = {}  # dictionary from param name to constraint object
 
     def clear(self) -> None:
         """
@@ -289,9 +289,9 @@ class ParamStoreDict:
         Set the ParamStore state using state from a previous :meth:`get_state` call
         """
         assert isinstance(state, dict), "malformed ParamStore state"
-        assert set(state.keys()) == set(
-            ["params", "constraints"]
-        ), "malformed ParamStore keys {}".format(state.keys())
+        assert set(state.keys()) == set(["params", "constraints"]), (
+            "malformed ParamStore keys {}".format(state.keys())
+        )
 
         for param_name, param in state["params"].items():
             self._params[param_name] = param

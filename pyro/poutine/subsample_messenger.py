@@ -166,7 +166,8 @@ class SubsampleMessenger(IndepMessenger):
         )
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
         if isinstance(self.size, torch.Tensor) or isinstance(  # type: ignore[unreachable]
-            self.subsample_size, torch.Tensor  # type: ignore[unreachable]
+            self.subsample_size,  # type: ignore[unreachable]
+            torch.Tensor,
         ):
             if not isinstance(msg["scale"], torch.Tensor):  # type: ignore[unreachable]
                 with ignore_jit_warnings():

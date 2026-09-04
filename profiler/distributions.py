@@ -74,10 +74,9 @@ def get_tool_cfg():
 @Profile(
     tool=get_tool,
     tool_cfg=get_tool_cfg,
-    fn_id=lambda dist, batch_size, *args, **kwargs: "sample_"
-    + dist.dist_class.__name__
-    + "_N="
-    + str(batch_size),
+    fn_id=lambda dist, batch_size, *args, **kwargs: (
+        "sample_" + dist.dist_class.__name__ + "_N=" + str(batch_size)
+    ),
 )
 def sample(dist, batch_size):
     return dist.sample(sample_shape=(batch_size,))
@@ -86,10 +85,12 @@ def sample(dist, batch_size):
 @Profile(
     tool=get_tool,
     tool_cfg=get_tool_cfg,
-    fn_id=lambda dist, batch, *args, **kwargs: "log_prob_"  #
-    + dist.dist_class.__name__
-    + "_N="
-    + str(batch.size()[0]),
+    fn_id=lambda dist, batch, *args, **kwargs: (
+        "log_prob_"  #
+        + dist.dist_class.__name__
+        + "_N="
+        + str(batch.size()[0])
+    ),
 )
 def log_prob(dist, batch):
     return dist.log_prob(batch)
@@ -138,7 +139,7 @@ def set_tool_cfg(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Profiling distributions library using various" "tools."
+        description="Profiling distributions library using varioustools."
     )
     parser.add_argument(
         "--tool",

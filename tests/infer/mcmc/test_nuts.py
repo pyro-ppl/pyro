@@ -359,8 +359,9 @@ def test_gaussian_hmm(num_steps):
         guide = AutoDelta(
             poutine.block(
                 model,
-                expose_fn=lambda msg: not msg["name"].startswith("x")
-                and not msg["name"].startswith("y"),
+                expose_fn=lambda msg: (
+                    not msg["name"].startswith("x") and not msg["name"].startswith("y")
+                ),
             )
         )
         elbo = TraceEnum_ELBO(max_plate_nesting=1)

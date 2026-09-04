@@ -849,9 +849,9 @@ def test_nested_autoguide(Elbo):
     for _, m in guide.named_modules():
         if m is guide:
             continue
-        assert (
-            m.master is not None and m.master() is guide
-        ), "master ref wrong for {}".format(m._pyro_name)
+        assert m.master is not None and m.master() is guide, (
+            "master ref wrong for {}".format(m._pyro_name)
+        )
 
     infer = SVI(
         model, guide, Adam({"lr": 0.005}), Elbo(strict_enumeration_warning=False)

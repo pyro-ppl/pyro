@@ -238,9 +238,7 @@ class LinearlyCoupledMaternGP(TimeSeriesModel):
             self.kernel.state_dim, dim=0
         ) * self.A.new_tensor([1.0] + [0.0] * (self.kernel.state_dim - 1)).repeat(
             self.num_gps
-        ).unsqueeze(
-            -1
-        )
+        ).unsqueeze(-1)
 
     def _stationary_covariance(self):
         return block_diag_embed(self.kernel.stationary_covariance())

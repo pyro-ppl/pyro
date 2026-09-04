@@ -145,24 +145,24 @@ class EnumMessenger(Messenger):
     """
 
     def __init__(self, first_available_dim: Optional[int] = None) -> None:
-        assert (
-            first_available_dim is None or first_available_dim < 0
-        ), first_available_dim
+        assert first_available_dim is None or first_available_dim < 0, (
+            first_available_dim
+        )
         self.first_available_dim = first_available_dim
         super().__init__()
 
     def __enter__(self) -> Self:
         if self.first_available_dim is not None:
             _ENUM_ALLOCATOR.set_first_available_dim(self.first_available_dim)
-        self._markov_depths: Dict[str, int] = (
-            {}
-        )  # site name -> depth (nonnegative integer)
-        self._param_dims: Dict[str, Dict[int, int]] = (
-            {}
-        )  # site name -> (enum dim -> unique id)
-        self._value_dims: Dict[str, Dict[int, int]] = (
-            {}
-        )  # site name -> (enum dim -> unique id)
+        self._markov_depths: Dict[
+            str, int
+        ] = {}  # site name -> depth (nonnegative integer)
+        self._param_dims: Dict[
+            str, Dict[int, int]
+        ] = {}  # site name -> (enum dim -> unique id)
+        self._value_dims: Dict[
+            str, Dict[int, int]
+        ] = {}  # site name -> (enum dim -> unique id)
         return super().__enter__()
 
     @ignore_jit_warnings()
@@ -207,9 +207,9 @@ class EnumMessenger(Messenger):
             value = value.reshape(value.shape[:1] + (1,) * (-1 - target_dim))
             value._pyro_categorical_support = categorical_support  # type: ignore[attr-defined]
         elif actual_dim < target_dim:
-            assert (
-                value.size(target_dim - event_dim) == 1
-            ), "pyro.markov dim conflict at dim {}".format(actual_dim)
+            assert value.size(target_dim - event_dim) == 1, (
+                "pyro.markov dim conflict at dim {}".format(actual_dim)
+            )
             value = value.transpose(target_dim - event_dim, actual_dim - event_dim)
             while value.dim() and value.size(0) == 1:
                 value = value.squeeze(0)

@@ -236,9 +236,9 @@ class SVGD:
     ):
         assert callable(model)
         assert isinstance(kernel, SteinKernel), "Must provide a valid SteinKernel"
-        assert isinstance(
-            optim, pyro.optim.PyroOptim
-        ), "Must provide a valid Pyro optimizer"
+        assert isinstance(optim, pyro.optim.PyroOptim), (
+            "Must provide a valid Pyro optimizer"
+        )
         assert num_particles > 1, "Must use at least two particles"
         assert max_plate_nesting >= 0
         assert mode in [

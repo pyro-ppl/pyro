@@ -17,9 +17,9 @@ def pack(value, dim_to_symbol):
     :param dim_to_symbol: a map from negative integers to characters
     """
     if isinstance(value, torch.Tensor):
-        assert not hasattr(
-            value, "_pyro_dims"
-        ), "tried to pack an already-packed tensor"
+        assert not hasattr(value, "_pyro_dims"), (
+            "tried to pack an already-packed tensor"
+        )
         shape = value.shape
         shift = len(shape)
         try:

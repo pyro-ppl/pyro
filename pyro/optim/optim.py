@@ -89,17 +89,17 @@ class PyroOptim:
         self.pt_optim_constructor = optim_constructor
 
         # must be callable or dict
-        assert callable(optim_args) or isinstance(
-            optim_args, dict
-        ), "optim_args must be function that returns defaults or a defaults dictionary"
+        assert callable(optim_args) or isinstance(optim_args, dict), (
+            "optim_args must be function that returns defaults or a defaults dictionary"
+        )
 
         if clip_args is None:
             clip_args = {}
 
         # must be callable or dict
-        assert callable(clip_args) or isinstance(
-            clip_args, dict
-        ), "clip_args must be function that returns defaults or a defaults dictionary"
+        assert callable(clip_args) or isinstance(clip_args, dict), (
+            "clip_args must be function that returns defaults or a defaults dictionary"
+        )
 
         # hold our args to be called/used
         self.pt_optim_args = optim_args
@@ -217,9 +217,9 @@ class PyroOptim:
                 opt_dict = self.pt_optim_args(module_name, stripped_param_name)
 
             # must be dictionary
-            assert isinstance(
-                opt_dict, dict
-            ), "per-param optim arg must return defaults dictionary"
+            assert isinstance(opt_dict, dict), (
+                "per-param optim arg must return defaults dictionary"
+            )
             return opt_dict
         else:
             return self.pt_optim_args
@@ -248,9 +248,9 @@ class PyroOptim:
             clip_dict = self.pt_clip_args(module_name, stripped_param_name)
 
             # must be dictionary
-            assert isinstance(
-                clip_dict, dict
-            ), "per-param clip arg must return defaults dictionary"
+            assert isinstance(clip_dict, dict), (
+                "per-param clip arg must return defaults dictionary"
+            )
             return clip_dict
         else:
             return self.pt_clip_args

@@ -585,8 +585,9 @@ class MHResampler(torch.nn.Module):
                 idx = torch.rand(*prob.shape) <= prob
                 self.transition_count[idx] += 1
                 for field_desc in fields(self.samples):
-                    field, new_field = getattr(self.samples, field_desc.name), getattr(
-                        new_samples, field_desc.name
+                    field, new_field = (
+                        getattr(self.samples, field_desc.name),
+                        getattr(new_samples, field_desc.name),
                     )
                     if isinstance(field, dict):
                         for key in field:

@@ -93,8 +93,9 @@ def main(args):
 
         # do rolling prediction
         print("doing one-step-ahead forecasting...")
-        onestep_means, onestep_stds = np.zeros((T_onestep, obs_dim)), np.zeros(
-            (T_onestep, obs_dim)
+        onestep_means, onestep_stds = (
+            np.zeros((T_onestep, obs_dim)),
+            np.zeros((T_onestep, obs_dim)),
         )
         for t in range(T_onestep):
             # predict one step into the future, conditioning on all previous data.

@@ -191,9 +191,7 @@ def _monotonic_rational_spline(
                 inputs <= yc
             ).float() + (
                 (wc - input_lambdas * wb) * inputs + input_lambdas * wb * yb - wc * yc
-            ) * (
-                inputs > yc
-            ).float()
+            ) * (inputs > yc).float()
 
             denominator = ((wc - wa) * inputs + wa * ya - wc * yc) * (
                 inputs <= yc

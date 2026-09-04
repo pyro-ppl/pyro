@@ -35,9 +35,9 @@ class HashingMarginal(dist.Distribution):
     """
 
     def __init__(self, trace_dist, sites=None):
-        assert isinstance(
-            trace_dist, TracePosterior
-        ), "trace_dist must be trace posterior distribution object"
+        assert isinstance(trace_dist, TracePosterior), (
+            "trace_dist must be trace posterior distribution object"
+        )
 
         if sites is None:
             sites = "_RETURN"
@@ -169,9 +169,9 @@ def pqueue(fn, queue):
 
     def _fn(*args, **kwargs):
         for i in range(int(1e6)):
-            assert (
-                not queue.empty()
-            ), "trying to get() from an empty queue will deadlock"
+            assert not queue.empty(), (
+                "trying to get() from an empty queue will deadlock"
+            )
 
             priority, next_trace = queue.get()
             try:

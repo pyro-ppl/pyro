@@ -1191,9 +1191,7 @@ class EwmaLog:
         else:
             ewma = inputs * (1.0 - self.alpha) / (1 - self.alpha**self.n) + torch.exp(
                 self.s - s
-            ) * self.ewma * (self.alpha - self.alpha**self.n) / (
-                1 - self.alpha**self.n
-            )
+            ) * self.ewma * (self.alpha - self.alpha**self.n) / (1 - self.alpha**self.n)
         self.ewma = ewma.detach()
         self.s = s.detach()
         return _ewma_log_fn(inputs, ewma)

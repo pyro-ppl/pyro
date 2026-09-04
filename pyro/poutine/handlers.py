@@ -579,9 +579,9 @@ def queue(
     def wrapper(wrapped):
         def _fn(*args, **kwargs):
             for i in range(max_tries):
-                assert (
-                    not queue.empty()
-                ), "trying to get() from an empty queue will deadlock"
+                assert not queue.empty(), (
+                    "trying to get() from an empty queue will deadlock"
+                )
 
                 next_trace = queue.get()
                 try:

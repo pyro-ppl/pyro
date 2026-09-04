@@ -25,9 +25,9 @@ class NamedMessenger(ReentrantMessenger):
     """
 
     def __init__(self, first_available_dim=None):
-        assert (
-            first_available_dim is None or first_available_dim < 0
-        ), first_available_dim
+        assert first_available_dim is None or first_available_dim < 0, (
+            first_available_dim
+        )
         self.first_available_dim = first_available_dim
         self._saved_dims = set()
         return super().__init__()
