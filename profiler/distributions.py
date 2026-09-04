@@ -139,7 +139,7 @@ def set_tool_cfg(args):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Profiling distributions library using varioustools."
+        description="Profiling distributions library using various tools."
     )
     parser.add_argument(
         "--tool",
