@@ -59,6 +59,7 @@ def param(
     init_tensor: Union[torch.Tensor, Callable[[], torch.Tensor], None] = None,
     constraint: constraints.Constraint = constraints.real,
     event_dim: Optional[int] = None,
+    parametrization: Optional[str] = None,
 ) -> torch.Tensor:
     """
     Saves the variable as a parameter in the param store.
@@ -86,7 +87,13 @@ def param(
     """
     # Note effectful(-) requires the double passing of name below.
     args = (name,) if init_tensor is None else (name, init_tensor)
-    value = _param(*args, constraint=constraint, event_dim=event_dim, name=name)
+    value = _param(
+        *args,
+        constraint=constraint,
+        event_dim=event_dim,
+        name=name,
+        parametrization=parametrization,
+    )
     assert value is not None  # type narrowing guaranteed by _param
     return value
 
