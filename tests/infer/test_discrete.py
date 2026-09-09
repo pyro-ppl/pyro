@@ -317,6 +317,67 @@ def test_distribution_masked(infer, temperature):
     assert_equal(actual_z_mean, expected_z_mean, prec=1e-2)
 
 
+@pytest.mark.parametrize(
+    "infer,temperature,enum",
+    [
+        (infer_discrete, 0, ("sequential", "parallel")),
+        (infer_discrete, 1, ("sequential", "parallel")),
+        pytest.param(
+            infer_discrete,
+            0,
+            ("parallel", "other"),
+            marks=pytest.mark.xfail(reason="expected failed case without this fix"),
+        ),
+        pytest.param(
+            infer_discrete,
+            0,
+            ("sequential", "other"),
+            marks=pytest.mark.xfail(reason="expected failed case without this fix"),
+        ),
+        pytest.param(
+            infer_discrete,
+            1,
+            ("parallel", "other"),
+            marks=pytest.mark.xfail(reason="expected failed case without this fix"),
+        ),
+        pytest.param(
+            infer_discrete,
+            1,
+            ("sequential", "other"),
+            marks=pytest.mark.xfail(reason="expected failed case without this fix"),
+        ),
+    ],
+)
+def test_enum(infer, temperature, enum):
+    assert len(enum) == 2
+    first_available_dim = -1
+    p = torch.tensor(0.5)
+
+    @config_enumerate
+    def model(x_ch_obs=None, enum_option=None):
+        y = pyro.sample(
+            "y_pre",
+            dist.Binomial(probs=p, total_count=1),
+            infer={"enumerate": enum_option},
+        )
+        d_ch = dist.Normal(y, 1.0)
+        pyro.sample("x_ch_pre", d_ch, obs=x_ch_obs)
+        return y
+
+    y_posts = []
+    for enum_option in enum:
+        data_obs = {"x_ch_obs": torch.tensor(1.0), "enum_option": enum_option}
+        model_discrete = infer_discrete(
+            model, first_available_dim=first_available_dim, temperature=temperature
+        )
+        y_post = []
+        for ii in range(10**4):
+            y_post.append(model_discrete(**data_obs))
+        smpl = torch.stack(y_post)
+        y_posts.append(smpl.mean())
+    assert_equal(y_posts[0], y_posts[1], prec=1e-2)
+
+
 @pytest.mark.parametrize("length", [1, 2, 10, 100])
 @pytest.mark.parametrize(
     "infer,temperature",
