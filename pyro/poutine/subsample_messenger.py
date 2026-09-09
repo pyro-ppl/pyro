@@ -109,6 +109,16 @@ class SubsampleMessenger(IndepMessenger):
         """
         Helper function for plate. See its docstrings for details.
         """
+        if size is not None and size < 0:
+            raise ValueError(
+                f"Argument 'size' must be a non-negative integer, "
+                f"but got {size!r}"
+            )
+        if subsample_size is not None and subsample_size < 0:
+            raise ValueError(
+                f"Argument 'subsample_size' must be a non-negative integer, "
+                f"but got {subsample_size!r}"
+            )
         if size is None:
             assert subsample_size is None
             assert subsample is None

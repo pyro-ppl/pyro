@@ -940,6 +940,18 @@ def test_plate_error_on_enter():
     assert len(_DIM_ALLOCATOR._stack) == 0, "stack was not cleaned on error"
 
 
+@pytest.mark.parametrize("size", [-1, -5])
+def test_plate_rejects_negative_size(size):
+    with pytest.raises(ValueError, match="'size' must be a non-negative"):
+        pyro.plate("foo", size)
+
+
+@pytest.mark.parametrize("subsample_size", [-1, -5])
+def test_plate_rejects_negative_subsample_size(subsample_size):
+    with pytest.raises(ValueError, match="'subsample_size' must be a non-negative"):
+        pyro.plate("foo", 10, subsample_size=subsample_size)
+
+
 @pytest.mark.parametrize(
     "graph_type, expected", [("flat", set()), ("dense", {"x", "y"})]
 )
