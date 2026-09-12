@@ -54,8 +54,11 @@ class LKJ(TransformedDistribution):
         )
 
     def expand(self, batch_shape, _instance=None):
-        new = self._get_checked_instance(LKJCholesky, _instance)
-        return super(LKJCholesky, self).expand(batch_shape, _instance=new)
+        new = self._get_checked_instance(LKJ, _instance)
+        new = super().expand(batch_shape, _instance=new)
+        new.dim = self.dim
+        new.concentration = new.base_dist.concentration
+        return new
 
     @property
     def mean(self):

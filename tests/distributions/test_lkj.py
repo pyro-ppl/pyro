@@ -13,7 +13,8 @@ from torch.distributions import (
     transform_to,
 )
 
-from pyro.distributions import constraints, transforms
+import pyro
+from pyro.distributions import LKJ, constraints, transforms
 from pyro.distributions.torch import LKJCholesky
 from tests.common import assert_equal, assert_tensors_equal
 
@@ -147,3 +148,42 @@ def test_sample_batch():
     # samples had the wrong shape when sample_shape is non-unit
     assert dist.shape((4,)) == torch.Size([4, 12, 3, 3])
     assert dist.sample((4,)).shape == torch.Size([4, 12, 3, 3])
+
+
+@pytest.mark.parametrize("dim", [2, 3])
+@pytest.mark.parametrize(
+    "batch_shape, expanded_shape", [((), (4,)), ((1,), (4,)), ((2, 1), (2, 4))]
+)
+def test_lkj_expand(dim, batch_shape, expanded_shape):
+    concentration = (
+        torch.arange(math.prod(batch_shape), dtype=torch.get_default_dtype()).reshape(
+            batch_shape
+        )
+        + 1.5
+    )
+    original = LKJ(dim, concentration, validate_args=False)
+    expanded = original.expand(expanded_shape)
+    expected = LKJ(dim, concentration.expand(expanded_shape), validate_args=False)
+
+    assert isinstance(expanded, LKJ)
+    assert expanded.batch_shape == torch.Size(expanded_shape)
+    assert original.batch_shape == torch.Size(batch_shape)
+    assert expanded.event_shape == (dim, dim)
+    assert expanded.dim == dim
+    assert not expanded._validate_args
+    assert_equal(expanded.concentration, expected.concentration)
+    assert_equal(expanded.mean, expected.mean)
+
+    samples = expanded.sample((5,))
+    assert samples.shape == (5,) + expanded_shape + (dim, dim)
+    assert_equal(expanded.log_prob(samples), expected.log_prob(samples))
+    reexpanded = expanded.expand((5,) + expanded_shape)
+    assert_equal(reexpanded.log_prob(samples), expanded.log_prob(samples))
+
+
+@pytest.mark.parametrize("dim", [2, 3])
+def test_lkj_plate(dim):
+    with pyro.plate("batch", 4):
+        samples = pyro.sample("correlation", LKJ(dim, torch.tensor(2.0)))
+    assert samples.shape == (4, dim, dim)
+    assert constraints.corr_matrix.check(samples).all()
