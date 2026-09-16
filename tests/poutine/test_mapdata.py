@@ -183,3 +183,21 @@ def test_model_guide_mismatch(behavior, model_size, guide_size, model):
     else:
         with pytest.raises(ValueError):
             poutine.replay(model, trace=model.trace)(model_size)
+
+
+def test_subsample_log_prob_no_tracer_warning():
+    import warnings
+
+    from pyro.poutine.subsample_messenger import _Subsample
+
+    subsample = _Subsample(size=10, subsample_size=5)
+    x = torch.zeros(5)
+
+    with warnings.catch_warnings(record=True) as recorded:
+        warnings.simplefilter("always")
+        torch.jit.trace(lambda t: subsample.log_prob(t), (x,))
+
+    tracer_warnings = [
+        str(m.message) for m in recorded if "Tracer" in type(m.message).__name__
+    ]
+    assert tracer_warnings == []
