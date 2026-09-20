@@ -10,6 +10,10 @@ from torch.utils._pytree import tree_flatten, tree_map, tree_unflatten
 _Tensor = TypeVar("_Tensor", bound=torch.Tensor)
 
 
+def _is_torch_size(x) -> bool:
+    return isinstance(x, torch.Size)
+
+
 class ProvenanceTensor(torch.Tensor):
     """
     Provenance tracking implementation in Pytorch.
@@ -91,11 +95,21 @@ def _track_provenance_set(x, provenance: frozenset):
     return type(x)(track_provenance(part, provenance) for part in x)
 
 
+@track_provenance.register(torch.Size)
+def _track_provenance_size(x, provenance: frozenset):
+    # See the matching ``extract_provenance`` registration above.
+    return x
+
+
 @track_provenance.register(list)
 @track_provenance.register(tuple)
 @track_provenance.register(dict)
 def _track_provenance_pytree(x, provenance: frozenset):
-    return tree_map(partial(track_provenance, provenance=provenance), x)
+    return tree_map(
+        partial(track_provenance, provenance=provenance),
+        x,
+        is_leaf=_is_torch_size,
+    )
 
 
 @track_provenance.register
@@ -123,6 +137,15 @@ def _extract_provenance_tensor(x):
     return x._t, x._provenance
 
 
+@extract_provenance.register(torch.Size)
+def _extract_provenance_size(x):
+    # ``torch.Size`` subclasses ``tuple`` but must be preserved as-is: many
+    # torch ops (e.g. ``Tensor.new``) distinguish ``torch.Size([3])`` from the
+    # plain tuple ``(3,)``. Flattening it through ``tree_flatten``/``tree_unflatten``
+    # silently converts it to a tuple and changes the semantics of the op.
+    return x, frozenset()
+
+
 @extract_provenance.register(frozenset)
 @extract_provenance.register(set)
 def _extract_provenance_set(x):
@@ -140,7 +163,9 @@ def _extract_provenance_set(x):
 @extract_provenance.register(tuple)
 @extract_provenance.register(dict)
 def _extract_provenance_pytree(x):
-    flat_args, spec = tree_flatten(x)
+    # Treat ``torch.Size`` as a leaf so it survives the round-trip unchanged
+    # (``tree_flatten`` would otherwise decompose it into a plain tuple).
+    flat_args, spec = tree_flatten(x, is_leaf=_is_torch_size)
     xs = []
     provenance = frozenset()
     for x, p in map(extract_provenance, flat_args):

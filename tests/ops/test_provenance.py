@@ -66,3 +66,13 @@ def test_track_provenance(x):
     old_provenance = get_provenance(x)
     provenance = old_provenance | new_provenance
     assert provenance == get_provenance(track_provenance(x, new_provenance))
+
+
+def test_torch_size_survives_provenance_roundtrip():
+    # ``torch.Size`` subclasses ``tuple``; pytree flattening would silently
+    # convert it to a plain tuple, breaking ops that distinguish the two
+    # (e.g. ``Tensor.new``). Regression test for #3436.
+    x = ProvenanceTensor(torch.zeros(10), frozenset({"x"}))
+    out = x.new(torch.Size([3]))
+    assert out.shape == torch.Size([3])
+    assert isinstance(out, ProvenanceTensor)
