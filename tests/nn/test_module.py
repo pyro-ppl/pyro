@@ -412,6 +412,26 @@ def test_clear(local_params):
             assert_equal(actual, expected)
 
 
+def test_frozen_parameter_not_registered():
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.x = nn.Parameter(torch.zeros(1))
+            self.y = nn.Parameter(torch.zeros(1), requires_grad=False)
+
+        def forward(self):
+            return self.x + self.y
+
+    pyro.clear_param_store()
+    m = Model()
+    m()
+
+    assert "x" in pyro.get_param_store().keys()
+    assert "y" not in pyro.get_param_store().keys()
+    assert m.x.requires_grad
+    assert not m.y.requires_grad
+
+
 def test_sample():
     class Model(nn.Linear, PyroModule):
         def __init__(self, in_features, out_features):

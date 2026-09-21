@@ -628,9 +628,14 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
 
         result = super().__getattr__(name)
 
-        # Regular nn.Parameters trigger pyro.param statements.
-        if isinstance(result, torch.nn.Parameter) and not name.endswith(
-            "_unconstrained"
+        # Regular nn.Parameters trigger pyro.param statements. Frozen
+        # parameters (requires_grad=False) are not managed by Pyro, so we
+        # leave them untouched instead of registering them in the param
+        # store (which would also force requires_grad=True).
+        if (
+            isinstance(result, torch.nn.Parameter)
+            and result.requires_grad
+            and not name.endswith("_unconstrained")
         ):
             if self._pyro_context.active and not _is_module_local_param_enabled():
                 pyro.param(self._pyro_get_fullname(name), result)
