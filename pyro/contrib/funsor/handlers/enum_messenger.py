@@ -226,7 +226,7 @@ def queue(
     return a return value from a complete trace in the queue.
 
     :param fn: a stochastic function (callable containing Pyro primitive calls)
-    :param q: a queue data structure like multiprocessing.Queue to hold partial traces
+    :param queue: a queue data structure like multiprocessing.Queue to hold partial traces
     :param max_tries: maximum number of attempts to compute a single complete trace
     :param extend_fn: function (possibly stochastic) that takes a partial trace and a site,
         and returns a list of extended traces

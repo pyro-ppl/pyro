@@ -338,8 +338,10 @@ class CompartmentalModel(ABC):
         For more complex flows (non-sequential, branching, looping,
         duplicating, etc.), users may override this method.
 
-        :param dict state: A dictionary mapping compartment name to current
-            tensor value. This should be updated in-place.
+        :param dict prev: A dictionary mapping compartment name to tensor value
+            before time step ``t``.
+        :param dict curr: A dictionary mapping compartment name to tensor value
+            after time step ``t``.
         :param t: A time-like index. During inference ``t`` may be either a
             slice (for vectorized inference) or an integer time index. During
             prediction ``t`` will be integer time index.
@@ -362,7 +364,7 @@ class CompartmentalModel(ABC):
         """
         Generate data from the prior.
 
-        :pram dict fixed: A dictionary of parameters on which to condition.
+        :param dict fixed: A dictionary of parameters on which to condition.
             These must be top-level parentless nodes, i.e. have no
             upstream stochastic dependencies.
         :returns: A dictionary mapping sample site name to sampled value.
