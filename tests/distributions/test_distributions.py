@@ -314,6 +314,36 @@ def test_expand_by(dist, sample_shape, shape_type):
         check_sample_shapes(small, large)
 
 
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize("moment", ["mean", "variance"])
+@pytest.mark.parametrize(
+    "distribution", [dist.AsymmetricLaplace, dist.SoftAsymmetricLaplace]
+)
+def test_asymmetric_laplace_large_scale_moments(dtype, moment, distribution):
+    parameters = dict(loc=2.0)
+    if distribution is dist.SoftAsymmetricLaplace:
+        parameters["softness"] = 0.1
+    if moment == "mean":
+        large_scale = 1e20 if dtype == torch.float32 else 1e155
+        scale = torch.tensor([1.0, large_scale], dtype=dtype)
+        asymmetry = torch.tensor([[0.5], [1.0], [2.0]], dtype=dtype)
+        d = distribution(**parameters, scale=scale, asymmetry=asymmetry)
+        # Independent unit-rate exponentials give E[loc - L*U + R*V].
+        expected = 2 + scale.double() * (1 / asymmetry.double() - asymmetry)
+        torch.testing.assert_close(d.mean, expected.to(dtype))
+        return
+
+    large_scale = 1e19 if dtype == torch.float32 else 8e153
+    scale = torch.tensor([1.0, large_scale], dtype=dtype, requires_grad=True)
+    d = distribution(**parameters, scale=scale, asymmetry=1.0)
+    # Each independent exponential has variance 1; add Gaussian variance if soft.
+    coefficient = 2.01 if distribution is dist.SoftAsymmetricLaplace else 2.0
+    expected_variance = coefficient * scale.double().square()
+    torch.testing.assert_close(d.variance, expected_variance.to(dtype))
+    gradient = torch.autograd.grad(d.variance.sum(), scale)[0]
+    torch.testing.assert_close(gradient, 2 * coefficient * scale)
+
+
 @pytest.mark.parametrize("sample_shape", [(), (2,), (2, 3)])
 @pytest.mark.parametrize("shape_type", [torch.Size, tuple, list])
 @pytest.mark.parametrize("default", [False, True])
