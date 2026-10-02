@@ -171,11 +171,20 @@ class EnumMessenger(Messenger):
         :param msg: current message at a trace site.
         :returns: a sample from the stochastic function at the site.
         """
-        if msg["done"] or not isinstance(msg["fn"], TorchDistributionMixin):
+        if not isinstance(msg["fn"], TorchDistributionMixin):
             return
 
         assert isinstance(msg["name"], str)
         assert msg["infer"] is not None
+        if msg["done"]:
+            # Replayed sites can depend on globally enumerated model variables.
+            # Keep model dimensions separate from the guide's shared metadata,
+            # whose Markov scope may also contain guide-only sites.
+            msg["infer"] = msg["infer"].copy()
+            msg["infer"]["_dim_to_id"] = msg["infer"].get("_dim_to_id", {}).copy()
+            self._param_dims[msg["name"]] = _ENUM_ALLOCATOR.dim_to_id.copy()
+            return
+
         # Compute upstream dims in scope; these are unsafe to use for this site's target_dim.
         scope = msg["infer"].get("_markov_scope")  # site name -> markov depth
         param_dims = _ENUM_ALLOCATOR.dim_to_id.copy()  # enum dim -> unique id
