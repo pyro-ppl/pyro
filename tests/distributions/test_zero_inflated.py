@@ -75,6 +75,26 @@ def test_zip_mean_variance(gate, rate):
     assert_close(expected_std, estimated_std, atol=1e-02)
 
 
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize("base_type", [Poisson, Normal])
+def test_zero_inflated_variance_large_mean(dtype, base_type):
+    mean = torch.tensor([1e3, 1e10, 1e20, 1e20], dtype=dtype, requires_grad=True)
+    gate = torch.tensor([0.25, 0.0, 1e-20, 1.0], dtype=dtype)
+    base = base_type(mean) if base_type is Poisson else Normal(mean, 1.0)
+    distribution = ZeroInflatedDistribution(base, gate=gate)
+    # Law of total variance, evaluated in double precision around each mean.
+    g, m, v = gate.double(), mean.double(), base.variance.double()
+    mixture_mean = (1 - g) * m
+    expected = (1 - g) * (v + (m - mixture_mean).square())
+    expected = expected + g * mixture_mean.square()
+    torch.testing.assert_close(distribution.variance, expected.to(dtype))
+    gradient = torch.autograd.grad(distribution.variance.sum(), mean)[0]
+    expected_gradient = 2 * g * (1 - g) * m
+    if base_type is Poisson:
+        expected_gradient = expected_gradient + (1 - g)
+    torch.testing.assert_close(gradient, expected_gradient.to(dtype))
+
+
 @pytest.mark.parametrize("total_count", [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])
 @pytest.mark.parametrize("probs", [0.1, 0.5, 0.9])
 def test_zinb_0_gate(total_count, probs):
