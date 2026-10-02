@@ -140,13 +140,13 @@ class SoftAsymmetricLaplace(TorchDistribution):
         return self.scale * self.softness
 
     def expand(self, batch_shape, _instance=None):
-        new = self._get_checked_instance(AsymmetricLaplace, _instance)
+        new = self._get_checked_instance(SoftAsymmetricLaplace, _instance)
         batch_shape = torch.Size(batch_shape)
         new.loc = self.loc.expand(batch_shape)
         new.scale = self.scale.expand(batch_shape)
         new.asymmetry = self.asymmetry.expand(batch_shape)
         new.softness = self.softness.expand(batch_shape)
-        super(AsymmetricLaplace, new).__init__(batch_shape, validate_args=False)
+        super(SoftAsymmetricLaplace, new).__init__(batch_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
 
