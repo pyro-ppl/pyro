@@ -407,7 +407,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.9.1")
+    assert pyro.__version__.startswith("1.9.2")
     # Parse command line arguments
     parser = argparse.ArgumentParser(
         description="single-cell ANnotation using Variational Inference"
