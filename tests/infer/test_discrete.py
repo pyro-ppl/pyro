@@ -398,6 +398,101 @@ def test_prob(nderivs):
         assert_equal(expected_grad, actual_grad, prec=1e-3)
 
 
+@pytest.mark.parametrize("batch_shape", [(), (3,), (2, 3)])
+def test_replayed_continuous_site_depends_on_enumerated_site(batch_shape):
+    values = torch.linspace(-1.8, 1.7, math.prod(batch_shape)).reshape(batch_shape)
+    means = torch.tensor([-1.0, 1.0])
+    probs = torch.tensor([0.3, 0.7])
+
+    @config_enumerate
+    def model():
+        with pyro.plate_stack("items", batch_shape):
+            category = pyro.sample("category", dist.Categorical(probs))
+            latent = pyro.sample("latent", dist.Normal(means[category], 0.7))
+            pyro.sample("observed", dist.Normal(latent, 1.0), obs=values)
+        return category, latent
+
+    def guide():
+        with pyro.plate_stack("items", batch_shape):
+            pyro.sample("latent", dist.Delta(values))
+
+    guide_trace = poutine.trace(guide).get_trace()
+    replayed_model = poutine.replay(model, trace=guide_trace)
+    actual, latent = infer_discrete(
+        replayed_model, first_available_dim=-len(batch_shape) - 1, temperature=0
+    )()
+    expected = (
+        probs.log() + dist.Normal(means, 0.7).log_prob(values.unsqueeze(-1))
+    ).argmax(-1)
+    assert_equal(actual, expected)
+    assert_equal(latent, values)
+
+
+def test_replayed_markov_guide_auxiliary_sites():
+    values = torch.tensor([-0.2, 0.8])
+
+    @config_enumerate
+    def model():
+        category = pyro.sample("category", dist.Categorical(torch.tensor([0.3, 0.7])))
+        latents = []
+        for t in pyro.markov(range(2)):
+            latents.append(pyro.sample("latent_{}".format(t), dist.Normal(0.0, 1.0)))
+        return category, torch.stack(latents)
+
+    def guide():
+        for t in pyro.markov(range(2)):
+            pyro.sample(
+                "aux_{}".format(t),
+                dist.Normal(0.0, 1.0),
+                infer={"is_auxiliary": True},
+            )
+            pyro.sample("latent_{}".format(t), dist.Delta(values[t]))
+
+    guide_trace = poutine.trace(guide).get_trace()
+    category, latents = infer_discrete(
+        poutine.replay(model, trace=guide_trace),
+        first_available_dim=-1,
+        temperature=0,
+    )()
+    assert_equal(category, torch.tensor(1))
+    assert_equal(latents, values)
+
+
+@pytest.mark.parametrize("enumerate_guide", [False, True])
+def test_replayed_guide_trace_reused_with_different_plates(enumerate_guide):
+    value = torch.tensor(0.2)
+
+    def guide():
+        pyro.sample("latent", dist.Delta(value))
+
+    if enumerate_guide:
+        guide = poutine.enum(guide, first_available_dim=-1)
+    guide_trace = poutine.trace(guide).get_trace()
+    original_dims = guide_trace.nodes["latent"]["infer"].get("_dim_to_id", {}).copy()
+
+    @config_enumerate
+    def model(probs):
+        with pyro.plate_stack("items", probs.shape[:-1]):
+            category = pyro.sample("category", dist.Categorical(probs))
+            latent = pyro.sample("latent", dist.Normal(0.0, 1.0))
+        return category, latent
+
+    for probs in [
+        torch.tensor([0.3, 0.7]),
+        torch.tensor([[0.3, 0.7], [0.8, 0.2], [0.1, 0.9]]),
+    ]:
+        category, latent = infer_discrete(
+            poutine.replay(model, trace=guide_trace),
+            first_available_dim=-probs.dim(),
+            temperature=0,
+        )(probs)
+        assert_equal(category, probs.argmax(-1))
+        assert_equal(latent, value)
+        assert (
+            guide_trace.nodes["latent"]["infer"].get("_dim_to_id", {}) == original_dims
+        )
+
+
 def test_warning():
     data = torch.randn(4)
 
