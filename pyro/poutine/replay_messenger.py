@@ -4,10 +4,11 @@
 import warnings
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
+import numpy as np
 import torch
 
 from pyro.poutine.messenger import Messenger
-from pyro.poutine.util import site_is_subsample
+from pyro.poutine.util import is_validation_enabled, site_is_subsample
 
 if TYPE_CHECKING:
     from pyro.poutine.runtime import Message
@@ -15,12 +16,39 @@ if TYPE_CHECKING:
 
 
 def _subsample_values_equal(a: Any, b: Any) -> bool:
-    """Compare two subsample index values for equality."""
-    if isinstance(a, torch.Tensor) and isinstance(b, torch.Tensor):
-        return torch.equal(a, b)
-    if isinstance(a, torch.Tensor) or isinstance(b, torch.Tensor):
+    """Return True if two subsample index values are equal.
+
+    This is a best-effort diagnostic used only to decide whether to warn when
+    ``ReplayMessenger`` overrides an explicit subsample. Subsample values can
+    be PyTorch tensors (possibly on different devices) or numpy arrays / lists
+    (which ``SubsampleMessenger._subsample`` accepts via ``len(subsample)``).
+    The comparison must never raise, so on any failure we conservatively assume
+    the values match and skip the warning.
+    """
+    if a is b:
+        return True
+    try:
+        a_t = torch.as_tensor(a)
+        b_t = torch.as_tensor(b)
+    except Exception:
+        # Non-tensor-compatible values: compare as numpy arrays, then fall back
+        # to Python equality. Either can raise, so guard both.
+        try:
+            return bool(np.array_equal(np.asarray(a), np.asarray(b)))
+        except Exception:
+            try:
+                return bool(a == b)
+            except Exception:
+                return True  # cannot compare -> stay silent
+    if a_t.shape != b_t.shape:
         return False
-    return bool(a == b)
+    try:
+        # torch.equal requires matching device and dtype; move ``b`` onto ``a``
+        # so identical indices on different devices compare equal instead of
+        # raising ``RuntimeError``.
+        return bool(torch.equal(a_t, b_t.to(device=a_t.device, dtype=a_t.dtype)))
+    except Exception:
+        return True  # e.g. non-numeric dtype -> stay silent
 
 
 class ReplayMessenger(Messenger):
@@ -95,7 +123,8 @@ class ReplayMessenger(Messenger):
             # the model's index decouples the model's and guide's minibatches.
             # See https://github.com/pyro-ppl/pyro/issues/3468
             if (
-                msg["value"] is not None
+                is_validation_enabled()
+                and msg["value"] is not None
                 and guide_msg["value"] is not None
                 and site_is_subsample(msg)
                 and not _subsample_values_equal(msg["value"], guide_msg["value"])

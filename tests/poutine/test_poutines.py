@@ -9,6 +9,7 @@ import warnings
 from queue import Queue
 from unittest import TestCase
 
+import numpy as np
 import pytest
 import torch
 import torch.nn as nn
@@ -171,6 +172,91 @@ def test_replay_no_warn_when_subsample_matches():
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(idx)
+
+
+def test_replay_warns_on_numpy_subsample_mismatch():
+    """Replay warns (and never raises) for numpy-array subsample mismatches.
+
+    ``pyro.plate`` accepts a numpy array as ``subsample=`` (via
+    ``len(subsample)``). The equality check in ``ReplayMessenger`` must not
+    raise ``ValueError: The truth value of an array is ambiguous`` when both
+    the model's and guide's subsamples are numpy arrays (see #3468).
+    """
+    N = 6
+    idx_model = np.array([4, 0, 1])
+    idx_guide = np.array([0, 1, 2])
+
+    def make_model(idx):
+        def model():
+            with pyro.plate("data", N, dim=-1, subsample=idx):
+                pyro.sample("mu", dist.Normal(0.0, 1.0))
+
+        return model
+
+    model = make_model(idx_model)
+    guide_trace = poutine.trace(make_model(idx_guide)).get_trace()
+
+    with pytest.warns(UserWarning, match="subsample site 'data'"):
+        poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace()
+
+
+def test_subsample_values_equal_numpy_and_shapes():
+    """The subsample equality helper must compare numpy/lists and never raise."""
+    from pyro.poutine.replay_messenger import _subsample_values_equal
+
+    assert _subsample_values_equal(torch.tensor([0, 1, 2]), torch.tensor([0, 1, 2]))
+    assert not _subsample_values_equal(
+        torch.tensor([0, 1, 2]), torch.tensor([0, 1, 3])
+    )
+    # shape mismatch
+    assert not _subsample_values_equal(torch.tensor([0, 1, 2]), torch.tensor([0, 1]))
+    # numpy vs numpy
+    assert _subsample_values_equal(np.array([0, 1, 2]), np.array([0, 1, 2]))
+    assert not _subsample_values_equal(np.array([0, 1, 2]), np.array([0, 1, 3]))
+    # numpy vs tensor
+    assert _subsample_values_equal(np.array([0, 1, 2]), torch.tensor([0, 1, 2]))
+    # lists
+    assert _subsample_values_equal([0, 1, 2], [0, 1, 2])
+    assert not _subsample_values_equal([0, 1, 2], [0, 1, 3])
+    # A string is never a valid subsample, but comparing it must not raise.
+    assert isinstance(
+        _subsample_values_equal(np.array([0, 1, 2]), "not-an-index"), bool
+    )
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
+def test_replay_no_crash_cross_device_subsample():
+    """Replay must not raise when subsample tensors live on different devices.
+
+    With guide ``subsample=idx.to('cuda')`` and model ``subsample=idx`` (CPU),
+    ``torch.equal`` used to raise ``RuntimeError: Expected all tensors to be on
+    the same device``. The comparison now moves one tensor onto the other's
+    device, so identical indices compare equal (no warning) and different
+    indices warn instead of crashing (see #3468).
+    """
+    N = 6
+    idx_cpu = torch.tensor([4, 0, 1])
+    idx_cuda = idx_cpu.to("cuda")
+
+    def make_model(idx):
+        def model():
+            with pyro.plate("data", N, dim=-1, subsample=idx):
+                pyro.sample("mu", dist.Normal(0.0, 1.0))
+
+        return model
+
+    model = make_model(idx_cpu)
+    guide_trace = poutine.trace(make_model(idx_cuda)).get_trace()
+
+    # identical values on different devices -> no warning, no RuntimeError
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace()
+
+    # different values on different devices -> warn
+    model = make_model(torch.tensor([0, 1, 2]))
+    with pytest.warns(UserWarning, match="subsample site 'data'"):
+        poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace()
 
 
 class BlockHandlerTests(NormalNormalNormalHandlerTestCase):
