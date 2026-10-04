@@ -314,6 +314,26 @@ def test_expand_by(dist, sample_shape, shape_type):
         check_sample_shapes(small, large)
 
 
+@pytest.mark.parametrize("shape", [(), (1,), (2, 1)])
+@pytest.mark.parametrize(
+    "distribution", [dist.AsymmetricLaplace, dist.SoftAsymmetricLaplace]
+)
+def test_asymmetric_laplace_expand_preserves_distribution(shape, distribution):
+    parameters = dict(loc=torch.zeros(shape), scale=2.0, asymmetry=1.5)
+    if distribution is dist.SoftAsymmetricLaplace:
+        parameters["softness"] = 0.3
+    small = distribution(**parameters)
+    large = small.expand((3, 2, 1))
+    assert type(large) is distribution
+    assert large.batch_shape == (3, 2, 1)
+    value = torch.zeros(3, 2, 1)
+    assert_close(large.log_prob(value), small.log_prob(value))
+    assert_close(large.variance, small.variance.expand(3, 2, 1))
+    assert large.rsample((4,)).shape == (4, 3, 2, 1)
+    if distribution is dist.SoftAsymmetricLaplace:
+        assert_close(large.softness, small.softness.expand(3, 2, 1))
+
+
 @pytest.mark.parametrize("sample_shape", [(), (2,), (2, 3)])
 @pytest.mark.parametrize("shape_type", [torch.Size, tuple, list])
 @pytest.mark.parametrize("default", [False, True])
