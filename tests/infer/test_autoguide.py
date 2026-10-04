@@ -522,10 +522,13 @@ def AutoGuideList_x(model):
         AutoLowRankMultivariateNormal,
         AutoLaplaceApproximation,
         AutoGuideList_x,
+        AutoNormalMessenger,
+        AutoHierarchicalNormalMessenger,
     ],
 )
 @pytest.mark.parametrize("Elbo", [Trace_ELBO, TraceGraph_ELBO, TraceEnum_ELBO])
 def test_quantiles(auto_class, Elbo):
+    xfail_messenger(auto_class, Elbo)
     def model():
         pyro.sample("y", dist.LogNormal(0.0, 1.0))
         pyro.sample("z", dist.Beta(2.0, 2.0).expand([2]).to_event(1))
