@@ -69,6 +69,36 @@ def test_svi_smoke():
         svi.step(data)
 
 
+@pytest.mark.parametrize("local_params", [False, True])
+def test_frozen_parameters_are_not_registered(local_params):
+    class Model(PyroModule):
+        def __init__(self):
+            super().__init__()
+            self.trainable = nn.Parameter(torch.zeros(1))
+            self.frozen = nn.Parameter(torch.ones(1), requires_grad=False)
+
+        def forward(self):
+            self.dynamic_frozen = nn.Parameter(
+                torch.full((1,), 2.0), requires_grad=False
+            )
+            return self.trainable + self.frozen + self.dynamic_frozen
+
+    with pyro.settings.context(module_local_params=local_params):
+        model = Model()
+        trace = poutine.trace(model).get_trace()
+
+    assert_equal(trace.nodes["_RETURN"]["value"], torch.tensor([3.0]))
+    assert "trainable" in trace.nodes
+    assert "frozen" not in trace.nodes
+    assert "dynamic_frozen" not in trace.nodes
+    assert model.frozen.requires_grad is False
+    assert model.dynamic_frozen.requires_grad is False
+    if local_params:
+        assert not pyro.get_param_store()
+    else:
+        assert set(pyro.get_param_store()) == {"trainable"}
+
+
 @pytest.mark.parametrize("local_params", [True, False])
 @pytest.mark.parametrize("num_particles", [1, 2])
 @pytest.mark.parametrize("vectorize_particles", [True, False])
