@@ -340,6 +340,25 @@ class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
         return constraints.interval(self._unbroadcasted_low, self._unbroadcasted_high)
 
 
+class LKJCholesky(torch.distributions.LKJCholesky, TorchDistributionMixin):
+    def sample(self, sample_shape=torch.Size()):
+        # Onion method, matching torch.distributions.LKJCholesky.sample.
+        # The diagonal is an addition, not an in-place update: w += diag aliases
+        # the factor with the node that built the strictly lower triangle, and a
+        # traced ELBO then cannot differentiate the concentration.
+        y = self._beta.sample(sample_shape).unsqueeze(-1)
+        u_normal = torch.randn(
+            self._extended_shape(sample_shape), dtype=y.dtype, device=y.device
+        ).tril(-1)
+        u_hypersphere = u_normal / u_normal.norm(dim=-1, keepdim=True)
+        # Replace NaNs in the first row. That row of tril(-1) is already zero.
+        u_hypersphere[..., 0, :].fill_(0.0)
+        w = torch.sqrt(y) * u_hypersphere
+        eps = torch.finfo(w.dtype).tiny
+        diag_elems = torch.clamp(1 - torch.sum(w**2, dim=-1), min=eps).sqrt()
+        return w + torch.diag_embed(diag_elems)
+
+
 def _cat_docstrings(*docstrings):
     result = "\n".join(textwrap.dedent(s.lstrip("\n")) for s in docstrings)
     result = re.sub("\n\n+", "\n\n", result)
