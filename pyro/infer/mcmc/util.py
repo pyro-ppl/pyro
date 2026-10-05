@@ -406,7 +406,7 @@ def initialize_model(
         optimized executable trace in the integrator.
     :param dict jit_options: A dictionary contains optional arguments for
         :func:`torch.jit.trace` function.
-    :param bool ignore_jit_warnings: Flag to ignore warnings from the JIT
+    :param bool skip_jit_warnings: Flag to ignore warnings from the JIT
         tracer when ``jit_compile=True``. Default is False.
     :param int num_chains: Number of parallel chains. If `num_chains > 1`,
         the returned `initial_params` will be a list with `num_chains` elements.

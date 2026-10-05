@@ -306,7 +306,7 @@ class CoalescentRateLikelihood:
             this might be ``beta S / I``. The rightmost dimension is time, and
             this tensor represents a (batch of) rates that are piecwise
             constant in time.
-        :param time: Optional time index by which the input was sliced, as in
+        :param t: Optional time index by which the input was sliced, as in
             ``rate_grid[..., t]`` This can be an integer for sequential models
             or ``slice(None)`` for vectorized models.
         :type time: int or slice
