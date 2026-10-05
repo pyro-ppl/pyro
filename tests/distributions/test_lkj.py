@@ -135,6 +135,16 @@ def test_log_prob_d2(concentration):
     assert_tensors_equal(lp, tst, prec=1e-3)
 
 
+def test_sample_is_correlation_factor():
+    torch.manual_seed(0)
+    factor = LKJCholesky(5, torch.tensor(1.5)).sample((32,))
+    gram = factor.matmul(factor.transpose(-1, -2))
+    diag = gram.diagonal(dim1=-2, dim2=-1)
+    assert_tensors_equal(diag, torch.ones_like(diag), prec=1e-4)
+    assert_tensors_equal(factor.triu(1), torch.zeros_like(factor.triu(1)))
+    assert bool((factor.diagonal(dim1=-2, dim2=-1) > 0).all())
+
+
 def test_sample_batch():
     # Regression test for https://github.com/pyro-ppl/pyro/issues/2615
     dist = LKJCholesky(3, concentration=torch.ones(())).expand([12])

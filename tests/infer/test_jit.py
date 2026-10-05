@@ -604,6 +604,42 @@ def test_cond_indep_equality(x, y):
     assert hash(x) == hash(y)
 
 
+def test_jit_lkj_cholesky_elbo():
+    # The onion sampler used to add the diagonal in place. Tracing that graph
+    # makes JitTrace_ELBO fail while differentiating the LKJ concentration.
+    # Regression test for https://github.com/pyro-ppl/pyro/issues/3444
+    pyro.clear_param_store()
+
+    def model():
+        chol = pyro.sample("s", dist.LKJCholesky(2, 1.0))
+        scale = pyro.sample(
+            "d", dist.Gamma(torch.ones(2), torch.ones(2)).to_event(1)
+        )
+        pyro.sample(
+            "x",
+            dist.MultivariateNormal(
+                torch.zeros(2), scale_tril=chol * scale.sqrt()[:, None]
+            ),
+        )
+
+    def guide():
+        eta = pyro.param("eta", lambda: torch.tensor(1.0))
+        alpha = pyro.param("alpha", lambda: 11 * torch.ones(2))
+        sigma = pyro.param("sigma", lambda: 10 * torch.ones(2))
+        sx = pyro.param("sx", lambda: torch.eye(2))
+        mu_x = pyro.param("mu_x", torch.zeros(2))
+        pyro.sample("s", dist.LKJCholesky(2, eta))
+        pyro.sample("d", dist.Gamma(alpha, sigma).to_event(1))
+        pyro.sample("x", dist.MultivariateNormal(mu_x, scale_tril=sx))
+
+    svi = SVI(model, guide, Adam({"lr": 0.0}), JitTrace_ELBO(ignore_jit_warnings=True))
+    loss = svi.step()
+    assert loss == loss and abs(loss) != float("inf")
+    grad_eta = pyro.param("eta").grad
+    assert grad_eta is not None
+    assert bool(torch.isfinite(grad_eta).all())
+
+
 def test_jit_arange_workaround():
     def fn(x):
         y = torch.ones(x.shape[0], dtype=torch.long, device=x.device)
