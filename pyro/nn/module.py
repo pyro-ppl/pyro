@@ -12,6 +12,7 @@ the :class:`PyroSample` struct::
     my_module.y = PyroSample(dist.Normal(0, 1))
 
 """
+
 import functools
 import inspect
 import warnings
@@ -25,7 +26,7 @@ except ImportError:
     )
 
     # Fall back to trivial decorator.
-    def _copy_to_script_wrapper(fn):
+    def _copy_to_script_wrapper(fn):  # type: ignore[misc]
         return fn
 
 
@@ -45,6 +46,7 @@ from typing import (
     Type,
     TypeVar,
     Union,
+    overload,
 )
 
 import torch
@@ -138,7 +140,7 @@ class PyroParam(NamedTuple):
         if name not in obj.__dict__["_pyro_params"]:
             init_value, constraint, event_dim = self
             # bind method's self arg
-            init_value = functools.partial(init_value, obj)  # type: ignore[arg-type]
+            init_value = functools.partial(init_value, obj)  # type: ignore[arg-type,call-arg,misc,operator]
             setattr(obj, name, PyroParam(init_value, constraint, event_dim))
         value: PyroParam = obj.__getattr__(name)
         return value
@@ -163,6 +165,7 @@ class PyroSample:
         assert isinstance(my_module, PyroModule)
         my_module.x = PyroSample(Normal(0, 1))                    # independent
         my_module.y = PyroSample(lambda self: Normal(self.x, 1))  # dependent
+        my_module.z = PyroSample(lambda self: self.y ** 2)        # deterministic dependent
 
     or EXPERIMENTALLY as a decorator on lazy initialization methods::
 
@@ -175,16 +178,22 @@ class PyroSample:
             def y(self):
                 return Normal(self.x, 1)  # dependent
 
+            @PyroSample
+            def z(self):
+                return self.y ** 2        # deterministic dependent
+
             def forward(self):
-                return self.y             # accessed like a @property
+                return self.z             # accessed like a @property
 
     :param prior: distribution object or function that inputs the
         :class:`PyroModule` instance ``self`` and returns a distribution
-        object.
+        object or a deterministic value.
     """
 
     prior: Union[
-        "TorchDistributionMixin", Callable[["PyroModule"], "TorchDistributionMixin"]
+        "TorchDistributionMixin",
+        Callable[["PyroModule"], "TorchDistributionMixin"],
+        Callable[["PyroModule"], torch.Tensor],
     ]
 
     def __post_init__(self) -> None:
@@ -506,9 +515,9 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
         self._pyro_context = context
         for key, value in self._modules.items():
             if isinstance(value, PyroModule):
-                assert (
-                    not value._pyro_context.used
-                ), "submodule {} has executed outside of supermodule".format(name)
+                assert not value._pyro_context.used, (
+                    "submodule {} has executed outside of supermodule".format(name)
+                )
                 value._pyro_set_supermodule(_make_name(name, key), context)
 
     def _pyro_get_fullname(self, name: str) -> str:
@@ -605,13 +614,17 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
                     if value is None:
                         if not hasattr(prior, "sample"):  # if not a distribution
                             prior = prior(self)
-                        value = pyro.sample(fullname, prior)
+                        value = (
+                            pyro.deterministic(fullname, prior)
+                            if isinstance(prior, torch.Tensor)
+                            else pyro.sample(fullname, prior)
+                        )
                         context.set(fullname, value)
                     return value
                 else:  # Cannot determine supermodule and hence cannot compute fullname.
                     if not hasattr(prior, "sample"):  # if not a distribution
                         prior = prior(self)
-                    return prior()
+                    return prior if isinstance(prior, torch.Tensor) else prior()
 
         result = super().__getattr__(name)
 
@@ -813,7 +826,7 @@ class PyroModule(torch.nn.Module, metaclass=_PyroModuleMeta):
 
 
 def pyro_method(
-    fn: Callable[Concatenate[_PyroModule, _P], _T]
+    fn: Callable[Concatenate[_PyroModule, _P], _T],
 ) -> Callable[Concatenate[_PyroModule, _P], _T]:
     """
     Decorator for top-level methods of a :class:`PyroModule` to enable pyro
@@ -943,10 +956,16 @@ class PyroModuleList(torch.nn.ModuleList, PyroModule):
     def __init__(self, modules):
         super().__init__(modules)
 
+    @overload
+    def __getitem__(self, idx: slice) -> torch.nn.ModuleList: ...
+
+    @overload
+    def __getitem__(self, idx: int) -> torch.nn.Module: ...
+
     @_copy_to_script_wrapper
     def __getitem__(
         self, idx: Union[int, slice]
-    ) -> Union[torch.nn.Module, "PyroModuleList"]:
+    ) -> Union[torch.nn.Module, torch.nn.ModuleList]:
         if isinstance(idx, slice):
             # return self.__class__(list(self._modules.values())[idx])
             return torch.nn.ModuleList(list(self._modules.values())[idx])

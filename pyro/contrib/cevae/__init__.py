@@ -21,6 +21,7 @@ using components :class:`Model`, :class:`Guide`,
     | http://papers.nips.cc/paper/7223-causal-effect-inference-with-deep-latent-variable-models.pdf
     | https://github.com/AMLab-Amsterdam/CEVAE
 """
+
 import logging
 
 import torch

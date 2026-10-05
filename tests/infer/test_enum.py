@@ -36,7 +36,7 @@ def _skip_cuda(*args):
     return skipif_param(
         *args,
         condition="CUDA_TEST" in os.environ,
-        reason="https://github.com/pyro-ppl/pyro/issues/1380"
+        reason="https://github.com/pyro-ppl/pyro/issues/1380",
     )
 
 

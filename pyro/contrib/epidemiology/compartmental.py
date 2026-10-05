@@ -100,7 +100,7 @@ class CompartmentalModel(ABC):
         model = MyModel(...)
         model.fit_svi(num_samples=100)  # or .fit_mcmc(...)
         R0 = model.samples["R0"]  # An example parameter.
-        print("R0 = {:0.3g} \u00B1 {:0.3g}".format(R0.mean(), R0.std()))
+        print("R0 = {:0.3g} \u00b1 {:0.3g}".format(R0.mean(), R0.std()))
 
         # Predict latent variables.
         samples = model.predict()

@@ -9,7 +9,6 @@ understanding with generative models." Advances in Neural Information
 Processing Systems. 2016.
 """
 
-
 import argparse
 import math
 import os
@@ -18,7 +17,6 @@ from functools import partial
 
 import numpy as np
 import torch
-import visdom
 from air import AIR, latents_to_tensor
 from viz import draw_many, tensor_to_objs
 
@@ -191,7 +189,7 @@ def main(**kwargs):
         use_baselines=not args.no_baselines,
         z_what_size=args.encoder_latent_size,
         use_cuda=args.cuda,
-        **model_args
+        **model_args,
     )
 
     if args.verbose:
@@ -200,10 +198,12 @@ def main(**kwargs):
 
     if "load" in args:
         print("Loading parameters...")
-        air.load_state_dict(torch.load(args.load))
+        air.load_state_dict(torch.load(args.load, weights_only=False))
 
     # Viz sample from prior.
     if args.viz:
+        import visdom
+
         vis = visdom.Visdom(env=args.visdom_env)
         z, x = air.prior(5, z_pres_prior_p=partial(z_pres_prior_p, 0))
         vis.images(draw_many(x, tensor_to_objs(latents_to_tensor(z))))
@@ -270,7 +270,7 @@ def main(**kwargs):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.9.1")
+    assert pyro.__version__.startswith("1.9.2")
     parser = argparse.ArgumentParser(
         description="Pyro AIR example", argument_default=argparse.SUPPRESS
     )

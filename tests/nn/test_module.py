@@ -417,9 +417,11 @@ def test_sample():
         def __init__(self, in_features, out_features):
             super().__init__(in_features, out_features)
             self.weight = PyroSample(
-                lambda self: dist.Normal(0, 1)
-                .expand([self.out_features, self.in_features])
-                .to_event(2)
+                lambda self: (
+                    dist.Normal(0, 1)
+                    .expand([self.out_features, self.in_features])
+                    .to_event(2)
+                )
             )
 
     class Guide(nn.Linear, PyroModule):
@@ -491,9 +493,10 @@ class AttributeModel(PyroModule):
         )
         self.s = PyroSample(dist.Normal(0, 1))
         self.t = PyroSample(lambda self: dist.Normal(self.s, self.z))
+        self.u = PyroSample(lambda self: self.t**2)
 
     def forward(self):
-        return self.x + self.y + self.t
+        return self.x + self.y + self.u
 
 
 class DecoratorModel(PyroModule):
@@ -521,8 +524,12 @@ class DecoratorModel(PyroModule):
     def t(self):
         return dist.Normal(self.s, self.z).to_event(1)
 
+    @PyroSample
+    def u(self):
+        return self.t**2
+
     def forward(self):
-        return self.x + self.y + self.t
+        return self.x + self.y + self.u
 
 
 @pytest.mark.parametrize("Model", [AttributeModel, DecoratorModel])
@@ -531,19 +538,32 @@ def test_decorator(Model, size):
     model = Model(size)
     for i in range(2):
         trace = poutine.trace(model).get_trace()
-        assert set(trace.nodes.keys()) == {"_INPUT", "x", "y", "z", "s", "t", "_RETURN"}
+        assert set(trace.nodes.keys()) == {
+            "_INPUT",
+            "x",
+            "y",
+            "z",
+            "s",
+            "t",
+            "u",
+            "_RETURN",
+        }
 
         assert trace.nodes["x"]["type"] == "param"
         assert trace.nodes["y"]["type"] == "param"
         assert trace.nodes["z"]["type"] == "param"
         assert trace.nodes["s"]["type"] == "sample"
         assert trace.nodes["t"]["type"] == "sample"
+        assert trace.nodes["u"]["type"] == "sample"
 
         assert trace.nodes["x"]["value"].shape == (size,)
         assert trace.nodes["y"]["value"].shape == (size,)
         assert trace.nodes["z"]["value"].shape == (size,)
         assert trace.nodes["s"]["value"].shape == ()
         assert trace.nodes["t"]["value"].shape == (size,)
+        assert trace.nodes["u"]["value"].shape == (size,)
+
+        assert trace.nodes["u"]["infer"] == {"_deterministic": True}
 
 
 def test_mixin_factory():
@@ -580,7 +600,7 @@ def test_mixin_factory():
         del module
         pyro.clear_param_store()
         f.seek(0)
-        module = torch.load(f)
+        module = torch.load(f, weights_only=False)
     assert type(module).__name__ == "PyroSequential"
     actual = module(data)
     assert_equal(actual, expected)
@@ -662,7 +682,7 @@ def test_torch_serialize_attributes(local_params):
             torch.save(module, f)
             pyro.clear_param_store()
             f.seek(0)
-            actual = torch.load(f)
+            actual = torch.load(f, weights_only=False)
 
         assert_equal(actual.x, module.x)
         actual_names = {name for name, _ in actual.named_parameters()}
@@ -686,7 +706,7 @@ def test_torch_serialize_decorators(local_params):
             torch.save(module, f)
             pyro.clear_param_store()
             f.seek(0)
-            actual = torch.load(f)
+            actual = torch.load(f, weights_only=False)
 
         assert_equal(actual.x, module.x)
         assert_equal(actual.y, module.y)
@@ -1051,7 +1071,6 @@ def test_module_list() -> None:
 def test_render_constrained_param(use_module_local_params):
 
     class Model(PyroModule):
-
         @PyroParam(constraint=constraints.positive)
         def x(self):
             return torch.tensor(1.234)

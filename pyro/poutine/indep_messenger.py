@@ -1,8 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-import numbers
-from typing import Iterator, NamedTuple, Optional, Tuple
+from typing import Iterator, NamedTuple, Optional, Tuple, Union
 
 import torch
 from typing_extensions import Self
@@ -108,7 +107,7 @@ class IndepMessenger(Messenger):
             _DIM_ALLOCATOR.free(self.name, self.dim)
         return super().__exit__(*args)
 
-    def __iter__(self) -> Iterator[int]:
+    def __iter__(self) -> Iterator[Union[int, float]]:
         if self._vectorized is True or self.dim is not None:
             raise ValueError(
                 "cannot use plate {} as both vectorized and non-vectorized"
@@ -121,7 +120,14 @@ class IndepMessenger(Messenger):
             for i in self.indices:
                 self.next_context()
                 with self:
-                    yield i if isinstance(i, numbers.Number) else i.item()
+                    if isinstance(i, (int, float)):
+                        yield i
+                    elif isinstance(i, torch.Tensor):
+                        yield i.item()
+                    else:
+                        raise ValueError(
+                            f"Expected int, float or torch.Tensor, but got {type(i)}"
+                        )
 
     def _reset(self) -> None:
         if self._vectorized:

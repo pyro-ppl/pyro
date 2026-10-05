@@ -8,7 +8,6 @@ import torch.nn as nn
 from utils.custom_mlp import MLP, Exp
 from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
 from utils.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
-from visdom import Visdom
 
 import pyro
 import pyro.distributions as dist
@@ -246,10 +245,10 @@ def run_inference_for_epoch(data_loaders, losses, periodic_interval_batches):
 
         # extract the corresponding batch
         if is_supervised:
-            (xs, ys) = next(sup_iter)
+            xs, ys = next(sup_iter)
             ctr_sup += 1
         else:
-            (xs, ys) = next(unsup_iter)
+            xs, ys = next(unsup_iter)
 
         # run the inference for each loss with supervised or un-supervised
         # data as arguments
@@ -306,6 +305,8 @@ def main(args):
 
     viz = None
     if args.visualize:
+        from visdom import Visdom
+
         viz = Visdom()
         mkdir_p("./vae_results")
 
@@ -427,7 +428,7 @@ EXAMPLE_RUN = (
 )
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.9.1")
+    assert pyro.__version__.startswith("1.9.2")
 
     parser = argparse.ArgumentParser(description="SS-VAE\n{}".format(EXAMPLE_RUN))
 
@@ -527,14 +528,14 @@ if __name__ == "__main__":
 
     # some assertions to make sure that batching math assumptions are met
     assert args.sup_num % args.batch_size == 0, "assuming simplicity of batching math"
-    assert (
-        MNISTCached.validation_size % args.batch_size == 0
-    ), "batch size should divide the number of validation examples"
-    assert (
-        MNISTCached.train_data_size % args.batch_size == 0
-    ), "batch size doesn't divide total number of training data examples"
-    assert (
-        MNISTCached.test_size % args.batch_size == 0
-    ), "batch size should divide the number of test examples"
+    assert MNISTCached.validation_size % args.batch_size == 0, (
+        "batch size should divide the number of validation examples"
+    )
+    assert MNISTCached.train_data_size % args.batch_size == 0, (
+        "batch size doesn't divide total number of training data examples"
+    )
+    assert MNISTCached.test_size % args.batch_size == 0, (
+        "batch size should divide the number of test examples"
+    )
 
     main(args)

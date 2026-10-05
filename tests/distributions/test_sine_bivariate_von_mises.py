@@ -130,3 +130,23 @@ def test_mle_bvm():
             )  # k == 'corr'
 
         assert_equal(expected[k].squeeze(), actual.squeeze(), 9e-2)
+
+
+@pytest.mark.parametrize("conc", [1.0, 10.0, 1000.0, 10_000.0, 10_001.0])
+def test_sine_bivariate_von_mises_norm(conc):
+    if conc > 10_000.0:
+        try:
+            dist = SineBivariateVonMises(0, 0, conc, conc, 0.0)
+            pytest.fail()
+        except AssertionError:
+            return
+
+    dist = SineBivariateVonMises(0, 0, conc, conc, 0.0)
+    num_samples = 500
+    x = torch.linspace(-torch.pi, torch.pi, num_samples)
+    y = torch.linspace(-torch.pi, torch.pi, num_samples)
+    mesh = torch.stack(torch.meshgrid(x, y, indexing="ij"), axis=-1)
+    integral_torus = (
+        torch.exp(dist.log_prob(mesh)) * (2 * torch.pi) ** 2 / num_samples**2
+    ).sum()
+    assert torch.allclose(integral_torus, torch.tensor(1.0), rtol=1e-2)

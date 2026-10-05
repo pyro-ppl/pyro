@@ -104,7 +104,7 @@ class Z2LEncoder(nn.Module):
         # Transform the counts x to log space for increased numerical stability.
         # Note that we only use this transform here; in particular the observation
         # distribution in the model is a proper count distribution.
-        x = torch.log(1 + x)
+        x = torch.log1p(x)
         h1, h2 = split_in_half(self.fc(x))
         z2_loc, z2_scale = h1[..., :-1], softplus(h2[..., :-1])
         l_loc, l_scale = h1[..., -1:], softplus(h2[..., -1:])
@@ -407,7 +407,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.9.1")
+    assert pyro.__version__.startswith("1.9.2")
     # Parse command line arguments
     parser = argparse.ArgumentParser(
         description="single-cell ANnotation using Variational Inference"

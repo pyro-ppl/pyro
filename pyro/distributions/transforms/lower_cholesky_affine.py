@@ -33,10 +33,10 @@ class LowerCholeskyAffine(Transform):
         super().__init__(cache_size=cache_size)
         self.loc = loc
         self.scale_tril = scale_tril
-        assert (
-            loc.size(-1) == scale_tril.size(-1) == scale_tril.size(-2)
-        ), "loc and scale_tril must be of size D and D x D, respectively (instead: {}, {})".format(
-            loc.shape, scale_tril.shape
+        assert loc.size(-1) == scale_tril.size(-1) == scale_tril.size(-2), (
+            "loc and scale_tril must be of size D and D x D, respectively (instead: {}, {})".format(
+                loc.shape, scale_tril.shape
+            )
         )
 
     def _call(self, x):

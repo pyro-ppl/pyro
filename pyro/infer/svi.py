@@ -44,7 +44,7 @@ class SVI(TracePosterior):
         loss_and_grads=None,
         num_samples=0,
         num_steps=0,
-        **kwargs
+        **kwargs,
     ):
         if num_steps:
             warnings.warn(

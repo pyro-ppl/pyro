@@ -1,3 +1,7 @@
+# Copyright Contributors to the Pyro project.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 run_outputs*
 .DS_Store
 .benchmarks
@@ -15,7 +19,6 @@ examples/mixed_hmm/*csv
 pyro/contrib/examples/processed
 pyro/contrib/examples/results
 pyro/contrib/examples/raw
-pyro/_version.py
 processed
 raw
 *.pkl
@@ -50,6 +53,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+uv.lock
 env/
 build/
 develop-eggs/

@@ -33,7 +33,7 @@ class WelfordCovariance:
         if self.diagonal:
             self._m2 += delta_pre * delta_post
         else:
-            self._m2 += torch.ger(delta_post, delta_pre)
+            self._m2 += torch.outer(delta_post, delta_pre)
 
     def get_covariance(self, regularize=True):
         if self.n_samples < 2:
@@ -72,7 +72,7 @@ class WelfordArrowheadCovariance:
         self._mean = self._mean + delta_pre / self.n_samples
         delta_post = sample - self._mean
         if self.head_size > 0:
-            self._m2_top = self._m2_top + torch.ger(
+            self._m2_top = self._m2_top + torch.outer(
                 delta_post[: self.head_size], delta_pre
             )
         else:

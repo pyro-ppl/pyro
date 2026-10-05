@@ -35,6 +35,7 @@ References
 Fritz Obermeyer, Eli Bingham, Martin Jankowiak, Justin Chiu,
 Neeraj Pradhan, Alexander Rush, Noah Goodman. https://arxiv.org/abs/1902.03210
 """
+
 import argparse
 import logging
 import sys
@@ -559,10 +560,13 @@ def model_6(sequences, lengths, args, batch_size=None, include_prior=False):
         for t in pyro.markov(range(lengths.max()), history=2):
             with poutine.mask(mask=(t < lengths).unsqueeze(-1)):
                 probs_x_t = Vindex(probs_x)[x_prev, x_curr]
-                x_prev, x_curr = x_curr, pyro.sample(
-                    "x_{}".format(t),
-                    dist.Categorical(probs_x_t),
-                    infer={"enumerate": "parallel"},
+                x_prev, x_curr = (
+                    x_curr,
+                    pyro.sample(
+                        "x_{}".format(t),
+                        dist.Categorical(probs_x_t),
+                        infer={"enumerate": "parallel"},
+                    ),
                 )
                 with tones_plate:
                     probs_y_t = probs_y[x_curr.squeeze(-1)]
@@ -737,7 +741,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.9.1")
+    assert pyro.__version__.startswith("1.9.2")
     parser = argparse.ArgumentParser(
         description="MAP Baum-Welch learning Bach Chorales"
     )

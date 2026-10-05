@@ -250,7 +250,7 @@ def infection_dist(
     num_susceptible=math.inf,
     population=math.inf,
     concentration=math.inf,
-    overdispersion=0.0
+    overdispersion=0.0,
 ):
     """
     Create a :class:`~pyro.distributions.Distribution` over the number of new

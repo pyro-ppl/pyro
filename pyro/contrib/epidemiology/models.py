@@ -615,7 +615,7 @@ class SuperspreadingSEIRModel(CompartmentalModel):
         data,
         *,
         leaf_times=None,
-        coal_times=None
+        coal_times=None,
     ):
         compartments = ("S", "E", "I")  # R is implicit.
         duration = len(data)
@@ -1282,9 +1282,7 @@ __doc__ = "\n\n".join(
     {}
     ----------------------------------------------------------------
     .. autoclass:: pyro.contrib.epidemiology.models.{}
-    """.format(
-            re.sub("([A-Z][a-z]+)", r"\1 ", _name[:-5]), _name
-        )
+    """.format(re.sub("([A-Z][a-z]+)", r"\1 ", _name[:-5]), _name)
         for _name in __all__
     ]
 )

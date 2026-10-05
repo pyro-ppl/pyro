@@ -5,6 +5,7 @@
 This file contains reimplementations of some of Pyro's core enumeration machinery,
 which should eventually be drop-in replacements for the current versions.
 """
+
 import functools
 import math
 from collections import OrderedDict
@@ -239,9 +240,9 @@ def queue(
     def wrapper(wrapped):
         def _fn(*args, **kwargs):
             for i in range(max_tries):
-                assert (
-                    not queue.empty()
-                ), "trying to get() from an empty queue will deadlock"
+                assert not queue.empty(), (
+                    "trying to get() from an empty queue will deadlock"
+                )
 
                 next_trace = queue.get()
                 try:

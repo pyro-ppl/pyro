@@ -90,9 +90,9 @@ class SineSkewed(TorchDistribution):
     support = constraints.independent(constraints.real, 1)
 
     def __init__(self, base_dist: TorchDistribution, skewness, validate_args=None):
-        assert (
-            base_dist.event_shape == skewness.shape[-1:]
-        ), "Sine Skewing is only valid with a skewness parameter for each dimension of `base_dist.event_shape`."
+        assert base_dist.event_shape == skewness.shape[-1:], (
+            "Sine Skewing is only valid with a skewness parameter for each dimension of `base_dist.event_shape`."
+        )
 
         if (skewness.abs().sum(-1) > 1.0).any():
             warnings.warn("Total skewness weight shouldn't exceed one.", UserWarning)

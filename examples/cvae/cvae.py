@@ -184,6 +184,6 @@ def train(
             break
 
     # Save model weights
-    cvae_net.load_state_dict(torch.load(model_path))
+    cvae_net.load_state_dict(torch.load(model_path, weights_only=False))
     cvae_net.eval()
     return cvae_net

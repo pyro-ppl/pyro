@@ -95,7 +95,7 @@ class AffineCoupling(TransformModule):
         *,
         dim=-1,
         log_scale_min_clip=-5.0,
-        log_scale_max_clip=3.0
+        log_scale_max_clip=3.0,
     ):
         super().__init__(cache_size=1)
         if dim >= 0:

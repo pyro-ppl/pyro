@@ -3,7 +3,7 @@
 all: docs test
 
 install: FORCE
-	pip install -e .[dev,profile] --config-settings editable_mode=strict
+	pip install -e . --group dev --group profile --config-settings editable_mode=strict
 
 uninstall: FORCE
 	pip uninstall pyro-ppl
@@ -19,16 +19,16 @@ tutorial: FORCE
 
 lint: FORCE
 	ruff check .
-	black --check *.py pyro examples tests scripts profiler
+	ruff format --check pyro examples tests scripts profiler
 	python scripts/update_headers.py --check
-	mypy --install-types --non-interactive pyro scripts tests
+	mypy --install-types --non-interactive --warn-unused-ignores pyro scripts tests
 
 license: FORCE
 	python scripts/update_headers.py
 
 format: license FORCE
 	ruff check --fix .
-	black *.py pyro examples tests scripts profiler
+	ruff format pyro examples tests scripts profiler
 
 version: FORCE
 	python scripts/update_version.py
@@ -83,7 +83,7 @@ test-jit: FORCE
 		-k JIT=True | tee -a jit.log
 
 test-funsor: lint FORCE
-	pytest -vx -n auto --stage funsor
+	pytest -vx -n auto -p no:benchmark --stage funsor
 
 clean: FORCE
 	git clean -dfx -e pyro_ppl.egg-info

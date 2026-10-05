@@ -5,7 +5,7 @@ import pytest
 import torch
 
 from pyro.ops.linalg import rinverse
-from tests.common import assert_close, assert_equal
+from tests.common import assert_equal
 
 
 @pytest.mark.parametrize(
@@ -35,29 +35,3 @@ def test_sym_rinverse(A, use_sym):
     batched_A = A.unsqueeze(0).unsqueeze(0).expand(5, 4, d, d)
     expected_A = torch.inverse(A).unsqueeze(0).unsqueeze(0).expand(5, 4, d, d)
     assert_equal(rinverse(batched_A, sym=use_sym), expected_A, prec=1e-8)
-
-
-# Tests migration from torch.triangular_solve -> torch.linalg.solve_triangular
-@pytest.mark.filterwarnings("ignore:torch.triangular_solve is deprecated")
-@pytest.mark.parametrize("upper", [False, True], ids=["lower", "upper"])
-def test_triangular_solve(upper):
-    b = torch.randn(5, 6)
-    A = torch.randn(5, 5)
-    expected = torch.triangular_solve(b, A, upper=upper).solution
-    actual = torch.linalg.solve_triangular(A, b, upper=upper)
-    assert_close(actual, expected)
-    A = A.triu() if upper else A.tril()
-    assert_close(A @ actual, b)
-
-
-# Tests migration from torch.triangular_solve -> torch.linalg.solve_triangular
-@pytest.mark.filterwarnings("ignore:torch.triangular_solve is deprecated")
-@pytest.mark.parametrize("upper", [False, True], ids=["lower", "upper"])
-def test_triangular_solve_transpose(upper):
-    b = torch.randn(5, 6)
-    A = torch.randn(5, 5)
-    expected = torch.triangular_solve(b, A, upper=upper, transpose=True).solution
-    actual = torch.linalg.solve_triangular(A.T, b, upper=not upper)
-    assert_close(actual, expected)
-    A = A.triu() if upper else A.tril()
-    assert_close(A.T @ actual, b)

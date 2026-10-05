@@ -461,11 +461,11 @@ def main(args):
 
     # loads the model and optimizer states from disk
     def load_checkpoint():
-        assert exists(args.load_opt) and exists(
-            args.load_model
-        ), "--load-model and/or --load-opt misspecified"
+        assert exists(args.load_opt) and exists(args.load_model), (
+            "--load-model and/or --load-opt misspecified"
+        )
         logging.info("loading model from %s..." % args.load_model)
-        dmm.load_state_dict(torch.load(args.load_model))
+        dmm.load_state_dict(torch.load(args.load_model, weights_only=False))
         logging.info("loading optimizer states from %s..." % args.load_opt)
         adam.load(args.load_opt)
         logging.info("done loading model and optimizer states.")
@@ -569,7 +569,7 @@ def main(args):
 
 # parse command-line arguments and execute the main method
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.9.1")
+    assert pyro.__version__.startswith("1.9.2")
 
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument("-n", "--num-epochs", type=int, default=5000)

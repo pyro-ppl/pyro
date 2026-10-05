@@ -267,7 +267,7 @@ def initialize_logger(logger, logger_id, progress_bar=None, log_queue=None):
         format = "%(levelname).1s \t %(message)s"
         handler = TqdmHandler()
     else:
-        raise ValueError("Logger cannot be initialized without a " "valid handler.")
+        raise ValueError("Logger cannot be initialized without a valid handler.")
     handler.setFormatter(logging.Formatter(format))
     logging_handler = MCMCLoggingHandler(handler, progress_bar)
     logging_handler.addFilter(MetadataFilter(logger_id))

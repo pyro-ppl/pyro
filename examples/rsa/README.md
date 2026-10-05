@@ -1,3 +1,9 @@
+<!--
+Copyright (c) 2017-2019 Uber Technologies, Inc.
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 ## Rational Speech Acts (RSA) examples
 
 This folder contains examples of reasoning about reasoning with nested inference

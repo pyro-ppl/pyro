@@ -2,22 +2,22 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
- A toy mixture model to provide a simple example for implementing discrete enumeration.
+A toy mixture model to provide a simple example for implementing discrete enumeration.
 
- (A) -> [B] -> (C)
+(A) -> [B] -> (C)
 
- A is an observed Bernoulli variable with Beta prior.
- B is a hidden variable which is a mixture of two Bernoulli distributions (with Beta priors),
- chosen by A being true or false.
- C is observed, and like B, is a mixture of two Bernoulli distributions (with Beta priors),
- chosen by B being true or false.
- There is a plate over the three variables for n independent observations of data.
+A is an observed Bernoulli variable with Beta prior.
+B is a hidden variable which is a mixture of two Bernoulli distributions (with Beta priors),
+chosen by A being true or false.
+C is observed, and like B, is a mixture of two Bernoulli distributions (with Beta priors),
+chosen by B being true or false.
+There is a plate over the three variables for n independent observations of data.
 
- Because B is hidden and discrete we wish to marginalize it out of the model.
- This is done by:
-    1) marking the model method with `@pyro.infer.config_enumerate`
-    2) marking the B sample site in the model with `infer={"enumerate": "parallel"}`
-    3) passing `pyro.infer.SVI` the `pyro.infer.TraceEnum_ELBO` loss function
+Because B is hidden and discrete we wish to marginalize it out of the model.
+This is done by:
+   1) marking the model method with `@pyro.infer.config_enumerate`
+   2) marking the B sample site in the model with `infer={"enumerate": "parallel"}`
+   3) passing `pyro.infer.SVI` the `pyro.infer.TraceEnum_ELBO` loss function
 """
 
 import argparse
@@ -133,7 +133,7 @@ def get_true_pred_CPDs(CPD, posterior_param):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.9.1")
+    assert pyro.__version__.startswith("1.9.2")
     parser = argparse.ArgumentParser(description="Toy mixture model")
     parser.add_argument("-n", "--num-steps", default=4000, type=int)
     parser.add_argument("-o", "--num-obs", default=10000, type=int)

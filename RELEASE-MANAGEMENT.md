@@ -1,10 +1,16 @@
+<!--
+Copyright Contributors to the Pyro project.
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Pyro release management
 
 This describes the process by which versions of Pyro are officially released to the public.
 
 ## Versioning
 
-Releases are versioned according to the `version_prefix` constant in [pyro/__init__.py](pyro/__init__.py).
+Releases are versioned according to the `__version__` constant in [pyro/__init__.py](pyro/__init__.py), which is used by [pyproject.toml](pyproject.toml).
 Pyro releases follow semantic versioning with the following caveats:
 
 - Behavior of documented APIs will remain stable across minor releases, except for bug fixes and features marked EXPERIMENTAL or DEPRECATED.

@@ -13,6 +13,8 @@ from pyro.infer.util import is_validation_enabled
 from pyro.poutine.util import prune_subsample_sites
 from pyro.util import check_site_shape
 
+logger = logging.getLogger(__name__)
+
 
 class ELBOModule(torch.nn.Module):
     def __init__(self, model: torch.nn.Module, guide: torch.nn.Module, elbo: "ELBO"):
@@ -181,7 +183,7 @@ class ELBO(object, metaclass=ABCMeta):
         self.max_plate_nesting = -min(dims) if dims else 0
         if self.vectorize_particles and self.num_particles > 1:
             self.max_plate_nesting += 1
-        logging.info("Guessed max_plate_nesting = {}".format(self.max_plate_nesting))
+        logger.info("Guessed max_plate_nesting = {}".format(self.max_plate_nesting))
 
     def _vectorized_num_particles(self, fn):
         """

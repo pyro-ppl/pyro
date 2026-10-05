@@ -61,11 +61,11 @@ class Sylvester(Householder):
         super().__init__(input_dim, count_transforms)
 
         # Create parameters for Sylvester transform
-        self.R_dense = nn.Parameter(torch.Tensor(input_dim, input_dim))
-        self.S_dense = nn.Parameter(torch.Tensor(input_dim, input_dim))
-        self.R_diag = nn.Parameter(torch.Tensor(input_dim))
-        self.S_diag = nn.Parameter(torch.Tensor(input_dim))
-        self.b = nn.Parameter(torch.Tensor(input_dim))
+        self.R_dense = nn.Parameter(torch.empty(input_dim, input_dim))
+        self.S_dense = nn.Parameter(torch.empty(input_dim, input_dim))
+        self.R_diag = nn.Parameter(torch.empty(input_dim))
+        self.S_diag = nn.Parameter(torch.empty(input_dim))
+        self.b = nn.Parameter(torch.empty(input_dim))
 
         # Register masks and indices
         triangular_mask = torch.triu(torch.ones(input_dim, input_dim), diagonal=1)
@@ -92,11 +92,11 @@ class Sylvester(Householder):
         u = self.u()
         partial_Q = torch.eye(
             self.input_dim, dtype=x.dtype, layout=x.layout, device=x.device
-        ) - 2.0 * torch.ger(u[0], u[0])
+        ) - 2.0 * torch.outer(u[0], u[0])
 
         for idx in range(1, self.u_unnormed.size(-2)):
             partial_Q = torch.matmul(
-                partial_Q, torch.eye(self.input_dim) - 2.0 * torch.ger(u[idx], u[idx])
+                partial_Q, torch.eye(self.input_dim) - 2.0 * torch.outer(u[idx], u[idx])
             )
 
         return partial_Q

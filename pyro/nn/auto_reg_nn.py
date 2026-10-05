@@ -118,6 +118,7 @@ class MaskedLinear(nn.Linear):
         self, in_features: int, out_features: int, mask: torch.Tensor, bias: bool = True
     ) -> None:
         super().__init__(in_features, out_features, bias)
+        self.mask: torch.Tensor
         self.register_buffer("mask", mask.data)
 
     def forward(self, _input: torch.Tensor) -> torch.Tensor:
@@ -209,7 +210,7 @@ class ConditionalAutoRegressiveNN(nn.Module):
 
         if permutation is None:
             # By default set a random permutation of variables, which is important for performance with multiple steps
-            P = torch.randperm(input_dim, device="cpu").to(torch.Tensor().device)
+            P = torch.randperm(input_dim)
         else:
             # The permutation is chosen by the user
             P = permutation.type(dtype=torch.int64)
@@ -259,12 +260,9 @@ class ConditionalAutoRegressiveNN(nn.Module):
         return self.permutation
 
     def forward(
-        self, x: torch.Tensor, context: Optional[torch.Tensor] = None
+        self, x: torch.Tensor, context: torch.Tensor
     ) -> Union[Sequence[torch.Tensor], torch.Tensor]:
         # We must be able to broadcast the size of the context over the input
-        if context is None:
-            context = self.context
-
         context = context.expand(x.size()[:-1] + (context.size(-1),))
         x = torch.cat([context, x], dim=-1)
         return self._forward(x)
@@ -280,7 +278,7 @@ class ConditionalAutoRegressiveNN(nn.Module):
 
         # Shape the output, squeezing the parameter dimension if all ones
         if self.output_multiplier == 1:
-            return h
+            return h  # type: ignore[no-any-return]
         else:
             h = h.reshape(
                 list(x.size()[:-1]) + [self.output_multiplier, self.input_dim]
@@ -288,7 +286,7 @@ class ConditionalAutoRegressiveNN(nn.Module):
 
             # Squeeze dimension if all parameters are one dimensional
             if self.count_params == 1:
-                return h
+                return h  # type: ignore[no-any-return]
 
             elif self.all_ones:
                 return torch.unbind(h, dim=-2)

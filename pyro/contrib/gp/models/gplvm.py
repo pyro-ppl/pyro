@@ -60,8 +60,9 @@ class GPLVM(Parameterized):
         super().__init__()
         if base_model.X.dim() != 2:
             raise ValueError(
-                "GPLVM model only works with 2D latent X, but got "
-                "X.dim() = {}.".format(base_model.X.dim())
+                "GPLVM model only works with 2D latent X, but got X.dim() = {}.".format(
+                    base_model.X.dim()
+                )
             )
         self.base_model = base_model
 

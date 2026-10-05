@@ -331,6 +331,10 @@ class Uniform(torch.distributions.Uniform, TorchDistributionMixin):
         new._unbroadcasted_high = self._unbroadcasted_high
         return new
 
+    @staticmethod
+    def infer_shapes(low, high):
+        return torch.Size(broadcast_shape(low, high)), torch.Size()
+
     @constraints.dependent_property(is_discrete=False, event_dim=0)
     def support(self):
         return constraints.interval(self._unbroadcasted_low, self._unbroadcasted_high)
@@ -411,9 +415,7 @@ for _name, _Dist in torch.distributions.__dict__.items():
     Wraps :class:`{}.{}` with
     :class:`~pyro.distributions.torch_distribution.TorchDistributionMixin`.
 
-    """.format(
-        _Dist.__module__, _Dist.__name__
-    )
+    """.format(_Dist.__module__, _Dist.__name__)
     _PyroDist.__doc__ = _cat_docstrings(_PyroDist.__doc__, _Dist.__doc__)
     __all__.append(_name)
 __all__ = sorted(set(__all__))
@@ -426,9 +428,7 @@ __doc__ = "\n\n".join(
     {0}
     ----------------------------------------------------------------
     .. autoclass:: pyro.distributions.{0}
-    """.format(
-            _name
-        )
+    """.format(_name)
         for _name in sorted(__all__)
         # Work around sphinx autodoc error in case two InverseGamma's are defined:
         # "duplicate object description of pyro.distributions.InverseGamma"

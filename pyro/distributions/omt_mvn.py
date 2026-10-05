@@ -68,7 +68,7 @@ class _OMTMVNSample(Function):
         diff_L_ab = 0.5 * sum_leftmost(g_ja * epsilon_jb + g_R_inv * z_ja, -2)
 
         Sigma_inv = torch.mm(R_inv, R_inv.t())
-        V, D, _ = torch.svd(Sigma_inv + jitter)
+        V, D, _ = torch.linalg.svd(Sigma_inv + jitter)
         D_outer = D.unsqueeze(-1) + D.unsqueeze(0)
 
         expand_tuple = tuple([-1] * (z.dim() - 1) + [dim, dim])

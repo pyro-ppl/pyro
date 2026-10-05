@@ -148,10 +148,10 @@ class UncollapseConjugateMessenger(Messenger):
                 if parent is not None and parent._latent.site_name == msg["name"]:
                     conj_node = self.trace.nodes[site_name]
                     break
-            assert (
-                conj_node is not None
-            ), "Collapsible latent site `{}` with no corresponding conjugate site.".format(
-                msg["name"]
+            assert conj_node is not None, (
+                "Collapsible latent site `{}` with no corresponding conjugate site.".format(
+                    msg["name"]
+                )
             )
             msg["fn"] = parent.posterior(conj_node["value"])
             msg["value"] = msg["fn"].sample()
@@ -222,9 +222,9 @@ def posterior_replay(model, posterior_samples, *args, **kwargs):
     """
     posterior_samples = posterior_samples.copy()
     num_samples = kwargs.pop("num_samples", None)
-    assert (
-        posterior_samples or num_samples
-    ), "`num_samples` must be provided if `posterior_samples` is empty."
+    assert posterior_samples or num_samples, (
+        "`num_samples` must be provided if `posterior_samples` is empty."
+    )
     if num_samples is None:
         num_samples = list(posterior_samples.values())[0].shape[0]
 

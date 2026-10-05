@@ -156,7 +156,7 @@ class MatrixExponential(ConditionedMatrixExponential, TransformModule):
             iterations=iterations, normalization=normalization, bound=bound
         )
 
-        self.weights = nn.Parameter(torch.Tensor(input_dim, input_dim))
+        self.weights = nn.Parameter(torch.empty(input_dim, input_dim))
         self.reset_parameters()
 
     def reset_parameters(self):

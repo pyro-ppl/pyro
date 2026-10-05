@@ -10,6 +10,7 @@ import torch
 
 import pyro
 import pyro.poutine as poutine
+from pyro.infer.autoguide.initialization import InitMessenger, init_to_sample
 from pyro.infer.importance import LogWeightsMixin
 from pyro.infer.util import CloneMixin, plate_log_prob_sum
 from pyro.poutine.trace_struct import Trace
@@ -86,12 +87,15 @@ def _predictive(
     mask=True,
 ):
     model = torch.no_grad()(poutine.mask(model, mask=False) if mask else model)
-    max_plate_nesting = _guess_max_plate_nesting(model, model_args, model_kwargs)
+    initailized_model = InitMessenger(init_to_sample)(model)
+    max_plate_nesting = _guess_max_plate_nesting(
+        initailized_model, model_args, model_kwargs
+    )
     vectorize = pyro.plate(
         _predictive_vectorize_plate_name, num_samples, dim=-max_plate_nesting - 1
     )
     model_trace = prune_subsample_sites(
-        poutine.trace(model).get_trace(*model_args, **model_kwargs)
+        poutine.trace(initailized_model).get_trace(*model_args, **model_kwargs)
     )
     reshaped_samples = {}
 
@@ -420,13 +424,13 @@ class WeighedPredictive(Predictive):
             guide_log_prob = plate_log_prob_sum(guide_trace, plate_symbol)
             model_log_prob = plate_log_prob_sum(model_trace, plate_symbol)
         else:
-            guide_log_prob = torch.Tensor(
+            guide_log_prob = torch.stack(
                 [
                     trace_element.log_prob_sum()
                     for trace_element in guide_predictive.trace
                 ]
             )
-            model_log_prob = torch.Tensor(
+            model_log_prob = torch.stack(
                 [
                     trace_element.log_prob_sum()
                     for trace_element in model_predictive.trace
@@ -581,8 +585,9 @@ class MHResampler(torch.nn.Module):
                 idx = torch.rand(*prob.shape) <= prob
                 self.transition_count[idx] += 1
                 for field_desc in fields(self.samples):
-                    field, new_field = getattr(self.samples, field_desc.name), getattr(
-                        new_samples, field_desc.name
+                    field, new_field = (
+                        getattr(self.samples, field_desc.name),
+                        getattr(new_samples, field_desc.name),
                     )
                     if isinstance(field, dict):
                         for key in field:

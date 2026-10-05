@@ -89,7 +89,7 @@ def test_serialize():
         f = io.BytesIO()
         torch.save(guide, f)
         f.seek(0)
-        actual = torch.load(f)
+        actual = torch.load(f, weights_only=False)
 
     assert type(actual) == type(guide)
     assert dir(actual) == dir(guide)

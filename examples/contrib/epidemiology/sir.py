@@ -177,7 +177,7 @@ def evaluate(args, model, samples):
         mean = samples[key].mean().item()
         std = samples[key].std().item()
         logging.info(
-            "{}: truth = {:0.3g}, estimate = {:0.3g} \u00B1 {:0.3g}".format(
+            "{}: truth = {:0.3g}, estimate = {:0.3g} \u00b1 {:0.3g}".format(
                 key, getattr(args, name), mean, std
             )
         )
@@ -334,7 +334,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.9.1")
+    assert pyro.__version__.startswith("1.9.2")
     parser = argparse.ArgumentParser(
         description="Compartmental epidemiology modeling using HMC"
     )

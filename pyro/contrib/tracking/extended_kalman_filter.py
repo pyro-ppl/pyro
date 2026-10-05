@@ -147,9 +147,9 @@ class EKFState:
         :return: Innovation mean and covariance of hypothetical update.
         :rtype: tuple(``torch.Tensor``, ``torch.Tensor``)
         """
-        assert (
-            self._time == measurement.time
-        ), "State time and measurement time must be aligned!"
+        assert self._time == measurement.time, (
+            "State time and measurement time must be aligned!"
+        )
 
         # Compute innovation.
         x_pv = self._dynamic_model.mean2pv(self._mean)
@@ -188,13 +188,13 @@ class EKFState:
         :returns: EKF State, Innovation mean and covariance.
         """
         if self._time is not None:
-            assert (
-                self._time == measurement.time
-            ), "State time and measurement time must be aligned!"
+            assert self._time == measurement.time, (
+                "State time and measurement time must be aligned!"
+            )
         if self._frame_num is not None:
-            assert (
-                self._frame_num == measurement.frame_num
-            ), "State time and measurement time must be aligned!"
+            assert self._frame_num == measurement.frame_num, (
+                "State time and measurement time must be aligned!"
+            )
 
         x = self._mean
         x_pv = self._dynamic_model.mean2pv(x)

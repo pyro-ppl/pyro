@@ -63,9 +63,7 @@ __doc__ = "\n\n".join(
         :special-members: __call__
         :show-inheritance:
         :member-order: bysource
-    """.format(
-            _name
-        )
+    """.format(_name)
         for _name in __all__
     ]
 )

@@ -19,6 +19,7 @@ Dirichlet distributions [2], avoiding the need for Laplace approximations as in
     "Pathwise gradients beyond the reparametrization trick"
     https://arxiv.org/pdf/1806.01851.pdf
 """
+
 import argparse
 import functools
 import logging
@@ -137,7 +138,9 @@ def main(args):
     guide = functools.partial(parametrized_guide, predictor)
     Elbo = JitTraceEnum_ELBO if args.jit else TraceEnum_ELBO
     elbo = Elbo(max_plate_nesting=2)
-    optim = ClippedAdam({"lr": args.learning_rate})
+    optim = ClippedAdam(
+        {"lr": args.learning_rate, "centered_variance": args.centered_variance}
+    )
     svi = SVI(model, guide, optim, elbo)
     logging.info("Step\tLoss")
     for step in range(args.num_steps):
@@ -149,7 +152,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.9.1")
+    assert pyro.__version__.startswith("1.9.2")
     parser = argparse.ArgumentParser(
         description="Amortized Latent Dirichlet Allocation"
     )
@@ -160,6 +163,7 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--num-steps", default=1000, type=int)
     parser.add_argument("-l", "--layer-sizes", default="100-100")
     parser.add_argument("-lr", "--learning-rate", default=0.01, type=float)
+    parser.add_argument("-cv", "--centered-variance", default=False, type=bool)
     parser.add_argument("-b", "--batch-size", default=32, type=int)
     parser.add_argument("--jit", action="store_true")
     args = parser.parse_args()

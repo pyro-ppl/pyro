@@ -41,4 +41,4 @@ def load_nextstrain_counts(map_location=None) -> dict:
     # Load tensors to the default location.
     if map_location is None:
         map_location = torch.tensor(0.0).device
-    return torch.load(filename, map_location=map_location)
+    return torch.load(filename, map_location=map_location, weights_only=False)

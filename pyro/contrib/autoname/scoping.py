@@ -6,6 +6,7 @@
 :func:`pyro.contrib.autoname.scope`, a tool for automatically appending
 a semantically meaningful prefix to names of sample sites.
 """
+
 import functools
 
 from pyro.poutine.messenger import Messenger

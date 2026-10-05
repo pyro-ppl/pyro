@@ -99,9 +99,9 @@ class MLP(nn.Module):
         )
 
         # assume int or list
-        assert isinstance(
-            input_size, (int, list, tuple)
-        ), "input_size must be int, list, tuple"
+        assert isinstance(input_size, (int, list, tuple)), (
+            "input_size must be int, list, tuple"
+        )
 
         # everything in MLP will be concatted if it's multiple arguments
         last_layer_size = input_size if type(input_size) == int else sum(input_size)
@@ -151,9 +151,9 @@ class MLP(nn.Module):
 
         # now we have all of our hidden layers
         # we handle outputs
-        assert isinstance(
-            output_size, (int, list, tuple)
-        ), "output_size must be int, list, tuple"
+        assert isinstance(output_size, (int, list, tuple)), (
+            "output_size must be int, list, tuple"
+        )
 
         if type(output_size) == int:
             all_modules.append(nn.Linear(last_layer_size, output_size))

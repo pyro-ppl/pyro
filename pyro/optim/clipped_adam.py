@@ -19,14 +19,21 @@ class ClippedAdam(Optimizer):
     :param weight_decay: weight decay (L2 penalty) (default: 0)
     :param clip_norm: magnitude of norm to which gradients are clipped (default: 10.0)
     :param lrd: rate at which learning rate decays (default: 1.0)
+    :param centered_variance: use centered variance (default: False)
 
     Small modification to the Adam algorithm implemented in torch.optim.Adam
-    to include gradient clipping and learning rate decay.
+    to include gradient clipping and learning rate decay and an option to use
+    the centered variance (see equation 2 in [2]).
 
-    Reference
+    **References**
 
-    `A Method for Stochastic Optimization`, Diederik P. Kingma, Jimmy Ba
-    https://arxiv.org/abs/1412.6980
+    [1] `A Method for Stochastic Optimization`, Diederik P. Kingma, Jimmy Ba
+        https://arxiv.org/abs/1412.6980
+
+    [2] `A Two-Step Machine Learning Method for Predicting the Formation Energy of Ternary Compounds`,
+        Varadarajan Rengaraj, Sebastian Jost, Franz Bethke, Christian Plessl,
+        Hossein Mirhosseini, Andrea Walther, Thomas D. Kühne
+        https://doi.org/10.3390/computation11050095
     """
 
     def __init__(
@@ -38,6 +45,7 @@ class ClippedAdam(Optimizer):
         weight_decay=0,
         clip_norm: float = 10.0,
         lrd: float = 1.0,
+        centered_variance: bool = False,
     ):
         defaults = dict(
             lr=lr,
@@ -46,6 +54,7 @@ class ClippedAdam(Optimizer):
             weight_decay=weight_decay,
             clip_norm=clip_norm,
             lrd=lrd,
+            centered_variance=centered_variance,
         )
         super().__init__(params, defaults)
 
@@ -87,7 +96,8 @@ class ClippedAdam(Optimizer):
 
                 # Decay the first and second moment running average coefficient
                 exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
-                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
+                grad_var = (grad - exp_avg) if group["centered_variance"] else grad
+                exp_avg_sq.mul_(beta2).addcmul_(grad_var, grad_var, value=1 - beta2)
 
                 denom = exp_avg_sq.sqrt().add_(group["eps"])
 

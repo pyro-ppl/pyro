@@ -56,21 +56,21 @@ class MixtureOfDiagNormals(TorchDistribution):
             "(or ... x B x K x D if doing batches)"
         )
         if not self.batch_mode:
-            assert (
-                coord_scale.dim() == 2
-            ), "The coord_scale parameter in MixtureOfDiagNormals should be K x D dimensional"
-            assert (
-                component_logits.dim() == 1
-            ), "The component_logits parameter in MixtureOfDiagNormals should be K dimensional"
+            assert coord_scale.dim() == 2, (
+                "The coord_scale parameter in MixtureOfDiagNormals should be K x D dimensional"
+            )
+            assert component_logits.dim() == 1, (
+                "The component_logits parameter in MixtureOfDiagNormals should be K dimensional"
+            )
             assert component_logits.size(-1) == locs.size(-2)
             batch_shape = ()
         else:
-            assert (
-                coord_scale.dim() > 2
-            ), "The coord_scale parameter in MixtureOfDiagNormals should be ... x B x K x D dimensional"
-            assert (
-                component_logits.dim() > 1
-            ), "The component_logits parameter in MixtureOfDiagNormals should be ... x B x K dimensional"
+            assert coord_scale.dim() > 2, (
+                "The coord_scale parameter in MixtureOfDiagNormals should be ... x B x K x D dimensional"
+            )
+            assert component_logits.dim() > 1, (
+                "The component_logits parameter in MixtureOfDiagNormals should be ... x B x K dimensional"
+            )
             assert component_logits.size(-1) == locs.size(-2)
             batch_shape = tuple(locs.shape[:-2])
 
@@ -202,23 +202,23 @@ class _MixDiagNormalSample(Function):
         root_two = math.sqrt(2.0)
         shift_log_scales = log_scales[..., shift_indices]
         shift_log_scales[..., 0] = 0.0
-        sigma_products = torch.cumsum(shift_log_scales, dim=-1).exp()  # b j i
+        log_sigma_products = torch.cumsum(shift_log_scales, dim=-1)  # b j i
 
         reverse_indices = torch.tensor(
             range(dim - 1, -1, -1), dtype=torch.long, device=z.device
         )
         reverse_log_sigma_0 = sigma_0.log()[..., reverse_indices]  # b 1 i
-        sigma_0_products = torch.cumsum(reverse_log_sigma_0, dim=-1).exp()[
+        log_sigma_0_products = torch.cumsum(reverse_log_sigma_0, dim=-1)[
             ..., reverse_indices - 1
         ]  # b 1 i
-        sigma_0_products[..., -1] = 1.0
-        sigma_products *= sigma_0_products
+        log_sigma_0_products[..., -1] = 0.0
+        log_sigma_products += log_sigma_0_products
 
         logits_grad = torch.erf(z_tilde / root_two) - torch.erf(
             z_shift / root_two
         )  # l b j i
-        logits_grad *= torch.exp(-0.5 * r_sqr_ji)  # l b j i
-        logits_grad = (logits_grad * g / sigma_products).sum(-1)  # l b j
+        logits_grad *= torch.exp(-0.5 * r_sqr_ji - log_sigma_products)  # l b j i
+        logits_grad = (logits_grad * g).sum(-1)  # l b j
         logits_grad = sum_leftmost(logits_grad / q_tot, -1 - batch_dims)  # b j
         logits_grad *= 0.5 * math.pow(2.0 * math.pi, -0.5 * (dim - 1))
         logits_grad = -pis * logits_grad

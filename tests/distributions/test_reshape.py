@@ -151,5 +151,5 @@ def test_extra_event_dim_overflow(sample_dim, batch_dim, event_dim):
 
 def test_independent_entropy():
     dist_univ = Bernoulli(0.5)
-    dist_multi = Bernoulli(torch.Tensor([0.5, 0.5])).to_event(1)
+    dist_multi = Bernoulli(torch.tensor([0.5, 0.5])).to_event(1)
     assert_equal(dist_multi.entropy(), 2 * dist_univ.entropy())

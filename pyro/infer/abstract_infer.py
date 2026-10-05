@@ -31,9 +31,9 @@ class EmpiricalMarginal(Empirical):
     """
 
     def __init__(self, trace_posterior, sites=None, validate_args=None):
-        assert isinstance(
-            trace_posterior, TracePosterior
-        ), "trace_dist must be trace posterior distribution object"
+        assert isinstance(trace_posterior, TracePosterior), (
+            "trace_dist must be trace posterior distribution object"
+        )
         if sites is None:
             sites = "_RETURN"
         self._num_chains = 1
@@ -126,9 +126,9 @@ class Marginals:
     """
 
     def __init__(self, trace_posterior, sites=None, validate_args=None):
-        assert isinstance(
-            trace_posterior, TracePosterior
-        ), "trace_dist must be trace posterior distribution object"
+        assert isinstance(trace_posterior, TracePosterior), (
+            "trace_dist must be trace posterior distribution object"
+        )
         if sites is None:
             sites = ["_RETURN"]
         elif isinstance(sites, str):
@@ -256,10 +256,10 @@ class TracePosterior(object, metaclass=ABCMeta):
                     tr, logit, chain_id = vals
                     assert chain_id < self.num_chains
                 self.exec_traces.append(tr)
-                self.log_weights.append(logit)
+                self.log_weights.append(torch.as_tensor(logit).detach())
                 self.chain_ids.append(chain_id)
                 self._idx_by_chain[chain_id].append(i)
-        self._categorical = Categorical(logits=torch.tensor(self.log_weights))
+        self._categorical = Categorical(logits=torch.stack(self.log_weights))
         return self
 
     def information_criterion(self, pointwise=False):

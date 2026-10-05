@@ -90,13 +90,13 @@ class GPModel(Parameterized):
     """
 
     def __init__(self, X, y, kernel, mean_function=None, jitter=1e-6):
-        assert isinstance(
-            X, torch.Tensor
-        ), "X needs to be a torch Tensor instead of a {}".format(type(X))
+        assert isinstance(X, torch.Tensor), (
+            "X needs to be a torch Tensor instead of a {}".format(type(X))
+        )
         if y is not None:
-            assert isinstance(
-                y, torch.Tensor
-            ), "y needs to be a torch Tensor instead of a {}".format(type(y))
+            assert isinstance(y, torch.Tensor), (
+                "y needs to be a torch Tensor instead of a {}".format(type(y))
+            )
 
         super().__init__()
         self.set_data(X, y)

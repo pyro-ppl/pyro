@@ -469,7 +469,7 @@ def test_enumeration(model, data, var, history, use_replay):
                             ): "{}_{}".format(k, i - j)
                             for j in range(history + 1)
                             for k in var
-                        }
+                        },
                     )
                 )
 
@@ -637,7 +637,7 @@ def test_enumeration_multi(
                             ): "{}_{}".format(k, i - j)
                             for j in range(history + 1)
                             for k in vars1
-                        }
+                        },
                     )
                 )
         # vectorized days factors
@@ -659,7 +659,7 @@ def test_enumeration_multi(
                             ): "{}_{}".format(k, i - j)
                             for j in range(history + 1)
                             for k in vars2
-                        }
+                        },
                     )
                 )
 

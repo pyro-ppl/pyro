@@ -70,8 +70,11 @@ class BatchDataLoader(object):
             _slice = slices[batch_order[i]]
             if _slice[1]:
                 # labeled
-                yield self.data_x[_slice[0]], nn.functional.one_hot(
-                    self.data_y[_slice[0]], num_classes=self.num_classes
+                yield (
+                    self.data_x[_slice[0]],
+                    nn.functional.one_hot(
+                        self.data_y[_slice[0]], num_classes=self.num_classes
+                    ),
                 )
             else:
                 # unlabeled

@@ -209,12 +209,12 @@ class AIR(nn.Module):
             )
 
     def guide(self, data, batch_size, **kwargs):
-        pyro.module("rnn", self.rnn),
-        pyro.module("predict", self.predict),
-        pyro.module("encode", self.encode),
-        pyro.module("embed", self.embed),
-        pyro.module("bl_rnn", self.bl_rnn),
-        pyro.module("bl_predict", self.bl_predict),
+        pyro.module("rnn", self.rnn)
+        pyro.module("predict", self.predict)
+        pyro.module("encode", self.encode)
+        pyro.module("embed", self.embed)
+        pyro.module("bl_rnn", self.bl_rnn)
+        pyro.module("bl_predict", self.bl_predict)
         pyro.module("bl_embed", self.bl_embed)
 
         pyro.param("h_init", self.h_init)

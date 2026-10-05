@@ -11,6 +11,7 @@ import os
 import subprocess
 import sys
 import urllib
+from functools import partial
 
 import torch
 
@@ -31,7 +32,9 @@ SOURCE_FILES = [
     "date-hour-soo-dest-2018.csv.gz",
     "date-hour-soo-dest-2019.csv.gz",
 ]
-CACHE_URL = "https://d2hg8soec8ck9v.cloudfront.net/datasets/bart_full.pkl.bz2"
+CACHE_URL = (
+    "https://github.com/pyro-ppl/datasets/blob/master/bart_full.pkl.bz2?raw=true"
+)
 
 
 def _load_hourly_od(basename):
@@ -120,12 +123,12 @@ def load_bart_od():
         except urllib.error.HTTPError:
             logging.debug("cache miss, preprocessing from scratch")
     if os.path.exists(pkl_file):
-        return torch.load(pkl_file)
+        return torch.load(pkl_file, weights_only=False)
 
     filenames = multiprocessing.Pool(len(SOURCE_FILES)).map(
         _load_hourly_od, SOURCE_FILES
     )
-    datasets = list(map(torch.load, filenames))
+    datasets = list(map(partial(torch.load, weights_only=False), filenames))
 
     stations = sorted(set().union(*(d["stations"].keys() for d in datasets)))
     min_time = min(int(d["rows"][:, 0].min()) for d in datasets)

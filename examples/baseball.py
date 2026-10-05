@@ -52,7 +52,7 @@ hyper-parameters) of running HMC on different problems.
 """
 
 logging.basicConfig(format="%(message)s", level=logging.INFO)
-DATA_URL = "https://d2hg8soec8ck9v.cloudfront.net/datasets/EfronMorrisBB.txt"
+DATA_URL = "https://github.com/pyro-ppl/datasets/blob/master/EfronMorrisBB.txt?raw=true"
 
 
 # ===================================
@@ -178,14 +178,12 @@ def train_test_split(pd_dataframe):
     Training data - 45 initial at-bats and hits for each player.
     Validation data - Full season at-bats and hits for each player.
     """
-    device = torch.Tensor().device
     train_data = torch.tensor(
-        pd_dataframe[["At-Bats", "Hits"]].values, dtype=torch.float, device=device
+        pd_dataframe[["At-Bats", "Hits"]].values, dtype=torch.float
     )
     test_data = torch.tensor(
         pd_dataframe[["SeasonAt-Bats", "SeasonHits"]].values,
         dtype=torch.float,
-        device=device,
     )
     first_name = pd_dataframe["FirstName"].values
     last_name = pd_dataframe["LastName"].values
@@ -392,7 +390,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.9.1")
+    assert pyro.__version__.startswith("1.9.2")
     parser = argparse.ArgumentParser(description="Baseball batting average using HMC")
     parser.add_argument("-n", "--num-samples", nargs="?", default=200, type=int)
     parser.add_argument("--num-chains", nargs="?", default=4, type=int)

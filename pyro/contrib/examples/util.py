@@ -10,9 +10,34 @@ from torchvision import transforms
 
 
 class MNIST(datasets.MNIST):
-    mirrors = [
-        "https://d2hg8soec8ck9v.cloudfront.net/datasets/mnist/"
-    ] + datasets.MNIST.mirrors
+    mirrors = ["https://github.com/pyro-ppl/datasets/blob/master/mnist/"]
+
+    def download(self) -> None:
+        """Download the MNIST data if it doesn't exist already."""
+
+        if self._check_exists():
+            return
+
+        os.makedirs(self.raw_folder, exist_ok=True)
+
+        # download files
+        for filename, md5 in self.resources:
+            errors = []
+            for mirror in self.mirrors:
+                url = f"{mirror}{filename}?raw=true"
+                try:
+                    datasets.utils.download_and_extract_archive(
+                        url, download_root=self.raw_folder, filename=filename, md5=md5
+                    )
+                except datasets.URLError as e:
+                    errors.append(e)
+                    continue
+                break
+            else:
+                s = f"Error downloading {filename}:\n"
+                for mirror, err in zip(self.mirrors, errors):
+                    s += f"Tried {mirror}, got:\n{str(err)}\n"
+                raise RuntimeError(s)
 
 
 def get_data_loader(

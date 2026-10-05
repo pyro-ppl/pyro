@@ -429,7 +429,7 @@ def effectful(
     assert type != "message", "cannot use 'message' as keyword"
 
     @functools.wraps(fn)
-    def _fn(
+    def _fn(  # type: ignore[valid-type]
         *args: _P.args,
         name: Optional[str] = None,
         infer: Optional[InferDict] = None,

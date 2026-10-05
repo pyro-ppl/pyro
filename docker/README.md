@@ -1,3 +1,9 @@
+<!--
+Copyright Contributors to the Pyro project.
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 ## Using Pyro Docker
 
 Some utilities for building docker images and running Pyro inside a Docker container are

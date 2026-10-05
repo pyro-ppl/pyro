@@ -1,3 +1,9 @@
+<!--
+Copyright (c) 2017-2019 Uber Technologies, Inc.
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Hierarchical mixed-effect hidden Markov models
 
 Note: This is a cleaned-up version of the seal experiments in [Bingham et al 2019] that is a simplified variant of some of the analysis in the [momentuHMM harbour seal example](https://github.com/bmcclintock/momentuHMM/blob/master/vignettes/harbourSealExample.R) [McClintock et al 2018].

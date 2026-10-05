@@ -219,7 +219,7 @@ def xfail_jit(*args, **kwargs):
         marks=[
             pytest.mark.xfail(reason=reason),
             pytest.mark.skipif("CI" in os.environ, reason="slow test"),
-        ]
+        ],
     )
 
 

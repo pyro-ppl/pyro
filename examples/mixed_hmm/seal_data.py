@@ -12,7 +12,7 @@ MISSING = 1e-6
 
 def download_seal_data(filename):
     """download the preprocessed seal data and save it to filename"""
-    url = "https://d2hg8soec8ck9v.cloudfront.net/datasets/prep_seal_data.csv"
+    url = "https://github.com/pyro-ppl/datasets/blob/master/prep_seal_data.csv?raw=true"
     with open(filename, "wb") as f:
         f.write(urlopen(url).read())
 

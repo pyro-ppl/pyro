@@ -420,7 +420,7 @@ def test_potential_fn_pickling(jit):
     buffer = io.BytesIO()
     torch.save(potential_fn, buffer)
     buffer.seek(0)
-    deser_potential_fn = torch.load(buffer)
+    deser_potential_fn = torch.load(buffer, weights_only=False)
     assert_close(deser_potential_fn(test_data), potential_fn(test_data))
 
 

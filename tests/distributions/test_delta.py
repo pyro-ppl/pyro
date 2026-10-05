@@ -19,7 +19,7 @@ class TestDelta(TestCase):
         self.test_data = torch.tensor([[3.0], [3.0], [3.0]])
         self.batch_test_data_1 = torch.arange(0.0, 4.0).unsqueeze(1).expand(4, 3)
         self.batch_test_data_2 = torch.arange(4.0, 8.0).unsqueeze(1).expand(4, 3)
-        self.batch_test_data_3 = torch.Tensor([[3.0], [3.0], [3.0], [3.0]])
+        self.batch_test_data_3 = torch.tensor([[3.0], [3.0], [3.0], [3.0]])
         self.expected_support = [[[0.0], [1.0], [2.0], [3.0]]]
         self.expected_support_non_vec = [[3.0]]
         self.analytic_mean = 3.0

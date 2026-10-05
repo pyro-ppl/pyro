@@ -6,6 +6,7 @@ import warnings
 from collections import OrderedDict
 from contextlib import ExitStack, contextmanager
 from inspect import isclass
+from operator import attrgetter
 from typing import Callable, Iterator, Optional, Sequence, Union
 
 import torch
@@ -28,7 +29,7 @@ from pyro.poutine.runtime import (
     effectful,
 )
 from pyro.poutine.subsample_messenger import SubsampleMessenger
-from pyro.util import deep_getattr, set_rng_seed  # noqa: F401
+from pyro.util import set_rng_seed  # noqa: F401
 
 
 def get_param_store() -> ParamStoreDict:
@@ -493,7 +494,7 @@ def module(
                 mod_name = _name
             if _name in target_state_dict.keys():
                 if not is_param:
-                    deep_getattr(nn_module, mod_name)._parameters[param_name] = (
+                    attrgetter(mod_name)(nn_module)._parameters[param_name] = (
                         target_state_dict[_name]
                     )
                 else:

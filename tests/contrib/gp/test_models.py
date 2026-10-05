@@ -349,9 +349,9 @@ def _pre_test_mean_function():
     def f(x):
         return 2 * x + 3 + 5 * torch.sin(7 * x)
 
-    X = torch.arange(100, dtype=torch.Tensor().dtype)
+    X = torch.arange(100, dtype=torch.get_default_dtype())
     y = f(X)
-    Xnew = torch.arange(100, 150, dtype=torch.Tensor().dtype)
+    Xnew = torch.arange(100, 150, dtype=torch.get_default_dtype())
     ynew = f(Xnew)
 
     kernel = Cosine(input_dim=1)

@@ -70,18 +70,22 @@ def test_elbo_mapdata(map_type, batch_size, n_steps, lr):
         )
         if map_type == "iplate":
             for i in pyro.plate("aaa", len(data), batch_size):
-                pyro.sample(
-                    "obs_%d" % i,
-                    dist.Normal(loc_latent, torch.pow(lam, -0.5)).to_event(1),
-                    obs=data[i],
-                ),
+                (
+                    pyro.sample(
+                        "obs_%d" % i,
+                        dist.Normal(loc_latent, torch.pow(lam, -0.5)).to_event(1),
+                        obs=data[i],
+                    ),
+                )
         elif map_type == "plate":
             with pyro.plate("aaa", len(data), batch_size) as ind:
-                pyro.sample(
-                    "obs",
-                    dist.Normal(loc_latent, torch.pow(lam, -0.5)).to_event(1),
-                    obs=data[ind],
-                ),
+                (
+                    pyro.sample(
+                        "obs",
+                        dist.Normal(loc_latent, torch.pow(lam, -0.5)).to_event(1),
+                        obs=data[ind],
+                    ),
+                )
         else:
             for i, x in enumerate(data):
                 pyro.sample(

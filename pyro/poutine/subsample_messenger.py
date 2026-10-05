@@ -45,7 +45,7 @@ class _Subsample(Distribution):
                     )
                 )
         with ignore_jit_warnings(["torch.Tensor results are registered as constants"]):
-            self.device = device or torch.Tensor().device
+            self.device = device or torch.tensor(tuple()).device
 
     @ignore_jit_warnings(["Converting a tensor to a Python boolean"])
     def sample(self, sample_shape: torch.Size = torch.Size()) -> torch.Tensor:
@@ -166,7 +166,8 @@ class SubsampleMessenger(IndepMessenger):
         )
         msg["cond_indep_stack"] = (frame,) + msg["cond_indep_stack"]
         if isinstance(self.size, torch.Tensor) or isinstance(  # type: ignore[unreachable]
-            self.subsample_size, torch.Tensor  # type: ignore[unreachable]
+            self.subsample_size,  # type: ignore[unreachable]
+            torch.Tensor,
         ):
             if not isinstance(msg["scale"], torch.Tensor):  # type: ignore[unreachable]
                 with ignore_jit_warnings():
@@ -205,13 +206,13 @@ class SubsampleMessenger(IndepMessenger):
                         )
                         if msg["type"] == "param":
                             if hasattr(value, "_pyro_unconstrained_param"):
-                                param = value._pyro_unconstrained_param  # type: ignore[attr-defined]
+                                param = value._pyro_unconstrained_param
                             else:
-                                param = value.unconstrained()  # type: ignore[attr-defined]
+                                param = value.unconstrained()
 
                             if not hasattr(param, "_pyro_subsample"):
                                 param._pyro_subsample = {}
 
                             param._pyro_subsample[dim] = self._indices
-                            new_value._pyro_unconstrained_param = param  # type: ignore[attr-defined]
+                            new_value._pyro_unconstrained_param = param
                         msg["value"] = new_value

@@ -1,9 +1,15 @@
+<!--
+Copyright Contributors to the Pyro project.
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 # Development
 
 Please follow our established coding style including variable names, module imports, and function definitions.
 The Pyro codebase follows the [PEP8 style guide](https://www.python.org/dev/peps/pep-0008/)
 (which you can check with `make lint`) and follows
-[`isort`](https://github.com/timothycrosley/isort) import order (which you can enforce with `make format`).
+Ruff's import order (which you can enforce with `make format`).
 When creating new files please add a license header; this can be done automatically via `make license` or simply `make format`.
 
 # Setup
@@ -16,14 +22,14 @@ make install
 ```
 or explicitly
 ```sh
-pip install -e .[dev]
+pip install -e . --group dev
 ```
 
 # Testing
 
 Before submitting a pull request, please autoformat code and ensure that unit tests pass locally
 ```sh
-make format            # runs isort
+make format            # runs Ruff
 make test              # linting and unit tests
 ```
 
@@ -76,8 +82,8 @@ You can test locally by running `make test-tutorials`.
 The profiler module contains scripts to support profiling different 
 Pyro modules, as well as test for performance regression.
 
-To run the profiling utilities, ensure that all dependencies for profiling are satisfied, 
-by running `make install`, or more specifically, `pip install -e .[profile]`.
+To run the profiling utilities, ensure that all dependencies for profiling are satisfied,
+by running `make install`, or more specifically, `pip install -e . --group profile`.
 
 There are some generic test cases available in the `profiler` module. Currently, this supports 
 only the `distributions` library, but we will be adding test cases for inference methods

@@ -216,7 +216,7 @@ def main(args):
                 raise
             pass
         wget.download(
-            "https://d2hg8soec8ck9v.cloudfront.net/datasets/faces_training.csv",
+            "https://github.com/pyro-ppl/datasets/blob/master/faces_training.csv?raw=true",
             dataset_path,
         )
     data = torch.tensor(np.loadtxt(dataset_path, delimiter=",")).float()
@@ -269,7 +269,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    assert pyro.__version__.startswith("1.9.1")
+    assert pyro.__version__.startswith("1.9.2")
     # parse command line arguments
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument(
