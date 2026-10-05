@@ -67,7 +67,9 @@ class _Subsample(Distribution):
     def log_prob(self, x: torch.Tensor) -> torch.Tensor:
         # This is zero so that plate can provide an unbiased estimate of
         # the non-subsampled log_prob.
-        result = torch.tensor(0.0, device=self.device)
+        # Derive the zero from ``x`` rather than a Python constant to avoid a
+        # torch.jit TracerWarning when running under jit_compile=True (see #3449).
+        result = x.new_zeros(())
         return result.cuda() if self.use_cuda else result
 
 
