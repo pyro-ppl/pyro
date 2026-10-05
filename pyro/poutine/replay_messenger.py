@@ -1,15 +1,26 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import TYPE_CHECKING, Dict, Optional
+import warnings
+from typing import TYPE_CHECKING, Any, Dict, Optional
+
+import torch
 
 from pyro.poutine.messenger import Messenger
+from pyro.poutine.util import site_is_subsample
 
 if TYPE_CHECKING:
-    import torch
-
     from pyro.poutine.runtime import Message
     from pyro.poutine.trace_struct import Trace
+
+
+def _subsample_values_equal(a: Any, b: Any) -> bool:
+    """Compare two subsample index values for equality."""
+    if isinstance(a, torch.Tensor) and isinstance(b, torch.Tensor):
+        return torch.equal(a, b)
+    if isinstance(a, torch.Tensor) or isinstance(b, torch.Tensor):
+        return False
+    return bool(a == b)
 
 
 class ReplayMessenger(Messenger):
@@ -76,6 +87,28 @@ class ReplayMessenger(Messenger):
                 return None
             if guide_msg["type"] != "sample" or guide_msg["is_observed"]:
                 raise RuntimeError("site {} must be sampled in trace".format(name))
+            # Warn when replaying a subsample site whose explicit value differs
+            # from the guide's independently drawn subsample. This happens when a
+            # model passes an explicit ``subsample=idx`` to ``pyro.plate`` but is
+            # composed with a guide that draws its own subsample (e.g. an
+            # ``AutoGuide`` built without ``create_plates=``). Silently overriding
+            # the model's index decouples the model's and guide's minibatches.
+            # See https://github.com/pyro-ppl/pyro/issues/3468
+            if (
+                msg["value"] is not None
+                and guide_msg["value"] is not None
+                and site_is_subsample(msg)
+                and not _subsample_values_equal(msg["value"], guide_msg["value"])
+            ):
+                warnings.warn(
+                    "Replaying the subsample site '{}' with a value that differs "
+                    "from the model's explicit subsample. If the model passes an "
+                    "explicit ``subsample=idx`` to ``pyro.plate``, use a guide that "
+                    "reuses the same subsample (e.g. pass ``create_plates=`` to "
+                    "``AutoGuide``) so the model's and guide's minibatches stay "
+                    "aligned.".format(name),
+                    stacklevel=2,
+                )
             msg["done"] = True
             msg["value"] = guide_msg["value"]
             msg["infer"] = guide_msg["infer"]

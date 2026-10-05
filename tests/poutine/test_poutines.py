@@ -123,6 +123,56 @@ class ReplayHandlerTests(NormalNormalNormalHandlerTestCase):
             assert_equal(model_trace.nodes[name]["value"], tr2.nodes[name]["value"])
 
 
+def test_replay_warns_on_mismatched_explicit_subsample():
+    """Replay should warn when it overrides a model's explicit subsample.
+
+    When a model passes an explicit ``subsample=idx`` to ``pyro.plate`` but is
+    composed with a guide that draws its own subsample (e.g. an ``AutoGuide``
+    without ``create_plates=``), replay silently overrode the model's index with
+    the guide's. We now warn about this decoupling (see #3468).
+    """
+    from pyro.infer.autoguide import AutoNormal
+
+    N = 6
+    idx = torch.tensor([4, 0, 1])
+
+    def model(idx):
+        with pyro.plate("data", N, dim=-1, subsample=idx):
+            pyro.sample("mu", dist.Normal(0.0, 1.0))
+
+    pyro.clear_param_store()
+    guide = AutoNormal(model)
+    guide(idx)
+    guide_trace = poutine.trace(guide).get_trace(idx)
+
+    with pytest.warns(UserWarning, match="subsample site 'data'"):
+        poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(idx)
+
+
+def test_replay_no_warn_when_subsample_matches():
+    """Replay should not warn when the guide reuses the model's subsample."""
+    from pyro.infer.autoguide import AutoNormal
+
+    N = 6
+    idx = torch.tensor([4, 0, 1])
+
+    def create_plates(idx):
+        return pyro.plate("data", N, dim=-1, subsample=idx)
+
+    def model(idx):
+        with pyro.plate("data", N, dim=-1, subsample=idx):
+            pyro.sample("mu", dist.Normal(0.0, 1.0))
+
+    pyro.clear_param_store()
+    guide = AutoNormal(model, create_plates=create_plates)
+    guide(idx)
+    guide_trace = poutine.trace(guide).get_trace(idx)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        poutine.trace(poutine.replay(model, trace=guide_trace)).get_trace(idx)
+
+
 class BlockHandlerTests(NormalNormalNormalHandlerTestCase):
     def test_block_hide_fn(self):
         model_trace = poutine.trace(

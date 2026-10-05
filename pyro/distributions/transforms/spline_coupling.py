@@ -166,7 +166,12 @@ class SplineCoupling(TransformModule):
 
 
 def spline_coupling(
-    input_dim, split_dim=None, hidden_dims=None, count_bins=8, bound=3.0
+    input_dim,
+    split_dim=None,
+    hidden_dims=None,
+    count_bins=8,
+    bound=3.0,
+    order="linear",
 ):
     """
     A helper function to create a
@@ -175,6 +180,18 @@ def spline_coupling(
 
     :param input_dim: Dimension of input variable
     :type input_dim: int
+    :param split_dim: Zero-indexed dimension :math:`d` upon which to perform input/
+        output split for transformation.
+    :type split_dim: int
+    :param hidden_dims: The dimensions of the hidden units of the hypernet.
+    :type hidden_dims: list
+    :param count_bins: The number of segments comprising the spline.
+    :type count_bins: int
+    :param bound: The quantity :math:`K` determining the bounding box,
+        :math:`[-K,K]\times[-K,K]`, of the spline.
+    :type bound: float
+    :param order: One of ['linear', 'quadratic'] specifying the order of the spline.
+    :type order: string
 
     """
 
@@ -184,15 +201,20 @@ def spline_coupling(
     if hidden_dims is None:
         hidden_dims = [input_dim * 10, input_dim * 10]
 
+    # Rational linear splines have an additional lambda parameter per bin,
+    # while quadratic splines only use widths, heights and derivatives.
+    param_dims = [
+        (input_dim - split_dim) * count_bins,
+        (input_dim - split_dim) * count_bins,
+        (input_dim - split_dim) * (count_bins - 1),
+    ]
+    if order == "linear":
+        param_dims.append((input_dim - split_dim) * count_bins)
+
     nn = DenseNN(
         split_dim,
         hidden_dims,
-        param_dims=[
-            (input_dim - split_dim) * count_bins,
-            (input_dim - split_dim) * count_bins,
-            (input_dim - split_dim) * (count_bins - 1),
-            (input_dim - split_dim) * count_bins,
-        ],
+        param_dims=param_dims,
     )
 
-    return SplineCoupling(input_dim, split_dim, nn, count_bins, bound)
+    return SplineCoupling(input_dim, split_dim, nn, count_bins, bound, order)

@@ -419,7 +419,8 @@ class TransformTests(TestCase):
             self._test(partial(T.spline, order=order))
 
     def test_spline_coupling(self):
-        self._test(T.spline_coupling)
+        for order in ["linear", "quadratic"]:
+            self._test(partial(T.spline_coupling, order=order))
 
     def test_spline_autoregressive(self):
         self._test(T.spline_autoregressive)
