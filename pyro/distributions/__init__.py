@@ -98,6 +98,7 @@ from pyro.distributions.improper_uniform import ImproperUniform
 
 if "InverseGamma" not in locals():  # Use PyTorch version if available.
     from pyro.distributions.inverse_gamma import InverseGamma
+from pyro.distributions.inverse_wishart import InverseWishart
 from pyro.distributions.lkj import LKJ, LKJCorrCholesky
 from pyro.distributions.log_normal_negative_binomial import LogNormalNegativeBinomial
 from pyro.distributions.logistic import Logistic, SkewLogistic
@@ -190,6 +191,7 @@ __all__ = [
     "Independent",
     "IndependentHMM",
     "InverseGamma",
+    "InverseWishart",
     "Kumaraswamy",
     "LKJ",
     "LKJCholesky",
