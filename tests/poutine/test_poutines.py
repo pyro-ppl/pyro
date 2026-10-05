@@ -940,6 +940,18 @@ def test_plate_error_on_enter():
     assert len(_DIM_ALLOCATOR._stack) == 0, "stack was not cleaned on error"
 
 
+@pytest.mark.parametrize("size", [-1, -10])
+def test_plate_error_on_negative_size(size):
+    def model():
+        with pyro.plate("foo", size):
+            pass
+
+    assert len(_DIM_ALLOCATOR._stack) == 0
+    with pytest.raises(ValueError, match="size must be a positive integer"):
+        poutine.trace(model)()
+    assert len(_DIM_ALLOCATOR._stack) == 0, "stack was not cleaned on error"
+
+
 @pytest.mark.parametrize(
     "graph_type, expected", [("flat", set()), ("dense", {"x", "y"})]
 )
