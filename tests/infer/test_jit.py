@@ -29,6 +29,7 @@ from pyro.infer import (
 )
 from pyro.optim import Adam
 from pyro.poutine.indep_messenger import CondIndepStackFrame
+from pyro.poutine.subsample_messenger import _Subsample
 from pyro.util import ignore_jit_warnings
 from tests.common import assert_close, assert_equal
 
@@ -37,6 +38,23 @@ def constant(*args, **kwargs):
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=torch.jit.TracerWarning)
         return torch.tensor(*args, **kwargs)
+
+
+def test_subsample_log_prob_ignores_jit_constant_warning():
+    subsample = _Subsample(3, None)
+    x = torch.arange(3)
+
+    def f(x):
+        return subsample.log_prob(x)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", torch.jit.TracerWarning)
+        torch.jit.trace(f, (x,), check_trace=False)
+
+    assert not any(
+        "torch.tensor results are registered as constants" in str(w.message).lower()
+        for w in caught
+    )
 
 
 logger = logging.getLogger(__name__)
