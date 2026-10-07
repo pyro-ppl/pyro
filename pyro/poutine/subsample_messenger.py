@@ -115,6 +115,8 @@ class SubsampleMessenger(IndepMessenger):
             size = -1  # This is PyTorch convention for "arbitrary size"
             subsample_size = -1
         else:
+            if size < 0:
+                raise ValueError("size cannot be negative")
             msg = Message(
                 type="sample",
                 name=name,
