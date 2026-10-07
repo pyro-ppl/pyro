@@ -23,7 +23,7 @@ from pyro.infer.enum import (
 from pyro.infer.util import Dice, is_validation_enabled
 from pyro.ops import packed
 from pyro.ops.contract import contract_tensor_tree, contract_to_tensor
-from pyro.ops.rings import SampleRing
+from pyro.ops.rings import LogRing, SampleRing
 from pyro.poutine.enum_messenger import EnumMessenger
 from pyro.util import check_traceenum_requirements, ignore_jit_warnings, warn_if_nan
 
@@ -106,6 +106,17 @@ def _find_ordinal(trace, site):
     return frozenset(
         trace.plate_to_symbol[f.name] for f in site["cond_indep_stack"] if f.vectorized
     )
+
+
+def _make_marginal_ring(trace, site, cache):
+    # Record plate sizes so that results can be broadcast to plates of size 1,
+    # whose dims are dropped from packed tensors.
+    dim_to_size = {
+        trace.plate_to_symbol[f.name]: f.size
+        for f in site["cond_indep_stack"]
+        if f.vectorized
+    }
+    return LogRing(cache, dim_to_size=dim_to_size)
 
 
 # TODO move this logic into a poutine
@@ -243,7 +254,7 @@ def _compute_marginals(model_trace, guide_trace):
                 sum_dims,
                 target_ordinal=ordinal,
                 target_dims={enum_symbol},
-                cache=cache,
+                ring=_make_marginal_ring(model_trace, site, cache),
             )
             logits = packed.unpack(logits, model_trace.symbol_to_dim)
             logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)
@@ -289,7 +300,7 @@ class BackwardSampleMessenger(pyro.poutine.messenger.Messenger):
                 self.sum_dims,
                 target_ordinal=ordinal,
                 target_dims={enum_symbol},
-                cache=self.cache,
+                ring=_make_marginal_ring(self.enum_trace, msg, self.cache),
             )
             logits = packed.unpack(logits, self.enum_trace.symbol_to_dim)
             logits = logits.unsqueeze(-1).transpose(-1, enum_dim - 1)

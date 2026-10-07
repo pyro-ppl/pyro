@@ -3870,6 +3870,33 @@ def test_marginals_2678(observed):
     elbo.compute_marginals(model, guide, **kwargs)
 
 
+@pytest.mark.parametrize("size", [1, 2, 3])
+def test_marginals_plate_3102(size):
+    probs = torch.tensor([0.3, 0.7])
+
+    @config_enumerate
+    def model(data):
+        with pyro.plate("data", size):
+            x = pyro.sample("x", dist.Categorical(probs))
+            pyro.sample("obs", dist.Normal(x.float(), 1.0), obs=data)
+            return x
+
+    def guide(data):
+        pass
+
+    data = torch.zeros(size)
+    elbo = TraceEnum_ELBO(max_plate_nesting=1)
+    marginals = elbo.compute_marginals(model, guide, data)
+    likelihood = (
+        dist.Normal(torch.tensor([0.0, 1.0]), 1.0).log_prob(torch.tensor(0.0)).exp()
+    )
+    expected = probs * likelihood / (probs * likelihood).sum()
+    assert_equal(marginals["x"].probs, expected.expand(size, 2).squeeze(0))
+
+    x = elbo.sample_posterior(model, guide, data)
+    assert x.numel() == size
+
+
 @pytest.mark.parametrize(
     "data",
     [
