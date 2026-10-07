@@ -21,6 +21,23 @@ from tests.common import (
 logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.stage("test_examples")
 
+# Mirrors the warning filters from setup.cfg [tool:pytest] filterwarnings,
+# which do not apply to examples run via subprocess.
+WARNINGS = [
+    "-Werror",
+    "-Wignore:numpy.ufunc size changed:RuntimeWarning",
+    "-Wignore:numpy.dtype size changed:RuntimeWarning",
+    "-Wignore:Mixed memory format inputs detected:UserWarning",
+    "-Wignore:Setting attributes on ParameterDict:UserWarning",
+    "-Wignore:Creating a tensor from a list of numpy.ndarrays is extremely slow",
+    "-Wignore::DeprecationWarning",
+    "-Wignore:CUDA initialization:UserWarning",
+    "-Wignore:__floordiv__ is deprecated:UserWarning",
+    "-Wignore:floor_divide is deprecated:UserWarning",
+    "-Wignore:torch.tensor results are registered as constants in the trace",
+    "-Wonce::DeprecationWarning",
+]
+
 
 CPU_EXAMPLES = [
     "air/main.py --num-steps=1",
@@ -363,7 +380,7 @@ def test_cpu(example):
     example = example.split()
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
-    check_call([sys.executable, filename] + args)
+    check_call([sys.executable] + WARNINGS + [filename] + args)
 
 
 @requires_cuda
@@ -373,7 +390,7 @@ def test_cuda(example):
     example = example.split()
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
-    check_call([sys.executable, filename] + args)
+    check_call([sys.executable] + WARNINGS + [filename] + args)
 
 
 @pytest.mark.parametrize("example", JIT_EXAMPLES)
@@ -382,7 +399,7 @@ def test_jit(example):
     example = example.split()
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
-    check_call([sys.executable, filename] + args)
+    check_call([sys.executable] + WARNINGS + [filename] + args)
 
 
 @requires_horovod
@@ -396,7 +413,7 @@ def test_horovod(np, example):
     example = example.split()
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
-    check_call(horovodrun.split() + [sys.executable, filename] + args)
+    check_call(horovodrun.split() + [sys.executable] + WARNINGS + [filename] + args)
 
 
 @requires_funsor
@@ -406,4 +423,4 @@ def test_funsor(example):
     example = example.split()
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
-    check_call([sys.executable, filename] + args)
+    check_call([sys.executable] + WARNINGS + [filename] + args)
