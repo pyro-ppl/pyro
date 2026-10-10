@@ -154,5 +154,8 @@ class SkewLogistic(TorchDistribution):
         return z.sigmoid().pow(self.asymmetry)
 
     def icdf(self, value):
-        z = value.pow(self.asymmetry.reciprocal()).logit()
+        # Keep p ** (1 / asymmetry) in log space: forming the power
+        # can underflow to zero or round to one for interior probabilities.
+        log_power = value.log() / self.asymmetry
+        z = log_power - (-log_power.expm1()).log()
         return self.loc + self.scale * z
