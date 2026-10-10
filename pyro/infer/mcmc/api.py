@@ -474,6 +474,7 @@ class MCMC(AbstractMCMC):
         self._samples = None
         self._args = None
         self._kwargs = None
+        self._prototype_trace = None
         if save_params is not None:
             kernel.save_params = save_params
         self._validate_kernel(initial_params)
@@ -554,6 +555,7 @@ class MCMC(AbstractMCMC):
         self._args, self._kwargs = args, kwargs
         num_samples = [0] * self.num_chains
         z_flat_acc = [[] for _ in range(self.num_chains)]
+
         with optional(
             pyro.validation_enabled(not self.disable_validation),
             self.disable_validation is not None,
@@ -564,6 +566,10 @@ class MCMC(AbstractMCMC):
             # requires_grad", which happens with `jit_compile` under PyTorch 1.7
             args = [arg.detach() if torch.is_tensor(arg) else arg for arg in args]
             for x, chain_id in self.sampler.run(*args, **kwargs):
+                # Save prototype trace after first setup (before it gets cleaned up)
+                if self._prototype_trace is None and hasattr(self.kernel, '_prototype_trace'):
+                    self._prototype_trace = self.kernel._prototype_trace
+
                 if num_samples[chain_id] == 0:
                     num_samples[chain_id] += 1
                     z_structure = x
@@ -606,14 +612,110 @@ class MCMC(AbstractMCMC):
         # terminate the sampler (shut down worker processes)
         self.sampler.terminate(True)
 
-    def get_samples(self, num_samples=None, group_by_chain=False):
+    def get_samples(self, num_samples=None, group_by_chain=False, include_discrete=True):
         """
         Get samples from the MCMC run, potentially resampling with replacement.
+
+        :param int num_samples: Number of samples to return. If `None`, all samples
+            from the MCMC run are returned.
+        :param bool group_by_chain: Whether to preserve the chain dimension. If True,
+            all samples will have num_chains as the size of their leading dimension.
+        :param bool include_discrete: Whether to include samples for discrete latent
+            variables that were enumerated during MCMC. If True, discrete latent sites
+            will be sampled from their posterior using forward-filtering backward-sampling.
+            Defaults to True.
+        :return: dictionary of samples keyed by site name.
 
         For parameter details see: :meth:`select_samples <pyro.infer.mcmc.util.select_samples>`.
         """
         samples = self._samples
-        return select_samples(samples, num_samples, group_by_chain)
+        selected_samples = select_samples(samples, num_samples, group_by_chain)
+
+        if not include_discrete or self._prototype_trace is None:
+            return selected_samples
+
+        # Check if model has any discrete enumerable sites
+        has_discrete = any(
+            node["fn"].has_enumerate_support
+            for node in self._prototype_trace.nodes.values()
+            if node["type"] == "sample" and not node["is_observed"]
+        )
+
+        if not has_discrete:
+            return selected_samples
+
+        # Sample discrete latent variables from their posterior
+        from pyro.infer.discrete import infer_discrete
+        from pyro.infer import config_enumerate
+
+        # Determine the number of samples to generate
+        if num_samples is None:
+            if group_by_chain:
+                total_samples = self.num_chains * self.num_samples
+            else:
+                total_samples = self.num_chains * self.num_samples
+        else:
+            total_samples = num_samples if not group_by_chain else num_samples * self.num_chains
+
+        # Flatten samples for processing if grouped by chain
+        if group_by_chain and len(selected_samples) > 0:
+            flattened_samples = {
+                k: v.reshape(-1, *v.shape[2:]) for k, v in selected_samples.items()
+            }
+        else:
+            flattened_samples = selected_samples
+
+        # Generate discrete samples for each MCMC sample
+        discrete_samples = {}
+        num_flat_samples = next(iter(flattened_samples.values())).shape[0] if flattened_samples else total_samples
+
+        for i in range(num_flat_samples):
+            # Get the i-th sample from continuous variables
+            sample_i = {k: v[i] for k, v in flattened_samples.items()} if flattened_samples else {}
+
+            # Condition model on this sample and infer discrete variables
+            # Note: kernel.model might already be conditioned/wrapped, so we need the base model
+            conditioned_model = poutine.condition(self.kernel.model, sample_i)
+            configured_model = config_enumerate(conditioned_model, "parallel")
+            discrete_model = infer_discrete(
+                configured_model,
+                first_available_dim=-1 - (self.kernel._max_plate_nesting or 0),
+                temperature=1,
+                strict_enumeration_warning=False
+            )
+
+            # Run the model to sample discrete variables
+            with poutine.trace() as tr:
+                discrete_model(*self._args, **self._kwargs)
+
+            # Collect discrete samples from this run
+            for name, node in tr.trace.nodes.items():
+                if (node["type"] == "sample" and
+                    not node["is_observed"] and
+                    name not in flattened_samples):
+                    if name not in discrete_samples:
+                        discrete_samples[name] = []
+                    discrete_samples[name].append(node["value"])
+
+        # Stack discrete samples
+        for name in discrete_samples:
+            discrete_samples[name] = torch.stack(discrete_samples[name])
+
+            # Reshape to match group_by_chain format if needed
+            if group_by_chain and num_samples is None:
+                discrete_samples[name] = discrete_samples[name].reshape(
+                    self.num_chains, self.num_samples, *discrete_samples[name].shape[1:]
+                )
+            elif group_by_chain:
+                # For resampled case with group_by_chain, determine chain structure
+                samples_per_chain = num_samples
+                discrete_samples[name] = discrete_samples[name].reshape(
+                    self.num_chains, samples_per_chain, *discrete_samples[name].shape[1:]
+                )
+
+        # Merge continuous and discrete samples
+        all_samples = {**selected_samples, **discrete_samples}
+        return all_samples
 
     def diagnostics(self):
         """
