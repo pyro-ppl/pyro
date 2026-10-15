@@ -18,12 +18,36 @@ from pyro.contrib.gp.models import (
     VariationalSparseGP,
 )
 from pyro.contrib.gp.util import train
+from pyro.infer import TraceMeanField_ELBO
 from pyro.infer.mcmc.api import MCMC
 from pyro.infer.mcmc.hmc import HMC
 from pyro.nn.module import PyroSample
 from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
+
+
+@pytest.mark.parametrize("approx", ["DTC", "FITC", "VFE"])
+@pytest.mark.parametrize("output_shape", [(), (1,), (2,), (2, 3)])
+def test_sparse_gp_independent_outputs(approx, output_shape):
+    x = torch.linspace(-2, 2, 9)
+    y = torch.randn(output_shape + (len(x),))
+    gp = SparseGPRegression(
+        x, y, RBF(1), x[::3].clone(), noise=torch.tensor(0.2), approx=approx
+    )
+    loss_fn = TraceMeanField_ELBO().differentiable_loss
+    joint_loss = loss_fn(gp.model, gp.guide)
+    params = tuple(gp.parameters())
+    joint_grad = torch.autograd.grad(joint_loss, params)
+    separate_loss = 0.0
+    for row in y.reshape(-1, len(x)):
+        gp.set_data(x, row)
+        separate_loss = separate_loss + loss_fn(gp.model, gp.guide)
+    separate_grad = torch.autograd.grad(separate_loss, params)
+    assert_equal(joint_loss, separate_loss)
+    for actual, expected in zip(joint_grad, separate_grad):
+        assert_equal(actual, expected)
+
 
 T = namedtuple("TestGPModel", ["model_class", "X", "y", "kernel", "likelihood"])
 
