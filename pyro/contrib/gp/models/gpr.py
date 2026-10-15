@@ -183,7 +183,7 @@ class GPRegression(GPModel):
         y = self.y.clone().detach()
         N = X.size(0)
         Kff = self.kernel(X).contiguous()
-        Kff.view(-1)[:: N + 1] += noise  # add noise to the diagonal
+        Kff.view(-1)[:: N + 1] += noise + self.jitter
 
         outside_vars = {"X": X, "y": y, "N": N, "Kff": Kff}
 
@@ -219,8 +219,10 @@ class GPRegression(GPModel):
             end = self.kernel(xnew, xnew).squeeze()
             Kffnew[N, :N] = cross
             Kffnew[:N, N] = cross
-            # No noise, just jitter for numerical stability
+            # Condition on the noisy observation when sampling with noise.
             Kffnew[N, N] = end + self.jitter
+            if not noiseless:
+                Kffnew[N, N] += noise
             # Heuristic to avoid adding degenerate points
             if Kffnew.logdet() > -15.0:
                 outside_vars["Kff"] = Kffnew

@@ -25,6 +25,49 @@ from tests.common import assert_equal
 
 logger = logging.getLogger(__name__)
 
+
+@pytest.mark.parametrize("noiseless", [False, True])
+@pytest.mark.init(rng_seed=0)
+def test_iter_sample_conditional(noiseless):
+    x = torch.tensor([-1.0, 1.0])
+    y = torch.tensor([0.2, -0.3])
+    gp = GPRegression(x, y, RBF(1), noise=torch.tensor(0.5), jitter=0.0)
+    sampler = gp.iter_sample(noiseless=noiseless)
+    xnew = torch.tensor([0.0])
+    ynew = sampler(xnew).detach()
+    inputs = torch.cat([x, xnew])
+    targets = torch.cat([y, ynew])
+    covariance = gp.kernel(inputs).detach()
+    covariance.diagonal()[: len(x)].add_(gp.noise.detach())
+    if not noiseless:
+        covariance[-1, -1] += gp.noise.detach()
+    query = torch.tensor([0.25])
+    cross = gp.kernel(inputs, query)
+    loc = cross.t() @ torch.linalg.solve(covariance, targets)
+    var = (
+        gp.kernel(query).squeeze()
+        - (cross * torch.linalg.solve(covariance, cross)).sum()
+    )
+    if not noiseless:
+        var = var + gp.noise
+    rng_state = torch.cuda.get_rng_state() if query.is_cuda else torch.get_rng_state()
+    actual = sampler(query)
+    if query.is_cuda:
+        torch.cuda.set_rng_state(rng_state)
+    else:
+        torch.set_rng_state(rng_state)
+    expected = dist.Normal(loc, var.sqrt()).rsample()
+    assert_equal(actual, expected)
+
+
+def test_iter_sample_training_jitter():
+    gp = GPRegression(
+        torch.zeros(2), torch.zeros(2), RBF(1), noise=torch.tensor(1e-20), jitter=1e-4
+    )
+    actual = gp.iter_sample()(torch.tensor([0.5]))
+    assert torch.isfinite(actual).all()
+
+
 T = namedtuple("TestGPModel", ["model_class", "X", "y", "kernel", "likelihood"])
 
 X = torch.tensor([[1.0, 5.0, 3.0], [4.0, 3.0, 7.0]])
