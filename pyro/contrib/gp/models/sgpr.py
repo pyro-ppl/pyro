@@ -163,6 +163,8 @@ class SparseGPRegression(GPModel):
             return f_loc, f_var
         else:
             if self.approx == "VFE":
+                # Each independent output has its own trace correction.
+                trace_term = trace_term.expand(self.y.shape[:-1]).sum()
                 pyro.factor(self._pyro_get_fullname("trace_term"), -trace_term / 2.0)
 
             return pyro.sample(
