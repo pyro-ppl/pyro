@@ -1,6 +1,7 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import itertools
 import logging
 import os
 import sys
@@ -407,3 +408,44 @@ def test_funsor(example):
     filename, args = example[0], example[1:]
     filename = os.path.join(EXAMPLES_DIR, filename)
     check_call([sys.executable, filename] + args)
+
+
+def _sparse_regression_stats(with_interactions):
+    # Importing this example sets the default dtype; keep other tests unchanged.
+    dtype = torch.get_default_dtype()
+    try:
+        from examples.sparse_regression import compute_posterior_stats
+    finally:
+        torch.set_default_dtype(dtype)
+
+    X = torch.tensor(
+        list(itertools.product([-1.0, 1.0], repeat=3)), dtype=torch.float64
+    )
+    Y = 10 * (X[:, 0] + X[:, 1])
+    if with_interactions:
+        Y = Y + 10 * (X[:, 2] + X[:, 0] * X[:, 1] + X[:, 1] * X[:, 2])
+    return compute_posterior_stats(
+        X,
+        Y,
+        X.new_tensor(1.0),
+        X.new_ones(3),
+        X.new_tensor(1.0),
+        X.new_tensor(1.0),
+        X.new_tensor(1.0),
+        X.new_tensor(0.01),
+    )
+
+
+def test_sparse_regression_no_active_pairs():
+    active_dims, pairs = _sparse_regression_stats(with_interactions=False)
+    assert active_dims.tolist() == [0, 1]
+    assert isinstance(pairs, list)
+    assert pairs == []
+
+
+def test_sparse_regression_ordered_pairs():
+    active_dims, pairs = _sparse_regression_stats(with_interactions=True)
+    assert active_dims.tolist() == [0, 1, 2]
+    assert pairs == [(0, 1), (1, 2)]
+    assert all(type(pair) is tuple for pair in pairs)
+    assert all(type(index) is int for pair in pairs for index in pair)
