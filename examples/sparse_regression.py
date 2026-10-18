@@ -205,10 +205,7 @@ def compute_posterior_stats(X, Y, msq, lam, eta1, xisq, c, sigma, jitter=1.0e-4)
         ],
         axis=1,
     )
-    active_quadratic_dims = np.split(
-        active_quadratic_dims, active_quadratic_dims.shape[0]
-    )
-    active_quadratic_dims = [tuple(a.tolist()[0]) for a in active_quadratic_dims]
+    active_quadratic_dims = [tuple(pair) for pair in active_quadratic_dims.tolist()]
 
     return active_dims.data.numpy(), active_quadratic_dims
 
