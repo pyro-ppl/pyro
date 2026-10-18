@@ -63,13 +63,11 @@ class LowerCholeskyAffine(Transform):
 
     def log_abs_det_jacobian(self, x, y):
         """
-        Calculates the elementwise determinant of the log Jacobian, i.e.
-        log(abs(dy/dx)).
+        Calculates log(abs(det(dy/dx))) for each vector in the batch.
         """
-        return (
-            torch.ones(x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device)
-            * self.scale_tril.diag().log().sum()
-        )
+        return torch.ones(
+            x.size()[:-1], dtype=x.dtype, layout=x.layout, device=x.device
+        ) * self.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(-1)
 
     def with_cache(self, cache_size=1):
         if self._cache_size == cache_size:
