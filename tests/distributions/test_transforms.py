@@ -438,6 +438,24 @@ class TransformTests(TestCase):
             self._test(lambda _: T.PositivePowerTransform(p), event_dim=0)
 
 
+@pytest.mark.parametrize("batch_shape", [(), (2,), (3, 2)])
+@pytest.mark.parametrize("sample_shape", [(), (4,), (5, 4)])
+@pytest.mark.parametrize("dim", [1, 3])
+def test_lower_cholesky_affine_batched(batch_shape, sample_shape, dim):
+    loc = torch.randn(batch_shape + (dim,))
+    scale_tril = torch.randn(batch_shape + (dim, dim)).tril(-1)
+    scale_tril = scale_tril + (0.5 + torch.rand(batch_shape + (dim,))).diag_embed()
+    transform = T.LowerCholeskyAffine(loc, scale_tril)
+    base_dist = dist.Normal(torch.zeros_like(loc), torch.ones_like(loc)).to_event(1)
+    transformed = dist.TransformedDistribution(base_dist, transform)
+    expected = dist.MultivariateNormal(loc, scale_tril=scale_tril)
+    value = expected.sample(sample_shape)
+
+    actual_log_prob = transformed.log_prob(value)
+    assert actual_log_prob.shape == sample_shape + batch_shape
+    assert_close(actual_log_prob, expected.log_prob(value))
+
+
 @pytest.mark.parametrize("batch_shape", [(), (7,), (6, 5)])
 @pytest.mark.parametrize("dim", [2, 3, 5])
 @pytest.mark.parametrize(
