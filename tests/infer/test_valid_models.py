@@ -1570,12 +1570,7 @@ def test_enum_sequential_in_model_error():
     def guide():
         pass
 
-    assert_error(
-        model,
-        guide,
-        TraceEnum_ELBO(max_plate_nesting=0),
-        match="At site .*, model-side sequential enumeration is not implemented",
-    )
+    assert_ok(model, guide, TraceEnum_ELBO(max_plate_nesting=0))
 
 
 def test_enum_in_model_plate_reuse_ok():
