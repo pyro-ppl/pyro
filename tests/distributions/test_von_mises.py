@@ -6,11 +6,17 @@ import os
 
 import pytest
 import torch
+from scipy.special import ive
 from torch import optim
 
 from pyro.distributions import VonMises, VonMises3D
 from pyro.distributions.testing.gof import auto_goodness_of_fit
-from tests.common import TEST_FAILURE_RATE, skipif_param, xfail_if_not_implemented
+from tests.common import (
+    TEST_FAILURE_RATE,
+    assert_close,
+    skipif_param,
+    xfail_if_not_implemented,
+)
 
 
 def _eval_poly(y, coef):
@@ -182,6 +188,52 @@ def test_von_mises_3d(scale):
     expected_total = 1 / (4 * math.pi)
     ratio = actual_total / expected_total
     assert torch.abs(ratio - 1) < 0.01, ratio
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize("batch_shape", [(), (2,)])
+@pytest.mark.parametrize(
+    "scale", [0.0, 1e-8, 1e-4, 0.01, 0.099, 0.1, 1.0, 100.0, 1000.0]
+)
+def test_von_mises_3d_log_prob(scale, batch_shape, dtype):
+    concentration = (
+        torch.tensor([scale, 0.0, 0.0], dtype=dtype)
+        .expand(batch_shape + (3,))
+        .requires_grad_()
+    )
+    value = torch.tensor(
+        [[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=dtype
+    ).reshape((3,) + (1,) * len(batch_shape) + (3,))
+    actual = VonMises3D(concentration).log_prob(value)
+
+    # Use the modified Bessel form of the von Mises-Fisher normalizer.
+    if scale == 0:
+        log_normalizer = -math.log(4 * math.pi)
+        mean = 0.0
+    else:
+        log_normalizer = (
+            0.5 * math.log(scale)
+            - 1.5 * math.log(2 * math.pi)
+            - math.log(ive(0.5, scale))
+            - scale
+        )
+        mean = ive(1.5, scale) / ive(0.5, scale)
+    expected = value[..., 0].double() * scale + log_normalizer
+    expected = expected.to(dtype).expand((3,) + batch_shape)
+    assert_close(
+        actual,
+        expected,
+        atol=1e-4 if dtype == torch.float32 else 1e-10,
+        rtol=1e-7 if dtype == torch.float32 else 0,
+    )
+
+    (actual_grad,) = torch.autograd.grad(actual[0].sum(), concentration)
+    expected_grad = torch.tensor([1 - mean, 0.0, 0.0], dtype=dtype).expand_as(
+        concentration
+    )
+    assert_close(
+        actual_grad, expected_grad, atol=1e-6 if dtype == torch.float32 else 1e-10
+    )
 
 
 @pytest.mark.parametrize("scale", [0.1, 0.5, 0.9, 1.0, 1.1, 2.0, 10.0])

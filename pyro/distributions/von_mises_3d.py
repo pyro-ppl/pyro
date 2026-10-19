@@ -26,7 +26,8 @@ class VonMises3D(TorchDistribution):
 
     :param torch.Tensor concentration: A combined location-and-concentration
         vector. The direction of this vector is the location, and its
-        magnitude is the concentration.
+        magnitude is the concentration. A zero vector gives the uniform
+        distribution on the sphere.
     """
 
     arg_constraints = {"concentration": constraints.real}
@@ -53,8 +54,18 @@ class VonMises3D(TorchDistribution):
                 )
             if not (torch.abs(value.norm(2, -1) - 1) < 1e-6).all():
                 raise ValueError("direction vectors are not normalized")
-        scale = self.concentration.norm(2, -1)
-        log_normalizer = scale.log() - scale.sinh().log() - math.log(4 * math.pi)
+        scale_squared = self.concentration.square().sum(-1)
+        # Use a Taylor series for log(scale / sinh(scale)) near zero.
+        small = scale_squared.clamp(max=0.01)
+        small_log_normalizer = small * (-1 / 6 + small * (1 / 180 - small / 2835))
+        # Clamp the unused branch away from zero to keep gradients finite.
+        scale = scale_squared.clamp(min=0.01).sqrt()
+        large_log_normalizer = (
+            scale.log() - scale - (-2 * scale).expm1().neg().log() + math.log(2)
+        )
+        log_normalizer = torch.where(
+            scale_squared < 0.01, small_log_normalizer, large_log_normalizer
+        ) - math.log(4 * math.pi)
         return (self.concentration * value).sum(-1) + log_normalizer
 
     def expand(self, batch_shape):
