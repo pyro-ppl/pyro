@@ -350,7 +350,7 @@ def hpdi(input, prob, dim=0):
     """
     sorted_input = input.sort(dim)[0]
     mass = input.size(dim)
-    index_length = int(prob * mass)
+    index_length = mass - 1 if prob == 1 else int(prob * mass)
     intervals_left = sorted_input.index_select(
         dim,
         torch.tensor(range(mass - index_length), dtype=torch.long, device=input.device),
