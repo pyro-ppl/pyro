@@ -92,6 +92,17 @@ def test_hpdi():
     assert_equal(hpdi(x, prob=0.2), torch.tensor([0.0, 0.22]), prec=0.01)
 
 
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize("num_samples", [1, 5])
+@pytest.mark.parametrize("dim", [0, 1, -1])
+def test_hpdi_full_probability(dtype, num_samples, dim):
+    samples = torch.tensor([4, -2, 0, 5, 1][:num_samples], dtype=dtype)
+    x = samples.reshape(1, num_samples, 1) + torch.arange(6).reshape(2, 1, 3)
+    x = x.movedim(1, dim)
+    expected = torch.stack([x.min(dim).values, x.max(dim).values], dim)
+    assert_equal(hpdi(x, prob=1, dim=dim), expected)
+
+
 def _quantile(x, dim=0):
     return quantile(x, probs=[0.1, 0.6], dim=dim)
 
