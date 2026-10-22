@@ -16,6 +16,34 @@ from tests.common import assert_close
 pytestmark = pytest.mark.init(rng_seed=123)
 
 
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_elu_support(dtype):
+    transform = T.ELUTransform()
+    values = torch.tensor([-2.0, -1.0, -0.5, 0.0, 0.5], dtype=dtype)
+    expected = torch.tensor([False, False, True, True, True])
+    assert torch.equal(transform.codomain.check(values), expected)
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize("batch_shape", [(), (2,), (2, 3)])
+@pytest.mark.parametrize("event_dim", [0, 1])
+def test_elu_transformed_distribution_support(dtype, batch_shape, event_dim):
+    transform = T.elu()
+    x = torch.tensor([-2.0, 0.0, 2.0], dtype=dtype).expand(batch_shape + (3,))
+    base_dist = dist.Normal(torch.zeros_like(x), torch.ones_like(x))
+    transformed_dist = dist.TransformedDistribution(
+        base_dist.to_event(event_dim), [transform], validate_args=True
+    )
+    y = transform(x)
+    assert transformed_dist.support.check(y).all()
+    expected = base_dist.log_prob(x) - x.clamp(max=0)
+    if event_dim:
+        expected = expected.sum(-1)
+    assert_close(transformed_dist.log_prob(y), expected, atol=1e-6)
+    with pytest.raises(ValueError, match="within the support"):
+        transformed_dist.log_prob(torch.full_like(y, -1.0))
+
+
 class Flatten(dist.TransformModule):
     """
     Used to handle transforms with `event_dim > 1` until we have a Reshape transform in PyTorch
