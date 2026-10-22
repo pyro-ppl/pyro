@@ -18,7 +18,7 @@ class ELUTransform(Transform):
     """
 
     domain = constraints.real
-    codomain = constraints.positive
+    codomain = constraints.greater_than(-1.0)
     bijective = True
     sign = +1
 
