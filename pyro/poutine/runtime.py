@@ -352,12 +352,12 @@ def apply_stack(initial_msg: Message) -> None:
     """
     Execute the effect stack at a single site according to the following scheme:
 
-        1. For each ``Messenger`` in the stack from bottom to top,
+        1. For each ``Messenger`` in the stack from top to bottom,
            execute ``Messenger._process_message`` with the message;
            if the message field "stop" is True, stop;
            otherwise, continue
         2. Apply default behavior (``default_process_message``) to finish remaining site execution
-        3. For each ``Messenger`` in the stack from top to bottom,
+        3. For each ``Messenger`` in the stack from bottom to top,
            execute ``_postprocess_message`` to update the message and internal messenger state with the site results
         4. If the message field "continuation" is not ``None``, call it with the message
 

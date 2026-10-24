@@ -98,7 +98,7 @@ class Messenger:
         :returns: self
         :rtype: pyro.poutine.Messenger
 
-        Installs this messenger at the bottom of the Pyro stack.
+        Installs this messenger on the top of the Pyro stack.
 
         Can be overloaded to add any additional per-call setup functionality,
         but the derived class must always push itself onto the stack, usually
@@ -109,7 +109,7 @@ class Messenger:
         """
         if self not in _PYRO_STACK:
             # if this poutine is not already installed,
-            # put it on the bottom of the stack.
+            # push it onto the top of the stack.
             _PYRO_STACK.append(self)
 
             # necessary to return self because the return value of __enter__
@@ -138,7 +138,7 @@ class Messenger:
         :returns: None
         :rtype: None
 
-        Removes this messenger from the bottom of the Pyro stack.
+        Removes this messenger from the top of the Pyro stack.
         If an exception is raised, removes this messenger and everything below it.
         Always called after every execution of self.fn via self.__call__.
 
@@ -155,14 +155,14 @@ class Messenger:
         """
         if exc_type is None:  # callee or enclosed block returned successfully
             # if the callee or enclosed block returned successfully,
-            # this poutine should be on the bottom of the stack.
+            # this poutine should be on the top of the stack.
             # If so, remove it from the stack.
             # if not, raise a ValueError because something really weird happened.
             if _PYRO_STACK[-1] == self:
                 _PYRO_STACK.pop()
             else:
                 # should never get here, but just in case...
-                raise ValueError("This Messenger is not on the bottom of the stack")
+                raise ValueError("This Messenger is not on the top of the stack")
         else:  # the wrapped function or block raised an exception
             # poutine exception handling:
             # when the callee or enclosed block raises an exception,
