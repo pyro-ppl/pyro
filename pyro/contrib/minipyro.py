@@ -164,7 +164,7 @@ class PlateMessenger(Messenger):
 # It is responsible for applying each Messenger to each effectful operation.
 def apply_stack(msg):
     # PYRO_STACK is reversed so that effect handlers higher
-    # in the stack are first applied.
+    # on the stack (i.e. pushed later) are applied first.
     for pointer, handler in enumerate(reversed(PYRO_STACK)):
         handler.process_message(msg)
         # When a Messenger sets the "stop" field of a message,
