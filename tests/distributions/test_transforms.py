@@ -438,6 +438,37 @@ class TransformTests(TestCase):
             self._test(lambda _: T.PositivePowerTransform(p), event_dim=0)
 
 
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize("anchor_point", [0.0, 1.5, [-1.5, 2.0]])
+def test_simplex_to_ordered_anchor_jacobian(dtype, anchor_point):
+    x = torch.tensor([[0.2, 0.3, 0.5], [0.1, 0.6, 0.3]], dtype=dtype)
+    anchor_point = torch.tensor(anchor_point, dtype=dtype)
+    transform = T.SimplexToOrderedTransform(anchor_point)
+    unanchored = T.SimplexToOrderedTransform(torch.tensor(0.0, dtype=dtype))
+
+    # Adding a constant to the output cannot change the Jacobian.
+    torch.testing.assert_close(
+        transform.log_abs_det_jacobian(x, transform(x)),
+        unanchored.log_abs_det_jacobian(x, unanchored(x)),
+    )
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize("anchor_point", [0.0, 1.5, [-1.5, 2.0]])
+def test_simplex_to_ordered_anchor_log_prob(dtype, anchor_point):
+    base = dist.Dirichlet(torch.tensor([2.0, 3.0, 4.0], dtype=dtype))
+    x = torch.tensor([[0.2, 0.3, 0.5], [0.1, 0.6, 0.3]], dtype=dtype)
+    anchor_point = torch.tensor(anchor_point, dtype=dtype)
+    unanchored = T.SimplexToOrderedTransform(torch.tensor(0.0, dtype=dtype))
+    y = unanchored(x)
+    expected = dist.TransformedDistribution(base, unanchored).log_prob(y)
+    actual = dist.TransformedDistribution(
+        base, T.SimplexToOrderedTransform(anchor_point)
+    ).log_prob(y + anchor_point.unsqueeze(-1))
+
+    torch.testing.assert_close(actual, expected)
+
+
 @pytest.mark.parametrize("batch_shape", [(), (7,), (6, 5)])
 @pytest.mark.parametrize("dim", [2, 3, 5])
 @pytest.mark.parametrize(

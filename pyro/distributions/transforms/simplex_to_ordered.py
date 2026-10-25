@@ -51,6 +51,7 @@ class SimplexToOrderedTransform(Transform):
         return x
 
     def log_abs_det_jacobian(self, x, y):
+        y = y - torch.unsqueeze(self.anchor_point, -1)
         # |dp/dc| = |dx/dy| = prod(ds/dy) = prod(expit'(y))
         # we know log derivative of expit(y) is `-softplus(y) - softplus(-y)`
         J_logdet = (
