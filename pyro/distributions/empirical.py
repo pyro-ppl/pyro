@@ -122,8 +122,10 @@ class Empirical(TorchDistribution):
         # that correspond to ``value``.
         for _ in range(len(self.event_shape)):
             selection_mask = selection_mask.min(dim=-1)[0]
-        selection_mask = selection_mask.type(self._categorical.probs.type())
-        return (self._categorical.probs * selection_mask).sum(dim=-1).log()
+        logits = self._categorical.logits
+        selection_mask = selection_mask.to(device=logits.device)
+        logits = logits.masked_fill(~selection_mask, -float("inf"))
+        return logits.logsumexp(dim=-1)
 
     def _weighted_mean(self, value, keepdim=False):
         weights = self._log_weights.reshape(
