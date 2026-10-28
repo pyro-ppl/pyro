@@ -1,6 +1,8 @@
 # Copyright (c) 2017-2019 Uber Technologies, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+import math
+
 import pytest
 import torch
 
@@ -110,6 +112,97 @@ def test_log_prob(batch_shape, event_shape, dtype):
     with pytest.raises(ValueError):
         sample_to_score = torch.ones([3] + batch_shape + event_shape, dtype=dtype)
         empirical_dist.log_prob(sample_to_score)
+
+
+@pytest.mark.parametrize(
+    "dtype,low_log_weight",
+    [(torch.float32, -200.0), (torch.float64, -1000.0)],
+)
+def test_log_prob_extreme_finite_log_weights(dtype, low_log_weight):
+    samples = torch.tensor([0, 1])
+    log_weights = torch.tensor([low_log_weight, 0.0], dtype=dtype)
+    empirical_dist = Empirical(samples, log_weights)
+
+    actual = empirical_dist.log_prob(samples[0])
+    expected = torch.tensor(low_log_weight, dtype=dtype) - torch.log1p(
+        torch.exp(torch.tensor(low_log_weight, dtype=dtype))
+    )
+
+    assert torch.isfinite(actual)
+    assert_equal(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "dtype,low_log_weight",
+    [(torch.float32, -200.0), (torch.float64, -1000.0)],
+)
+def test_log_prob_extreme_finite_log_weights_has_finite_gradients(
+    dtype, low_log_weight
+):
+    samples = torch.tensor([0, 1])
+    log_weights = torch.tensor([low_log_weight, 0.0], dtype=dtype, requires_grad=True)
+    empirical_dist = Empirical(samples, log_weights)
+
+    actual = empirical_dist.log_prob(samples[0])
+    actual.backward()
+
+    assert torch.isfinite(actual)
+    assert torch.isfinite(log_weights.grad).all()
+    assert_equal(log_weights.grad, torch.tensor([1.0, -1.0], dtype=dtype))
+
+
+def test_log_prob_duplicate_low_weight_samples_are_combined_stably():
+    samples = torch.tensor([0, 0, 1])
+    log_weights = torch.tensor(
+        [-1000.0, -1000.0, 0.0], dtype=torch.float64, requires_grad=True
+    )
+    empirical_dist = Empirical(samples, log_weights)
+
+    actual = empirical_dist.log_prob(samples[0])
+    expected = torch.tensor(-1000.0 + math.log(2.0), dtype=torch.float64)
+    actual.backward()
+
+    assert torch.isfinite(actual)
+    assert_equal(actual, expected)
+    assert torch.isfinite(log_weights.grad).all()
+    assert_equal(log_weights.grad, torch.tensor([0.5, 0.5, -1.0], dtype=torch.float64))
+
+
+@pytest.mark.parametrize("event_shape", [(), (2,)])
+@pytest.mark.parametrize(
+    "dtype,low_log_weight",
+    [(torch.float32, -200.0), (torch.float64, -1000.0)],
+)
+def test_log_prob_extreme_weights_preserve_batch_and_event_shapes(
+    event_shape, dtype, low_log_weight
+):
+    scalar_samples = torch.tensor([[0, 1], [2, 3]], dtype=dtype)
+    log_weights = torch.tensor(
+        [[low_log_weight, 0.0], [0.0, low_log_weight]], dtype=dtype
+    )
+    if event_shape:
+        samples = scalar_samples.unsqueeze(-1).expand(2, 2, 2).clone()
+        value = torch.tensor([[0, 0], [3, 3]], dtype=dtype)
+    else:
+        samples = scalar_samples
+        value = torch.tensor([0, 3], dtype=dtype)
+    empirical_dist = Empirical(samples, log_weights)
+
+    actual = empirical_dist.log_prob(value)
+
+    assert actual.shape == torch.Size([2])
+    assert torch.isfinite(actual).all()
+    assert_equal(actual, torch.full((2,), low_log_weight, dtype=dtype))
+
+
+def test_log_prob_zero_weight_and_absent_support_behavior():
+    samples = torch.tensor([0, 1])
+    log_weights = torch.tensor([-float("inf"), 0.0], dtype=torch.float64)
+    empirical_dist = Empirical(samples, log_weights)
+
+    assert torch.isneginf(empirical_dist.log_prob(samples[0]))
+    assert_equal(empirical_dist.log_prob(samples[1]), torch.tensor(0.0))
+    assert torch.isneginf(empirical_dist.log_prob(torch.tensor(2)))
 
 
 @pytest.mark.parametrize("event_shape", [[], [1], [2, 3]])
