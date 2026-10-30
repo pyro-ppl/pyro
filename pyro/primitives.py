@@ -450,7 +450,7 @@ def module(
     :param update_module_params: determines whether Parameters
                                  in the PyTorch module get overridden with the values found in the
                                  ParamStore (if any). Defaults to `False`
-    :type load_from_param_store: bool
+    :type update_module_params: bool
     :returns: torch.nn.Module
     """
     assert hasattr(nn_module, "parameters"), "module has no parameters"
