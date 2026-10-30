@@ -309,7 +309,7 @@ class CoalescentRateLikelihood:
         :param t: Optional time index by which the input was sliced, as in
             ``rate_grid[..., t]`` This can be an integer for sequential models
             or ``slice(None)`` for vectorized models.
-        :type time: int or slice
+        :type t: int or slice
         :returns: Likelihood ``p(coal_times | leaf_times, rate_grid)``,
             or a part of that likelihood corresponding to a single time step.
         :rtype: torch.Tensor
