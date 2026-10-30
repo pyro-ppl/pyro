@@ -154,7 +154,7 @@ def get_provenance(x) -> frozenset:
     Reads the provenance of a recursive datastructure possibly containing
     :class:`torch.Tensor` s.
 
-    :param torch.Tensor tensor: An input tensor.
+    :param x: An input data structure.
     :returns: A provenance frozenset.
     :rtype: frozenset
     """
@@ -166,7 +166,7 @@ def detach_provenance(x: _Tensor) -> _Tensor:
     """
     Blocks provenance tracking through a tensor, similar to :meth:`torch.Tensor.detach`.
 
-    :param torch.Tensor tensor: An input tensor.
+    :param torch.Tensor x: An input tensor.
     :returns: A tensor sharing the same data but with no provenance.
     :rtype: torch.Tensor
     """

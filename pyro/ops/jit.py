@@ -150,7 +150,7 @@ def trace(fn=None, ignore_warnings=False, jit_options=None):
             return tr.log_prob_sum()
 
     :param callable fn: The function to be traced.
-    :param bool ignore_warnins: Whether to ignore jit warnings.
+    :param bool ignore_warnings: Whether to ignore jit warnings.
     :param dict jit_options: Optional dict of options to pass to
         :func:`torch.jit.trace` , e.g. ``{"optimize": False}``.
     """

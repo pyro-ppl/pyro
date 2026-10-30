@@ -34,7 +34,7 @@ class Reparam(ABC):
         """
         Abstract method to apply reparameterizer.
 
-        :param dict name: A simplified Pyro message with fields:
+        :param dict msg: A simplified Pyro message with fields:
             - ``name: str`` the sample site's name
             - ``fn: Callable`` a distribution
             - ``value: Optional[torch.Tensor]`` an observed or initial value
