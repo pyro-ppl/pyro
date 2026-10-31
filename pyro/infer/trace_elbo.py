@@ -23,7 +23,7 @@ def _compute_log_r(model_trace, guide_trace):
     for name, model_site in model_trace.nodes.items():
         if model_site["type"] == "sample":
             log_r_term = model_site["log_prob"]
-            if not model_site["is_observed"]:
+            if not model_site["is_observed"] and name in guide_trace.nodes:
                 log_r_term = log_r_term - guide_trace.nodes[name]["log_prob"]
             log_r.add((stacks[name], log_r_term.detach()))
     return log_r
