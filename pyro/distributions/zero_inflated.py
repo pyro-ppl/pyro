@@ -104,15 +104,14 @@ class ZeroInflatedDistribution(TorchDistribution):
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(type(self), _instance)
         batch_shape = torch.Size(batch_shape)
-        gate = self.gate.expand(batch_shape) if "gate" in self.__dict__ else None
-        gate_logits = (
-            self.gate_logits.expand(batch_shape)
-            if "gate_logits" in self.__dict__
-            else None
-        )
-        base_dist = self.base_dist.expand(batch_shape)
-        ZeroInflatedDistribution.__init__(
-            new, base_dist, gate=gate, gate_logits=gate_logits, validate_args=False
+        if "gate" in self.__dict__:
+            new.gate = self.gate.expand(batch_shape)
+        if "gate_logits" in self.__dict__:
+            new.gate_logits = self.gate_logits.expand(batch_shape)
+        new.base_dist = self.base_dist.expand(batch_shape)
+        # Both lazy parameters may be cached, so avoid the constructor's exclusivity check.
+        super(ZeroInflatedDistribution, new).__init__(
+            batch_shape, self.event_shape, validate_args=False
         )
         new._validate_args = self._validate_args
         return new
