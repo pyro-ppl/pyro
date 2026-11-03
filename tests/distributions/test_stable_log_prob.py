@@ -138,6 +138,16 @@ def test_stable_with_log_prob_param_fit(alpha, beta, c, mu, alpha_0, beta_0, c_0
     assert_close(mu, pyro.param("mu").item(), atol=0.2)
 
 
+# # The below tests will be executed:
+# test_stable_with_log_prob_param_fit(1.00,  0.8,  2.0,  3.0,  1.3,  0.0,  1.0,  0.0)
+# test_stable_with_log_prob_param_fit(1.02, -0.8,  2.0, -3.0,  1.3,  0.0,  1.0,  0.0)
+# test_stable_with_log_prob_param_fit(0.98,  0.5,  1.0, -3.0,  1.3,  0.0,  1.0,  0.0)
+# test_stable_with_log_prob_param_fit(0.95, -0.5,  1.0,  3.0,  1.3,  0.0,  1.0,  0.0)
+# test_stable_with_log_prob_param_fit(1.10,  0.0,  1.0,  0.0,  1.3,  0.0,  1.0,  0.0)
+# test_stable_with_log_prob_param_fit(1.80, -0.5,  1.0, -2.0,  1.3,  0.0,  1.0,  0.0)
+# test_stable_with_log_prob_param_fit(0.50,  0.0,  1.0,  2.0,  1.3,  0.0,  1.0,  0.0)
+
+
 @pytest.mark.parametrize("alpha", [0.5, 0.7, 1.0, 1.5, 1.9])
 def test_stable_log_prob_match_at_beta_zero(alpha):
     beta = torch.tensor([0.0])
@@ -151,13 +161,3 @@ def test_stable_log_prob_match_at_beta_zero(alpha):
     log_prob_s0 = stable_s0.log_prob(x)
 
     assert_close(log_prob_s, log_prob_s0, atol=1e-6)
-
-
-# # The below tests will be executed:
-# test_stable_with_log_prob_param_fit(1.00,  0.8,  2.0,  3.0,  1.3,  0.0,  1.0,  0.0)
-# test_stable_with_log_prob_param_fit(1.02, -0.8,  2.0, -3.0,  1.3,  0.0,  1.0,  0.0)
-# test_stable_with_log_prob_param_fit(0.98,  0.5,  1.0, -3.0,  1.3,  0.0,  1.0,  0.0)
-# test_stable_with_log_prob_param_fit(0.95, -0.5,  1.0,  3.0,  1.3,  0.0,  1.0,  0.0)
-# test_stable_with_log_prob_param_fit(1.10,  0.0,  1.0,  0.0,  1.3,  0.0,  1.0,  0.0)
-# test_stable_with_log_prob_param_fit(1.80, -0.5,  1.0, -2.0,  1.3,  0.0,  1.0,  0.0)
-# test_stable_with_log_prob_param_fit(0.50,  0.0,  1.0,  2.0,  1.3,  0.0,  1.0,  0.0)
