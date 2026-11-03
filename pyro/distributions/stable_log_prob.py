@@ -55,8 +55,8 @@ def _stable_log_prob(alpha, beta, value, coords):
     # alpha=1.
     if coords == "S":
         value = torch.where(
-            alpha == 1, value, value - beta * (math.pi / 2 * alpha)
-        ).tan()
+            alpha == 1, value, value - beta * (math.pi / 2 * alpha).tan()
+        )
     elif coords != "S0":
         raise ValueError("Unknown coords: {}".format(coords))
 
