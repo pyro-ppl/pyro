@@ -152,6 +152,7 @@ def test_stable_log_prob_match_at_beta_zero(alpha):
 
     assert_close(log_prob_s, log_prob_s0, atol=1e-6)
 
+
 # # The below tests will be executed:
 # test_stable_with_log_prob_param_fit(1.00,  0.8,  2.0,  3.0,  1.3,  0.0,  1.0,  0.0)
 # test_stable_with_log_prob_param_fit(1.02, -0.8,  2.0, -3.0,  1.3,  0.0,  1.0,  0.0)
