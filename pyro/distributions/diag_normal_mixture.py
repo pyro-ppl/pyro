@@ -136,12 +136,14 @@ class _MixDiagNormalSample(Function):
     def forward(ctx, locs, scales, component_logits, pis, which, noise_shape):
         dim = scales.size(-1)
         white = locs.new_empty(noise_shape).normal_()
-        n_unsqueezes = locs.dim() - which.dim()
-        for _ in range(n_unsqueezes):
-            which = which.unsqueeze(-1)
-        which_expand = which.expand(tuple(which.shape[:-1] + (dim,)))
-        loc = torch.gather(locs, -2, which_expand).squeeze(-2)
-        sigma = torch.gather(scales, -2, which_expand).squeeze(-2)
+        # Keep sample and batch dimensions separate from the component dimension.
+        which_expand = which[..., None, None].expand(noise_shape[:-1] + (1, dim))
+        loc = torch.gather(
+            locs.expand(noise_shape[:-1] + locs.shape[-2:]), -2, which_expand
+        ).squeeze(-2)
+        sigma = torch.gather(
+            scales.expand(noise_shape[:-1] + scales.shape[-2:]), -2, which_expand
+        ).squeeze(-2)
         z = loc + sigma * white
         ctx.save_for_backward(z, scales, locs, component_logits, pis)
         return z

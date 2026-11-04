@@ -138,11 +138,12 @@ class _MixDiagNormalSharedCovarianceSample(Function):
     def forward(ctx, locs, coord_scale, component_logits, pis, which, noise_shape):
         dim = coord_scale.size(-1)
         white = locs.new_empty(noise_shape).normal_()
-        n_unsqueezes = locs.dim() - which.dim()
-        for _ in range(n_unsqueezes):
-            which = which.unsqueeze(-1)
-        expand_tuple = tuple(which.shape[:-1] + (dim,))
-        loc = torch.gather(locs, -2, which.expand(expand_tuple)).squeeze(-2)
+        # Keep sample and batch dimensions separate from the component dimension.
+        sample_batch_shape = torch.broadcast_shapes(which.shape, locs.shape[:-2])
+        which_expand = which[..., None, None].expand(sample_batch_shape + (1, dim))
+        loc = torch.gather(
+            locs.expand(sample_batch_shape + locs.shape[-2:]), -2, which_expand
+        ).squeeze(-2)
         z = loc + coord_scale * white
         ctx.save_for_backward(z, coord_scale, locs, component_logits, pis)
         return z

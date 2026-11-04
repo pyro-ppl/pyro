@@ -3,6 +3,7 @@
 
 import logging
 import math
+from unittest.mock import patch
 
 import pytest
 import torch
@@ -303,3 +304,51 @@ def test_mix_of_diag_normals_log_prob(batch_size):
     assert_equal(
         log_prob, correct_log_prob, msg="bad log prob for MixtureOfDiagNormals"
     )
+
+
+@pytest.mark.parametrize(
+    "mix_dist", [MixtureOfDiagNormals, MixtureOfDiagNormalsSharedCovariance]
+)
+@pytest.mark.parametrize("batch_shape", [(), (4,), (2, 3)])
+@pytest.mark.parametrize("sample_shape", [(), (5,), (2, 3), (2, 1, 3)])
+def test_mixture_sample_batch_shape(mix_dist, batch_shape, sample_shape):
+    K, D = 3, 2
+    locs = torch.randn(batch_shape + (K, D), requires_grad=True)
+    scale_shape = (K, D) if mix_dist is MixtureOfDiagNormals else (D,)
+    scales = (0.5 + torch.rand(batch_shape + scale_shape)).requires_grad_()
+    logits = torch.randn(batch_shape + (K,), requires_grad=True)
+    params = (locs, scales, logits)
+    mixture = mix_dist(*params)
+    shape = sample_shape + batch_shape
+    which = torch.arange(math.prod(shape)).reshape(shape) % K
+
+    # Treat the same independent draws as batch dimensions for the reference.
+    with patch.object(torch.distributions.Categorical, "sample", return_value=which):
+        torch.manual_seed(1234)
+        actual = mixture.rsample(torch.Size(sample_shape))
+        torch.manual_seed(1234)
+        expected = mixture.expand(shape).rsample()
+    assert actual.shape == shape + (D,)
+    assert_equal(actual, expected)
+    actual_grads = torch.autograd.grad(actual.square().sum(), params, retain_graph=True)
+    expected_grads = torch.autograd.grad(expected.square().sum(), params)
+    for actual_grad, expected_grad in zip(actual_grads, expected_grads):
+        assert torch.isfinite(actual_grad).all()
+        assert_equal(actual_grad, expected_grad)
+
+
+@pytest.mark.parametrize("batch_shape", [(4,), (2, 3)])
+@pytest.mark.parametrize("sample_shape", [(), (5,), (2, 3), (2, 1, 3)])
+def test_shared_covariance_singleton_scale_batch(batch_shape, sample_shape):
+    K, D = 3, 2
+    locs = torch.randn(batch_shape + (K, D), requires_grad=True)
+    scale = torch.ones((1,) * len(batch_shape) + (D,), requires_grad=True)
+    logits = torch.randn(batch_shape + (K,), requires_grad=True)
+    mixture = MixtureOfDiagNormalsSharedCovariance(locs, scale, logits)
+    sample = mixture.rsample(torch.Size(sample_shape))
+    assert sample.shape == sample_shape + batch_shape + (D,)
+    assert mixture.log_prob(sample).shape == sample_shape + batch_shape
+    grads = torch.autograd.grad(sample.square().sum(), (locs, scale, logits))
+    for param, grad in zip((locs, scale, logits), grads):
+        assert grad.shape == param.shape
+        assert torch.isfinite(grad).all()
