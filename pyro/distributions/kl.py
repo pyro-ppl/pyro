@@ -18,7 +18,7 @@ from pyro.distributions.util import sum_rightmost
 
 @register_kl(Delta, Distribution)
 def _kl_delta(p, q):
-    return -q.log_prob(p.v)
+    return p.log_density - q.log_prob(p.v)
 
 
 @register_kl(Independent, Independent)
@@ -37,7 +37,7 @@ def _kl_independent_independent(p, q):
 @register_kl(Independent, MultivariateNormal)
 def _kl_independent_mvn(p, q):
     if isinstance(p.base_dist, Delta) and p.reinterpreted_batch_ndims == 1:
-        return -q.log_prob(p.base_dist.v)
+        return p.log_prob(p.base_dist.v) - q.log_prob(p.base_dist.v)
 
     if isinstance(p.base_dist, Normal) and p.reinterpreted_batch_ndims == 1:
         dim = q.event_shape[0]

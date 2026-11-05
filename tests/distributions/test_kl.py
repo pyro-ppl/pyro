@@ -90,3 +90,56 @@ def test_kl_transformed_transformed(shape, event_dim, transform):
     kl = kl_divergence(q, p)
     expected_shape = shape[:-1] if max(transform.event_dim, event_dim) == 1 else shape
     assert kl.shape == expected_shape
+
+
+@pytest.mark.parametrize("batch_shape", [(), (2,), (2, 1)])
+@pytest.mark.parametrize("independent", [False, True])
+def test_kl_delta_preserves_log_density(batch_shape, independent):
+    value = torch.ones(batch_shape + (3,))
+    density_shape = value.shape if independent else batch_shape
+    log_density = torch.full(density_shape, 0.4, requires_grad=True)
+    if independent:
+        p = dist.Delta(value, log_density).to_event(1)
+    else:
+        p = dist.Delta(value, log_density, event_dim=1)
+    q = dist.MultivariateNormal(torch.zeros_like(value), torch.eye(3))
+
+    actual = kl_divergence(p, q)
+    expected = p.log_prob(value) - q.log_prob(value)
+    assert_close(actual, expected)
+    gradient = torch.autograd.grad(actual.sum(), log_density)[0]
+    assert_close(gradient, torch.ones_like(log_density))
+
+
+@pytest.mark.parametrize("prior", ["lognormal", "mvn"])
+def test_kl_delta_jacobian_in_mean_field_elbo(prior):
+    import pyro
+    from pyro.infer import Trace_ELBO, TraceMeanField_ELBO
+
+    loc = torch.tensor([0.4, -0.2], requires_grad=True)
+
+    def model():
+        if prior == "lognormal":
+            fn = dist.LogNormal(torch.zeros(2), torch.ones(2)).to_event(1)
+        else:
+            fn = dist.MultivariateNormal(torch.zeros(2), torch.eye(2))
+        pyro.sample("x", fn)
+
+    def guide():
+        z = pyro.sample(
+            "aux", dist.Normal(loc, 0.7).to_event(1), infer={"is_auxiliary": True}
+        )
+        if prior == "lognormal":
+            fn = dist.Delta(z.exp(), log_density=-z.sum(), event_dim=1)
+        else:
+            fn = dist.Delta(z.exp(), log_density=-z).to_event(1)
+        pyro.sample("x", fn)
+
+    results = []
+    for estimator in (Trace_ELBO, TraceMeanField_ELBO):
+        pyro.set_rng_seed(2026)
+        loss = estimator().differentiable_loss(model, guide)
+        gradient = torch.autograd.grad(loss, loc)[0]
+        results.append((loss, gradient))
+    assert_close(results[0][0], results[1][0])
+    assert_close(results[0][1], results[1][1])
