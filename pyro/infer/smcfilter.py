@@ -114,6 +114,15 @@ class SMCFilter:
             for key, value in self.state.items()
         }
 
+    def normalized_weights(self):
+        """
+        :returns: the particle weights normalized to sum to one. The
+            underlying unnormalized log weights in ``self.state`` are left
+            unchanged.
+        :rtype: torch.Tensor
+        """
+        return self.state._log_weights.softmax(-1)
+
     @torch.no_grad()
     def _update_weights(self, model_trace, guide_trace):
         # w_t <-w_{t-1}*p(y_t|z_t) * p(z_t|z_t-1)/q(z_t)

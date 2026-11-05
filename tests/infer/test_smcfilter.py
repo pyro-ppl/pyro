@@ -270,3 +270,25 @@ def test_gaussian_filter():
         assert_close(actual.variance**0.5, expected.variance**0.5, atol=0.1, rtol=0.5)
         sigma = actual.variance.max().item() ** 0.5
         assert_close(actual.mean, expected.mean, atol=3 * sigma)
+
+
+def test_normalized_weights():
+    model = SmokeModel(2, 3)
+    guide = SmokeGuide(2, 3)
+    smc = SMCFilter(model, guide, num_particles=100, max_plate_nesting=1)
+    true_model = SmokeModel(2, 3)
+    state = {}
+    true_model.init(state)
+    truth = [true_model.step(state) for t in range(3)]
+
+    smc.init()
+    for x, y in truth:
+        smc.step(x, y)
+        raw = smc.state._log_weights.clone()
+        weights = smc.normalized_weights()
+        assert weights.shape == (100,)
+        assert (weights >= 0).all()
+        assert_close(weights.sum(), torch.tensor(1.0))
+        assert_close(weights, (raw - raw.logsumexp(-1)).exp())
+        # raw weights are untouched
+        assert (smc.state._log_weights == raw).all()
