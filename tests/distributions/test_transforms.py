@@ -16,6 +16,28 @@ from tests.common import assert_close
 pytestmark = pytest.mark.init(rng_seed=123)
 
 
+@pytest.mark.parametrize("event_shape", [(3, 3), (3, 4)])
+@pytest.mark.parametrize("cache_size", [0, 1])
+def test_permute_recached_density(event_shape, cache_size):
+    permutation = torch.tensor([2, 0, 1])
+    transform = T.Permute(permutation, dim=-2, cache_size=1 - cache_size).with_cache(
+        cache_size
+    )
+    loc = torch.arange(3 * event_shape[1], dtype=torch.double).reshape(event_shape) / 4
+    base = dist.Normal(loc, torch.ones_like(loc)).to_event(2)
+    distribution = dist.TransformedDistribution(base, transform)
+    x = (
+        torch.arange(6 * event_shape[1], dtype=torch.double).reshape(2, *event_shape)
+        / 10
+    )
+    matrix = torch.eye(3, dtype=x.dtype)[permutation]
+    y = matrix @ x
+
+    assert_close(distribution.log_prob(y), base.log_prob(x))
+    assert_close(transform(x), y)
+    assert_close(transform.inv(y.clone()), x)
+
+
 class Flatten(dist.TransformModule):
     """
     Used to handle transforms with `event_dim > 1` until we have a Reshape transform in PyTorch
