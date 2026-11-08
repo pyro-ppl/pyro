@@ -107,9 +107,10 @@ class Permute(Transform):
         )
 
     def with_cache(self, cache_size=1):
+        """Return a transform with the same permutation and axis but a new cache size."""
         if self._cache_size == cache_size:
             return self
-        return Permute(self.permutation, cache_size=cache_size)
+        return Permute(self.permutation, dim=self.dim, cache_size=cache_size)
 
 
 def permute(input_dim, permutation=None, dim=-1):
