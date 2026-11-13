@@ -63,7 +63,11 @@ class SoftLaplace(TorchDistribution):
         return z.exp().atan().mul(2 / math.pi)
 
     def icdf(self, value):
-        return value.mul(math.pi / 2).tan().log().mul(self.scale).add(self.loc)
+        # Reflect the upper tail to avoid rounding its angle to or beyond pi / 2.
+        lower = value <= 0.5
+        tail = torch.where(lower, value, 1 - value)
+        quantile = tail.mul(math.pi / 2).tan().log()
+        return torch.where(lower, quantile, -quantile).mul(self.scale).add(self.loc)
 
     @property
     def mean(self):
