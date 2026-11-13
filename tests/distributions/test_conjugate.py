@@ -11,6 +11,27 @@ from pyro.distributions import BetaBinomial, DirichletMultinomial, GammaPoisson
 from tests.common import assert_close
 
 
+@pytest.mark.parametrize("global_validation", [False, True])
+@pytest.mark.parametrize("validate_args", [False, True, None])
+@pytest.mark.parametrize(
+    "distribution, args",
+    [
+        (BetaBinomial, (-1.0, 1.0)),
+        (BetaBinomial, (1.0, -1.0)),
+        (DirichletMultinomial, (torch.tensor([-1.0, 1.0]),)),
+        (GammaPoisson, (-1.0, 1.0)),
+    ],
+)
+def test_conjugate_validate_args(distribution, args, validate_args, global_validation):
+    should_validate = global_validation if validate_args is None else validate_args
+    with dist.validation_enabled(global_validation):
+        if should_validate:
+            with pytest.raises(ValueError):
+                distribution(*args, validate_args=validate_args)
+        else:
+            distribution(*args, validate_args=validate_args)
+
+
 @pytest.mark.parametrize(
     "dist",
     [

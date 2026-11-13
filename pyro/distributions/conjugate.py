@@ -46,6 +46,8 @@ class BetaBinomial(TorchDistribution):
     :type concentration0: float or torch.Tensor
     :param total_count: Number of Bernoulli trials.
     :type total_count: float or torch.Tensor
+    :param bool validate_args: Whether to validate parameters and samples.
+        If None, use the global validation setting.
     """
 
     arg_constraints = {
@@ -68,7 +70,7 @@ class BetaBinomial(TorchDistribution):
         concentration1, concentration0, total_count = broadcast_all(
             concentration1, concentration0, total_count
         )
-        self._beta = Beta(concentration1, concentration0)
+        self._beta = Beta(concentration1, concentration0, validate_args=validate_args)
         self.total_count = total_count
         super().__init__(self._beta._batch_shape, validate_args=validate_args)
 
@@ -150,6 +152,8 @@ class DirichletMultinomial(TorchDistribution):
     :param int or torch.Tensor total_count: number of Categorical trials.
     :param bool is_sparse: Whether to assume value is mostly zero when computing
         :meth:`log_prob`, which can speed up computation when data is sparse.
+    :param bool validate_args: Whether to validate parameters and samples.
+        If None, use the global validation setting.
     """
 
     arg_constraints = {
@@ -169,7 +173,7 @@ class DirichletMultinomial(TorchDistribution):
             batch_shape = broadcast_shape(batch_shape, total_count.shape)
             concentration = concentration.expand(batch_shape + (-1,))
             total_count = total_count.expand(batch_shape)
-        self._dirichlet = Dirichlet(concentration)
+        self._dirichlet = Dirichlet(concentration, validate_args=validate_args)
         self.total_count = total_count
         self.is_sparse = is_sparse
         super().__init__(batch_shape, event_shape, validate_args=validate_args)
