@@ -397,6 +397,47 @@ class DiscreteHMM(HiddenMarkovModel):
         return Categorical(logits=logp, validate_args=self._validate_args)
 
     @torch.no_grad()
+    def map_states(self, value):
+        """
+        Decode the most likely joint sequence of observation-emitting states.
+
+        The initial state precedes the first transition and is marginalized
+        out. The returned tensor has one state index per observation.
+
+        :param ~torch.Tensor value: A sequence of observations.
+        :rtype: ~torch.LongTensor
+        """
+        if self._validate_args:
+            self._validate_sample(value)
+
+        value = value.unsqueeze(-1 - self.observation_dist.event_dim)
+        emissions = self.observation_dist.log_prob(value)
+        duration = self.duration if self.duration is not None else emissions.size(-2)
+        if duration == 0:
+            batch_shape = broadcast_shape(self.batch_shape, emissions.shape[:-2])
+            return emissions.new_empty(batch_shape + (0,), dtype=torch.long)
+        transitions = self.transition_logits
+        transitions = transitions.expand(transitions.shape[:-3] + (duration, -1, -1))
+        emissions = emissions.expand(emissions.shape[:-2] + (duration, -1))
+
+        scores = (
+            self.initial_logits.unsqueeze(-1) + transitions[..., 0, :, :]
+        ).logsumexp(-2)
+        scores = scores + emissions[..., 0, :]
+        backpointers = []
+        for t in range(1, duration):
+            scores, indices = (scores.unsqueeze(-1) + transitions[..., t, :, :]).max(-2)
+            scores = scores + emissions[..., t, :]
+            backpointers.append(indices)
+
+        state = scores.argmax(-1, keepdim=True)
+        path = [state]
+        for indices in reversed(backpointers):
+            state = indices.gather(-1, state)
+            path.append(state)
+        return torch.cat(path[::-1], dim=-1)
+
+    @torch.no_grad()
     def sample(self, sample_shape=torch.Size()):
         assert self.duration is not None
 
