@@ -4,6 +4,7 @@
 import logging
 import operator
 from functools import reduce
+from itertools import product
 
 import opt_einsum
 import pytest
@@ -280,6 +281,55 @@ def test_discrete_hmm_diag_normal(num_steps):
     expected_loss = TraceEnum_ELBO().loss(model, empty_guide, data)
     actual_loss = -float(actual.sum())
     assert_close(actual_loss, expected_loss)
+
+
+@pytest.mark.parametrize("duration", [1, 4])
+@pytest.mark.parametrize("homogeneous", [False, True])
+def test_discrete_hmm_map_states(duration, homogeneous):
+    size = 1 if homogeneous else duration
+    initial = torch.randn(2, 3)
+    transition = torch.randn(size, 3, 3)
+    loc = torch.randn(size, 3, 2)
+    obs = dist.Normal(loc, 1.0).to_event(1)
+    hmm = dist.DiscreteHMM(initial, transition, obs)
+    values = torch.randn(5, 1, duration, 2)
+
+    paths = list(product(range(3), repeat=duration))
+    transitions = hmm.transition_logits.expand(duration, 3, 3)
+    emissions = obs.log_prob(values.unsqueeze(-2))
+    scores = []
+    for path in paths:
+        score = (hmm.initial_logits + transitions[0, :, path[0]]).logsumexp(-1)
+        for t, state in enumerate(path):
+            score = score + emissions[..., t, state]
+            if t:
+                score = score + transitions[t, path[t - 1], state]
+        scores.append(score)
+
+    expected = initial.new_tensor(paths, dtype=torch.long)[
+        torch.stack(scores, -1).argmax(-1)
+    ]
+    assert torch.equal(hmm.map_states(values), expected)
+
+
+def test_discrete_hmm_map_states_marginalizes_initial_state():
+    # Max over the initial state picks 1, whereas its marginal favors 0.
+    initial = torch.tensor([0.6, 0.4])
+    transitions = torch.tensor([[0.3, 0.7], [1.0, 0.0]])
+    obs = dist.Normal(torch.zeros(2), 1.0)
+    hmm = dist.DiscreteHMM(initial.log(), transitions.log(), obs)
+    value = torch.zeros(1)
+    assert torch.equal(hmm.map_states(value), hmm.filter(value).mode.unsqueeze(-1))
+    assert hmm.map_states(value).item() == 0
+
+
+def test_discrete_hmm_map_states_empty():
+    hmm = dist.DiscreteHMM(
+        torch.zeros(2), torch.zeros(2, 2), dist.Normal(torch.zeros(2), 1.0)
+    )
+    path = hmm.expand([3]).map_states(torch.empty(5, 1, 0))
+    assert path.shape == (5, 3, 0)
+    assert path.dtype == torch.long
 
 
 def test_discrete_hmm_distribution():
