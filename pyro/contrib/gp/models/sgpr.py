@@ -163,7 +163,11 @@ class SparseGPRegression(GPModel):
             return f_loc, f_var
         else:
             if self.approx == "VFE":
-                pyro.factor(self._pyro_get_fullname("trace_term"), -trace_term / 2.0)
+                num_outputs = self.y.shape[:-1].numel()
+                pyro.factor(
+                    self._pyro_get_fullname("trace_term"),
+                    -trace_term * num_outputs / 2.0,
+                )
 
             return pyro.sample(
                 self._pyro_get_fullname("y"),
@@ -269,7 +273,7 @@ class SparseGPRegression(GPModel):
             if not noiseless:
                 Kssdiag = Kssdiag + self.noise
             Qssdiag = Ws.pow(2).sum(dim=0)
-            cov = Kssdiag - Qssdiag + Linv_Ws.pow(2).sum(dim=0)
+            cov = (Kssdiag - Qssdiag).clamp(min=0) + Linv_Ws.pow(2).sum(dim=0)
             cov_shape = self.y.shape[:-1] + (C,)
             cov = cov.expand(cov_shape)
 

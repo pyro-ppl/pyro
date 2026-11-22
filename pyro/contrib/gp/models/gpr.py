@@ -84,7 +84,7 @@ class GPRegression(GPModel):
         self.set_mode("model")
 
         N = self.X.size(0)
-        Kff = self.kernel(self.X)
+        Kff = self.kernel(self.X).clone()
         Kff.view(-1)[:: N + 1] += self.jitter + self.noise  # add noise to diagonal
         Lff = torch.linalg.cholesky(Kff)
 
@@ -182,8 +182,8 @@ class GPRegression(GPModel):
         X = self.X.clone().detach()
         y = self.y.clone().detach()
         N = X.size(0)
-        Kff = self.kernel(X).contiguous()
-        Kff.view(-1)[:: N + 1] += noise  # add noise to the diagonal
+        Kff = self.kernel(X).clone()
+        Kff.view(-1)[:: N + 1] += self.jitter + noise  # add noise to the diagonal
 
         outside_vars = {"X": X, "y": y, "N": N, "Kff": Kff}
 

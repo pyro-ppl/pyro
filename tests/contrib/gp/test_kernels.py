@@ -150,3 +150,10 @@ def test_transforming():
     assert_equal(K_owarp.data, Warping(k, owarping_coef=owarping_coef)(X, Z).data)
     assert_equal(K_vscale.data, VerticalScaling(k, vscaling_fn=vscaling_fn)(X, Z).data)
     assert_equal(K.exp().data, Exponent(k)(X, Z).data)
+
+
+@pytest.mark.parametrize("bad_coef", [[-2, 1], [-0.5, 1], [True, 1], [5], [1, 0, 0]])
+def test_warping_invalid_coefficients(bad_coef):
+    k = RBF(input_dim=1)
+    with pytest.raises(ValueError):
+        Warping(k, owarping_coef=bad_coef)
