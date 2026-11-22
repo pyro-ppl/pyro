@@ -233,13 +233,17 @@ class Warping(Transforming):
 
         if owarping_coef is not None:
             for coef in owarping_coef:
-                if not isinstance(coef, int) and coef < 0:
+                if (
+                    not isinstance(coef, numbers.Number)
+                    or isinstance(coef, bool)
+                    or coef < 0
+                ):
                     raise ValueError(
-                        "Coefficients of the polynomial must be a non-negative integer."
+                        "Coefficients of the polynomial must be non-negative numbers."
                     )
-            if len(owarping_coef) < 2 and sum(owarping_coef) == 0:
+            if len(owarping_coef) < 2 or sum(owarping_coef[1:]) == 0:
                 raise ValueError(
-                    "The ouput warping polynomial should have a degree of at least 1."
+                    "The output warping polynomial should have a degree of at least 1."
                 )
         self.owarping_coef = owarping_coef
 

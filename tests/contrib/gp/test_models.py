@@ -453,3 +453,56 @@ def test_mean_function_VSGP_whiten():
     optimizer = torch.optim.Adam(gpmodule.parameters(), lr=0.1)
     train(gpmodule, optimizer)
     _post_test_mean_function(gpmodule, Xnew, ynew)
+
+
+def test_gpr_constant_kernel():
+    import pyro
+    from pyro.contrib.gp.kernels import Constant
+
+    pyro.clear_param_store()
+    X_in = torch.randn(4, 2)
+    y_in = torch.randn(4)
+    gpr = GPRegression(X_in, y_in, Constant(input_dim=2))
+    loss = pyro.infer.Trace_ELBO().differentiable_loss(gpr.model, gpr.guide)
+    assert torch.isfinite(loss).item()
+
+
+def test_sgpr_vfe_multioutput_trace_term():
+    import pyro
+
+    X_in = torch.linspace(0.0, 1.0, 5).unsqueeze(-1)
+    Xu = torch.tensor([[0.2], [0.8]])
+    y_multi = torch.tensor(
+        [
+            [0.5, -0.2, 0.3, 1.1, -0.4],
+            [-0.3, 0.8, 0.1, -0.6, 0.2],
+            [0.1, 0.4, -0.5, 0.2, 0.9],
+        ]
+    )
+    elbo = pyro.infer.Trace_ELBO()
+
+    pyro.clear_param_store()
+    sgpr_multi = SparseGPRegression(
+        X_in,
+        y_multi,
+        RBF(input_dim=1, variance=torch.tensor(1.5), lengthscale=torch.tensor(0.4)),
+        Xu.clone(),
+        noise=torch.tensor(0.2),
+        approx="VFE",
+    )
+    loss_multi = elbo.differentiable_loss(sgpr_multi.model, sgpr_multi.guide)
+
+    loss_sum = 0.0
+    for k in range(y_multi.size(0)):
+        pyro.clear_param_store()
+        sgpr_k = SparseGPRegression(
+            X_in,
+            y_multi[k],
+            RBF(input_dim=1, variance=torch.tensor(1.5), lengthscale=torch.tensor(0.4)),
+            Xu.clone(),
+            noise=torch.tensor(0.2),
+            approx="VFE",
+        )
+        loss_sum = loss_sum + elbo.differentiable_loss(sgpr_k.model, sgpr_k.guide)
+
+    assert_equal(loss_multi, loss_sum)
