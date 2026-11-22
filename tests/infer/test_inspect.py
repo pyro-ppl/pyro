@@ -556,3 +556,35 @@ def test_get_model_relations(include_deterministic):
         }
 
     assert actual == expected
+
+
+@pytest.mark.parametrize("use_deterministic", [True, False])
+@pytest.mark.parametrize("include_deterministic", [True, False])
+def test_get_model_relations_ordered_logistic(use_deterministic, include_deterministic):
+    # Regression test for https://github.com/pyro-ppl/pyro/issues/3441
+    X = torch.randn(4, 2)
+    y = torch.tensor([0.0, 1.0, 2.0, 1.0])
+
+    def model(X, y=None):
+        cutpoints = pyro.param(
+            "cutpoints",
+            torch.linspace(-1.0, 1.0, 2),
+            constraint=dist.constraints.ordered_vector,
+        )
+        beta = pyro.sample("beta", dist.Normal(torch.zeros(2), 5.0).to_event(1))
+        if use_deterministic:
+            eta = pyro.deterministic("eta", X @ beta)
+        else:
+            eta = pyro.sample("eta", dist.Delta(X @ beta).to_event(1))
+        with pyro.plate("data", X.size(0)):
+            pyro.sample("obs", dist.OrderedLogistic(eta, cutpoints), obs=y)
+
+    pyro.clear_param_store()
+    relations = get_model_relations(
+        model, (X, y), include_deterministic=include_deterministic
+    )
+    assert relations["sample_sample"]["eta"] == ["beta"]
+    assert relations["sample_sample"]["obs"] == (
+        ["eta"] if include_deterministic else ["beta"]
+    )
+    assert relations["sample_param"]["obs"] == ["cutpoints"]

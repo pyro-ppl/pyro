@@ -318,11 +318,11 @@ def get_model_relations(
         if site["type"] != "sample" or site_is_subsample(site):
             continue
 
-        provenance = get_provenance(
-            site["fn"].log_prob(site["value"])
-            if not site_is_deterministic(site)
-            else site["fn"].base_dist.log_prob(site["value"])
-        )
+        fn = site["fn"]
+        if site_is_deterministic(site):
+            while isinstance(fn, dist.MaskedDistribution):
+                fn = fn.base_dist
+        provenance = get_provenance(fn.log_prob(site["value"]))
         sample_sample[name] = [
             upstream
             for upstream in provenance
