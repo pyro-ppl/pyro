@@ -84,6 +84,16 @@ def test_autograd():
     assert torch.all(pre_cutpoints.grad != 0).item()
 
 
+def test_provenance():
+    from pyro.ops.provenance import ProvenanceTensor, get_provenance
+
+    predictor = ProvenanceTensor(torch.zeros(4), frozenset({"predictor"}))
+    cutpoints = ProvenanceTensor(torch.tensor([-1.0, 1.0]), frozenset({"cutpoints"}))
+    d = OrderedLogistic(predictor, cutpoints, validate_args=False)
+    log_prob = d.log_prob(torch.tensor([0.0, 1.0, 2.0, 0.0]))
+    assert get_provenance(log_prob) == frozenset({"predictor", "cutpoints"})
+
+
 # Tests for the OrderedTransform
 
 

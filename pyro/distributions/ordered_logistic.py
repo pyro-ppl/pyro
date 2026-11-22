@@ -45,11 +45,7 @@ class OrderedLogistic(Categorical):
         self.predictor = predictor.expand(q.shape[:-1])
         self.cutpoints = cutpoints.expand(q.shape)
         # turn cumulative probabilities into probability mass of categories
-        p_shape = q.shape[:-1] + (q.shape[-1] + 1,)
-        p = torch.zeros(p_shape, dtype=q.dtype, device=q.device)
-        p[..., 0] = q[..., 0]
-        p[..., 1:-1] = q[..., 1:] - q[..., :-1]
-        p[..., -1] = 1 - q[..., -1]
+        p = torch.cat([q[..., :1], q[..., 1:] - q[..., :-1], 1 - q[..., -1:]], dim=-1)
         # pass probability mass to Categorical constructor
         super(OrderedLogistic, self).__init__(p, validate_args=validate_args)
 
